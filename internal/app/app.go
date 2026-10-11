@@ -72,6 +72,7 @@ type App struct {
 	windows []*Window    // front first
 	opener  URLOpener    // opens links; nil until UseURLOpener
 	picker  FolderPicker // shows the folder picker; nil until UseFolderPicker
+	kits    []KitRelease // the kit releases Givens ships, oldest first; see ShipKits
 	// pendingTrash holds paths sent to the Trash that are still on disk; see trash.
 	pendingTrash map[string]bool
 	windowsEver  int // windows opened so far; numbers the next one

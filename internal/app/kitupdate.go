@@ -1,9 +1,13 @@
 package app
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"givens/internal/assert"
+	"givens/internal/kit"
 )
 
 // Limits for Update the kit.
@@ -38,5 +42,84 @@ func (a *App) ShipKits(releases []KitRelease) error {
 		assert.That(versioned, "a kit starts with its version line")
 		assert.That(len(release.Text) <= KitLengthMax, "a kit fits KitLengthMax")
 	}
-	return ErrNotImplemented
+	a.kits = append([]KitRelease{}, releases...)
+	return nil
+}
+
+// shippedKits are the releases this app knows, oldest first: ShipKits's, or the one built in.
+func (a *App) shippedKits() []KitRelease {
+	assert.That(a != nil, "shipped kits runs on an app")
+	assert.That(len(a.kits) <= KitReleasesMax, "releases stay bounded")
+	if len(a.kits) > 0 {
+		return a.kits
+	}
+	return []KitRelease{{Version: kit.ShippedVersion(), Text: kit.Script}}
+}
+
+// Kit messages and actions.
+const (
+	OfferUpdateKit     = "Update kit"
+	OfferReplaceAnyway = "Replace anyway"
+	MessageKitEdited   = "givens.sh has changes of its own"
+	MessageNewerKit    = "This project uses a newer kit. Update Givens to edit its scripts."
+	kitFile            = "_shared/givens.sh"
+)
+
+// kitState reads the project's kit: its text, its version (0 when unreadable), and the
+// release Givens ships last.
+func (w *Window) kitState() (string, int, KitRelease) {
+	assert.That(w != nil, "kit state runs on a window")
+	assert.That(w.found, "the window shows a capabilities folder")
+	shipped := w.app.shippedKits()
+	latest := shipped[len(shipped)-1]
+	text, err := os.ReadFile(filepath.Join(w.path, filepath.FromSlash(kitFile)))
+	if err != nil {
+		return "", 0, latest
+	}
+	version, _ := kit.Version(string(text))
+	return string(text), version, latest
+}
+
+// kitMessages say where the project's kit stands against the one Givens ships.
+func (w *Window) kitMessages() []string {
+	assert.That(w != nil, "kit messages run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if !w.found || w.kind != WindowProject {
+		return []string{}
+	}
+	_, version, latest := w.kitState()
+	switch {
+	case version == 0:
+		return []string{}
+	case version < latest.Version:
+		return []string{fmt.Sprintf("Kit update available (%d → %d)", version, latest.Version)}
+	case version > latest.Version:
+		return []string{MessageNewerKit}
+	}
+	return []string{}
+}
+
+// updateKit replaces the project's kit with the latest Givens ships, when it's an unedited
+// copy of a release; otherwise it asks first, offering "Compare" and "Replace anyway".
+func (w *Window) updateKit() error {
+	assert.That(w != nil, "update kit runs on a window")
+	assert.That(w.found, "the window shows a capabilities folder")
+	text, version, latest := w.kitState()
+	path := filepath.Join(w.path, filepath.FromSlash(kitFile))
+	replace := func() error {
+		if err := os.WriteFile(path, []byte(latest.Text), 0o644); err != nil {
+			return err
+		}
+		return w.reload()
+	}
+	for _, release := range w.app.shippedKits() {
+		if release.Version == version && release.Text == text {
+			return replace()
+		}
+	}
+	w.askEither(MessageKitEdited, OfferReplaceAnyway, replace, OfferCompare, func() error {
+		_, err := w.Edit(kitFile)
+		return err
+	})
+	return nil
 }

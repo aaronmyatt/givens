@@ -34,6 +34,10 @@ func (w *Window) Offers() []string {
 		offers = append(offers, w.editor.editorOffers()...)
 	}
 	if w.project != nil {
+		if messages := w.kitMessages(); len(messages) > 0 &&
+			strings.HasPrefix(messages[0], "Kit update available") {
+			offers = append(offers, OfferUpdateKit)
+		}
 		offers = append(offers, OfferNewStory)
 		if w.selectedCapability != "" {
 			offers = append(offers, OfferNewScenario)
@@ -118,6 +122,8 @@ func (w *Window) Choose(action string) error {
 		return err
 	}
 	switch action {
+	case OfferUpdateKit:
+		return w.updateKit()
 	case OfferOpenFolder:
 		return w.openFolder()
 	case OfferCreateFolder:

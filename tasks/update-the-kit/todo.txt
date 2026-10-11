@@ -1,5 +1,5 @@
-2026-10-11 Pass: An update is available
-2026-10-11 Pass: Update the kit
-2026-10-11 Pass: The kit was edited by hand (error state)
-2026-10-11 Pass: The project's kit is newer than Givens (error state)
-2026-10-11 Wire Update the kit into the UI shell, after ui-shell
+x 2026-10-11 2026-10-11 Pass: An update is available — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Update the kit — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: The kit was edited by hand (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: The project's kit is newer than Givens (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Wire Update the kit into the UI shell, after ui-shell — kit messages and Update kit are window messages and offers, already drawn; not eyeballed

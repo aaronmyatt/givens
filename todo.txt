@@ -1,4 +1,3 @@
-2026-10-11 Update the kit: 4 scenarios ref:update-the-kit
 2026-10-11 Release: package Givens.app and the givens command ref:release
 2026-10-11 Finish: no @wip tags left and scripts/check.sh passes
 x 2026-10-11 2026-10-11 Foundation: core packages and the acceptance world ref:foundation — see tasks/foundation/notes.md
@@ -19,3 +18,4 @@ x 2026-10-11 2026-10-11 Views: 4 scenarios ref:views — see tasks/views/notes.m
 x 2026-10-11 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios — see tasks/write-stories-and-scenarios/notes.md
 2026-10-11 Editor UI: show step suggestions while typing in the SwiftUI text editor
 x 2026-10-11 2026-10-11 Open a project: 14 scenarios ref:open-a-project — see tasks/open-a-project/notes.md
+x 2026-10-11 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit — see tasks/update-the-kit/notes.md

@@ -117,6 +117,8 @@ func (w *Window) Snapshot() WindowSnapshot {
 		}
 	} else if w.project == nil {
 		messages = append(messages, MessageNoCapabilities)
+	} else {
+		messages = append(messages, w.kitMessages()...)
 	}
 	if empty := w.emptyView(); empty != "" {
 		messages = append(messages, empty)
