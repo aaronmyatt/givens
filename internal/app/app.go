@@ -65,8 +65,9 @@ type Config struct {
 // App is one running Givens. It isn't safe for concurrent use: `givens serve` and the steps
 // each call it one command at a time.
 type App struct {
-	config  Config
-	windows []*Window // front first
+	config      Config
+	windows     []*Window // front first
+	windowsEver int       // windows opened so far; numbers the next one
 }
 
 // New returns an App that hasn't launched yet.
@@ -104,7 +105,8 @@ func (a *App) Open(path string) (*Window, error) {
 	if len(a.windows) >= WindowsMax {
 		return nil, fmt.Errorf("%d windows are open, the most Givens keeps", WindowsMax)
 	}
-	window := &Window{app: a, kind: WindowProject, path: folder, found: found}
+	a.windowsEver++
+	window := &Window{app: a, id: a.windowsEver, kind: WindowProject, path: folder, found: found}
 	if err := window.reload(); err != nil {
 		return nil, err
 	}

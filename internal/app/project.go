@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"givens/internal/assert"
 	"givens/internal/project"
 	"givens/internal/slug"
+	"givens/internal/watch"
 )
 
 // capabilitiesFolderName is the folder Open looks for inside a project folder.
@@ -45,27 +47,52 @@ func findCapabilities(path string) (string, bool, error) {
 	return absolute, len(loaded.Capabilities) > 0, nil
 }
 
-// reload reads the window's capabilities folder again. A window with no capabilities folder
-// has no project.
+// reload reads the window's capabilities folder again and starts watching it. A window with
+// no capabilities folder has no project.
 func (w *Window) reload() error {
 	assert.That(w != nil, "reload runs on a window")
 	assert.That(w.kind == WindowProject, "only a project window has a project")
 	if !w.found {
-		w.project = nil
+		w.project, w.watcher = nil, nil
 		return nil
+	}
+	// The watcher's first look comes before the load, so a write in between is seen next time.
+	watcher, err := watch.New(w.path, time.Now())
+	if err != nil {
+		return err
 	}
 	loaded, err := project.Load(w.path)
 	if err != nil {
 		return err
 	}
-	w.project = loaded
+	w.project, w.watcher = loaded, watcher
 	return nil
+}
+
+// refresh reloads the project when another tool changed its files. Givens keeps no copy of
+// its own, so every read of a window starts here. The watcher limits looks to one per
+// watch.Interval of wall-clock time; the app's Clock is for dates, not for this.
+// A folder that can't be read keeps showing what was last read.
+func (w *Window) refresh() {
+	assert.That(w != nil, "refresh runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.watcher == nil {
+		return
+	}
+	changed, err := w.watcher.Changed(time.Now())
+	if err != nil || !changed {
+		return
+	}
+	if loaded, err := project.Load(w.path); err == nil {
+		w.project = loaded
+	}
 }
 
 // findCapability finds a capability by its name or slug.
 func (w *Window) findCapability(name string) (project.Capability, bool) {
 	assert.That(w != nil, "find runs on a window")
 	assert.That(name != "", "a capability has a name")
+	w.refresh()
 	if w.project == nil {
 		return project.Capability{}, false
 	}
@@ -81,6 +108,7 @@ func (w *Window) findCapability(name string) (project.Capability, bool) {
 func (w *Window) findScenario(name string) (project.Scenario, bool) {
 	assert.That(w != nil, "find runs on a window")
 	assert.That(name != "", "a scenario has a name")
+	w.refresh()
 	if w.project == nil {
 		return project.Scenario{}, false
 	}
@@ -107,7 +135,7 @@ func capabilityOf(loaded project.Capability) Capability {
 	assert.That(loaded.Slug != "", "a capability has a slug")
 	assert.That(loaded.Dir != "", "a capability has a folder")
 	shown := Capability{
-		Name: loaded.Name, Slug: loaded.Slug, Story: loaded.Story,
+		Name: loaded.Name, Slug: loaded.Slug, Story: append([]string{}, loaded.Story...),
 		Scenarios: make([]Scenario, 0, len(loaded.Scenarios)),
 		Warning:   loaded.ParseError,
 	}
@@ -133,7 +161,7 @@ func scenarioOf(capability string, loaded project.Scenario) Scenario {
 	}
 	shown := Scenario{
 		Name: loaded.Name, Slug: loaded.Slug, Capability: capability,
-		Error: loaded.Error, Tags: loaded.Tags, Steps: steps,
+		Error: loaded.Error, Tags: append([]string{}, loaded.Tags...), Steps: steps,
 	}
 	if loaded.Setup != "" {
 		if setup, err := os.ReadFile(loaded.Setup); err == nil {

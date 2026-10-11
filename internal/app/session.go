@@ -17,9 +17,9 @@ const (
 
 // CheckItem is one line of a Drop in checklist.
 type CheckItem struct {
-	Text string // the step as shown, placeholders filled in: "When they place the order"
-	Kind string // "given" (done by hand), "when" or "then"
-	Mark string // "", "done", "pass" or "fail"
+	Text string `json:"text"` // the step as shown, placeholders filled in
+	Kind string `json:"kind"` // "given" (done by hand), "when" or "then"
+	Mark string `json:"mark"` // "", "done", "pass" or "fail"
 }
 
 // Session is one Drop in: a setup run and the checklist that follows.

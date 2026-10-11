@@ -20,8 +20,8 @@ const KitVersionPrefix = "# givens kit "
 // KitRelease is one version of the kit, as Givens shipped it. Givens keeps every release it
 // has shipped so it can tell an unedited old kit from one edited by hand.
 type KitRelease struct {
-	Version int
-	Text    string // the whole givens.sh, starting with its version line
+	Version int    `json:"version"`
+	Text    string `json:"text"` // the whole givens.sh, starting with its version line
 }
 
 // ShipKits sets the kit releases this app knows, oldest first; the last is the version it

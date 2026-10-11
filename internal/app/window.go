@@ -6,46 +6,49 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/project"
+	"givens/internal/watch"
 )
 
 // Window is one Givens window: the welcome window, or one project.
 type Window struct {
 	app     *App
+	id      int // numbered from 1 in opening order; see ID
 	kind    string
 	path    string           // the capabilities folder, or the folder opened when found is false
 	found   bool             // path is a capabilities folder
 	project *project.Project // nil when found is false
+	watcher *watch.Watcher   // nil when found is false
 }
 
 // SidebarItem is one line in a project window's sidebar.
 type SidebarItem struct {
-	Name    string // "Checkout", "Error states", "payments", "seed_shopper"
-	Kind    string // "capability", "view", "tag" or "helper"
-	Count   int    // scenarios in a capability or view
-	Warning string // why the item is marked, or ""
+	Name    string `json:"name"`    // "Checkout", "Error states", "payments", "seed_shopper"
+	Kind    string `json:"kind"`    // "capability", "view", "tag" or "helper"
+	Count   int    `json:"count"`   // scenarios in a capability or view
+	Warning string `json:"warning"` // why the item is marked, or ""
 }
 
 // Capability is one capability as a window shows it.
 type Capability struct {
-	Name      string
-	Slug      string
-	Story     []string // the As a, I want and So that lines
-	About     string   // about.md, rendered; "" when there is none
-	Scenarios []Scenario
-	Warning   string
+	Name      string     `json:"name"`
+	Slug      string     `json:"slug"`
+	Story     []string   `json:"story"` // the As a, I want and So that lines
+	About     string     `json:"about"` // about.md, rendered; "" when there is none
+	Scenarios []Scenario `json:"scenarios"`
+	Warning   string     `json:"warning"`
 }
 
 // Scenario is one scenario as a window shows it.
 type Scenario struct {
-	Name       string
-	Slug       string
-	Capability string   // the capability's name
-	Error      bool     // tagged @error
-	Tags       []string // every tag, Feature tags included
-	Steps      []string // "Given …", "When …", "Then …", "And …", Background steps first
-	Setup      string   // the setup script's text, or ""
-	Status     string   // "Verified today", "Never run", "Last run failed", "Unverified: …"
-	Warning    string
+	Name       string   `json:"name"`
+	Slug       string   `json:"slug"`
+	Capability string   `json:"capability"` // the capability's name
+	Error      bool     `json:"error"`      // tagged @error
+	Tags       []string `json:"tags"`       // every tag, Feature tags included
+	Steps      []string `json:"steps"`      // "Given …", "When …", "Then …", Background first
+	Setup      string   `json:"setup"`      // the setup script's text, or ""
+	Status     string   `json:"status"`     // "Verified today", "Never run", "Unverified: …"
+	Warning    string   `json:"warning"`
 }
 
 // Kind is WindowWelcome or WindowProject.
@@ -76,7 +79,18 @@ func (w *Window) Path() string {
 func (w *Window) Sidebar() []SidebarItem {
 	assert.That(w != nil, "sidebar runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
+	w.refresh()
+	if w.project == nil {
+		return []SidebarItem{}
+	}
+	items := make([]SidebarItem, 0, len(w.project.Capabilities))
+	for _, capability := range w.project.Capabilities {
+		items = append(items, SidebarItem{
+			Name: capability.Name, Kind: "capability", Count: len(capability.Scenarios),
+			Warning: capability.ParseError,
+		})
+	}
+	return items
 }
 
 // Select selects a sidebar item, scenario, search result or helper by its name.
@@ -98,7 +112,7 @@ func (w *Window) Selected() string {
 func (w *Window) Visible() []string {
 	assert.That(w != nil, "visible runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
+	return visibleLines(w.Snapshot())
 }
 
 // Offers is every action the window offers right now, by its label: "Drop in", "Copy",

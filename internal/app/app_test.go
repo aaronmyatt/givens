@@ -116,3 +116,32 @@ func TestMarkTrusted(t *testing.T) {
 		t.Errorf("trusted folders = %q, %v", folders, err)
 	}
 }
+
+// TestFilesWrittenByOtherToolsAppear adds a scenario behind the window's back and waits for
+// the window to show it, as "Files written by other tools appear" does.
+func TestFilesWrittenByOtherToolsAppear(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "capabilities")
+	if err := os.CopyFS(root, os.DirFS(filepath.Join(sampleShop, "capabilities"))); err != nil {
+		t.Fatal(err)
+	}
+	window, err := newApp(t).Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	feature := filepath.Join(root, "sign-in", "sign-in.feature")
+	text, err := os.ReadFile(feature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	added := string(text) + "\n  Scenario: Remember me\n    Then they stay signed in\n"
+	if err := os.WriteFile(feature, []byte(added), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for range 40 {
+		if _, err := window.Scenario("Remember me"); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Error("the added scenario didn't appear within 2 seconds")
+}
