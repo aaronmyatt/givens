@@ -11,3 +11,11 @@ its steps, already written in `acceptance/search-everything/`, pass, and `script
 - Reuse step text across scenarios; a step used word for word is defined once.
 
 ## As built
+- All 6 (2026-10-11), Go and Swift, built with Tags (tasks/tags/notes.md).
+- Results: Stories (first matching story line), Scenarios (capability as second line), Steps
+  (each text once, with uses; keyword from its first use), Scripts (named for the words first,
+  then mentions, first matching line as second line), Helpers (description as second line).
+  Matches list every occurrence in title and second line, as written there.
+- Selecting a step result lists the scenarios using it; selecting a helper shows its
+  signature, description, file and callers.
+- Not built yet: ↵, ⇧⌘C, ⌘↵ and ⌘E on a result (no scenario here needs them).

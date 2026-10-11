@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"unicode/utf8"
 
 	"givens/internal/assert"
 	"givens/internal/project"
@@ -28,6 +27,8 @@ type Window struct {
 	prompt             *prompt  // the question on show, or nil
 	session            *Session // the Drop in on show, or nil
 	holdRefresh        bool     // a snapshot is being built, and has already looked
+	search             *search  // the ⌘K panel while it's open, or nil
+	selectedStep       string   // the step result on show, as its text, or ""
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -94,14 +95,14 @@ func (w *Window) Sidebar() []SidebarItem {
 	if w.project == nil {
 		return []SidebarItem{}
 	}
-	items := make([]SidebarItem, 0, len(w.project.Capabilities))
+	items := make([]SidebarItem, 0, len(w.project.Capabilities)+8)
 	for _, capability := range w.project.Capabilities {
 		items = append(items, SidebarItem{
 			Name: capability.Name, Kind: "capability", Count: len(capability.Scenarios),
 			Warning: capabilityWarning(capability),
 		})
 	}
-	return items
+	return append(items, w.viewItems()...)
 }
 
 // Visible is every piece of text the window shows right now: messages, warnings, labels,
@@ -110,20 +111,6 @@ func (w *Window) Visible() []string {
 	assert.That(w != nil, "visible runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	return visibleLines(w.Snapshot())
-}
-
-// Type types text into whatever has focus: the search box, the editor, an ask card.
-func (w *Window) Type(text string) error {
-	assert.That(w != nil, "type runs on a window")
-	assert.That(utf8.ValidString(text), "typed text is text")
-	return ErrNotImplemented
-}
-
-// Press presses a key or shortcut: "⌘K", "⌘C", "⇧⌘C", "⌘↵", "⌘E", "↵".
-func (w *Window) Press(keys string) error {
-	assert.That(w != nil, "press runs on a window")
-	assert.That(keys != "", "a shortcut names keys")
-	return ErrNotImplemented
 }
 
 // Capability returns a capability by its name.

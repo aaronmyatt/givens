@@ -36,3 +36,10 @@ func TestParseErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestParseErrorMessage(t *testing.T) {
+	_, err := Parse("@error and")
+	if err == nil || err.Error() != "not a tag expression: expected a tag after 'and'" {
+		t.Errorf("Parse(\"@error and\") = %v", err)
+	}
+}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"strconv"
+	"strings"
 
 	"givens/internal/assert"
 )
@@ -31,6 +32,7 @@ type WindowSnapshot struct {
 	Search            *SearchSnapshot  `json:"search"`
 	Editor            *EditorSnapshot  `json:"editor"`
 	Session           *SessionSnapshot `json:"session"`
+	Listed            []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
 	Offers            []string         `json:"offers"`
 	Labels            []string         `json:"labels"`
 	FolderPickerShown bool             `json:"folderPickerShown"`
@@ -101,6 +103,12 @@ func (w *Window) Snapshot() WindowSnapshot {
 		labels = append(labels, w.session.hints...)
 	} else if w.selectedScenario != "" {
 		labels = append(labels, w.requirementLabels()...)
+	} else if w.selectedHelper != "" {
+		labels = append(labels, w.helperLabels()...)
+	}
+	searching := w.searchSnapshot()
+	if searching != nil {
+		messages = append(messages, w.searchMessages()...)
 	}
 	return WindowSnapshot{
 		ID: w.ID(), Kind: w.kind, Title: w.Title(), Path: w.Path(),
@@ -111,6 +119,8 @@ func (w *Window) Snapshot() WindowSnapshot {
 		Scenario:   w.shownScenario(),
 		Editor:     editor,
 		Session:    session,
+		Search:     searching,
+		Listed:     append(make([]Scenario, 0, 16), w.ListedScenarios()...),
 		Offers:     append(make([]string, 0, 8), w.Offers()...),
 		Labels:     labels,
 	}
@@ -130,6 +140,9 @@ func visibleLines(snapshot WindowSnapshot) []string {
 	}
 	if snapshot.Scenario != nil {
 		lines = append(lines, scenarioLines(*snapshot.Scenario)...)
+	}
+	for _, scenario := range snapshot.Listed {
+		lines = append(lines, scenario.Name, scenario.Capability, scenario.Status)
 	}
 	if snapshot.Search != nil {
 		lines = append(lines, snapshot.Search.Results...)
@@ -203,4 +216,56 @@ func (w *Window) requirementLabels() []string {
 		}
 	}
 	return labels
+}
+
+// helperLabels show the selected helper: its signature and description, where it's defined,
+// and each script that calls it.
+func (w *Window) helperLabels() []string {
+	assert.That(w != nil, "helper labels run on a window")
+	assert.That(w.selectedHelper != "", "a helper is selected")
+	helper, ok := w.findHelper(w.selectedHelper)
+	if !ok {
+		return []string{}
+	}
+	labels := []string{helper.Signature, helper.Description, "Defined in " + helper.DefinedIn}
+	return append(labels, helper.Callers...)
+}
+
+// searchSnapshot is the ⌘K panel as the window shows it: each group's heading, then each
+// result's title and second line. nil while search is closed.
+func (w *Window) searchSnapshot() *SearchSnapshot {
+	assert.That(w != nil, "search snapshot runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.search == nil {
+		return nil
+	}
+	results := w.SearchResults()
+	lines := make([]string, 0, 32)
+	for _, group := range results.Groups {
+		lines = append(lines, group.Kind)
+		for _, result := range group.Results {
+			lines = append(lines, result.Name)
+			if result.Detail != "" {
+				lines = append(lines, result.Detail)
+			}
+		}
+	}
+	return &SearchSnapshot{Query: results.Query, Results: lines}
+}
+
+// searchMessages say why there are no results: a tag expression that doesn't parse, or
+// nothing matching.
+func (w *Window) searchMessages() []string {
+	assert.That(w.search != nil, "search is open")
+	assert.That(len(w.search.query) <= NameLengthMax*4, "the query stays bounded")
+	if strings.TrimSpace(w.search.query) == "" {
+		return []string{}
+	}
+	if read := readQuery(w.search.query); read.problem != "" {
+		return []string{read.problem}
+	}
+	if len(w.SearchResults().Groups) == 0 {
+		return []string{`Nothing matches "` + w.search.query + `"`}
+	}
+	return []string{}
 }

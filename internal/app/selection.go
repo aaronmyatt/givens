@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"givens/internal/assert"
@@ -13,7 +14,10 @@ import (
 func (w *Window) Select(name string) error {
 	assert.That(w != nil, "select runs on a window")
 	assert.That(utf8.ValidString(name), "the name is text")
-	w.selectedView = ""
+	w.selectedView, w.selectedStep = "", ""
+	if w.selectStep(name) {
+		return nil
+	}
 	if capability, ok := w.findCapability(name); ok {
 		w.selected, w.selectedCapability, w.selectedScenario = name, capability.Slug, ""
 		w.selectedHelper = ""
@@ -99,4 +103,25 @@ func (w *Window) RuleGroups(capability string) ([]RuleGroup, error) {
 		groups[last].Scenarios = append(groups[last].Scenarios, scenario.Name)
 	}
 	return groups, nil
+}
+
+// selectStep selects a step from the search results by its name, "Then they see …", so the
+// main pane lists the scenarios that use it.
+func (w *Window) selectStep(name string) bool {
+	assert.That(w != nil, "select step runs on a window")
+	assert.That(name != "", "a step has a name")
+	for _, group := range w.SearchResults().Groups {
+		if group.Kind != SearchSteps {
+			continue
+		}
+		for _, result := range group.Results {
+			if result.Name == name {
+				_, text, _ := strings.Cut(name, " ")
+				w.selected, w.selectedStep = name, text
+				w.selectedCapability, w.selectedScenario, w.selectedHelper = "", "", ""
+				return true
+			}
+		}
+	}
+	return false
 }

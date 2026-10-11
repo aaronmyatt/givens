@@ -24,6 +24,10 @@ func (w *Window) Offers() []string {
 		return w.session.offers()
 	}
 	offers := make([]string, 0, 8)
+	if w.search != nil && len(w.searchMessages()) > 0 &&
+		strings.HasPrefix(w.searchMessages()[0], "Nothing matches") {
+		return []string{OfferNewScenario}
+	}
 	if w.selectedHelper != "" {
 		return []string{OfferEdit}
 	}
@@ -114,6 +118,7 @@ func (w *Window) Choose(action string) error {
 
 // Scenario and capability page actions.
 const (
+	OfferNewScenario         = "New scenario"
 	OfferMoveToOwnCapability = "Move to its own capability"
 	OfferCopy                = "Copy"
 	OfferDropIn              = "Drop in"

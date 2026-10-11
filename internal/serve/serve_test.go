@@ -56,7 +56,13 @@ func TestOpenAndCapability(t *testing.T) {
 	}
 	windows := replies[0]["snapshot"].(map[string]any)["windows"].([]any)
 	sidebar := windows[0].(map[string]any)["sidebar"].([]any)
-	if len(sidebar) != 3 || sidebar[2].(map[string]any)["name"] != "Sign in" {
+	capabilities := make([]any, 0, 3)
+	for _, item := range sidebar {
+		if item.(map[string]any)["kind"] == "capability" {
+			capabilities = append(capabilities, item.(map[string]any)["name"])
+		}
+	}
+	if len(capabilities) != 3 || capabilities[2] != "Sign in" {
 		t.Errorf("sidebar = %v", sidebar)
 	}
 	value := replies[1]["value"].(map[string]any)

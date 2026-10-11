@@ -1,9 +1,9 @@
-2026-10-11 Pass: An error state
-2026-10-11 Pass: A tag view
-2026-10-11 Pass: A tag on the Feature
-2026-10-11 Pass: A runner filters on the same tags
-2026-10-11 Pass: Search by tag
-2026-10-11 Pass: Search with a tag expression
-2026-10-11 Pass: A tag and words together
-2026-10-11 Pass: A tag expression that doesn't parse (error state)
-2026-10-11 Wire Tags into the UI shell, after ui-shell
+x 2026-10-11 2026-10-11 Pass: An error state — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A tag view — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A tag on the Feature — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A runner filters on the same tags — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Search by tag — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Search with a tag expression — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A tag and words together — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A tag expression that doesn't parse (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Wire Tags into the UI shell, after ui-shell — sidebar Views and Tags sections, listed scenarios pane; not eyeballed

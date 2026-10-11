@@ -39,6 +39,7 @@ type params struct {
 	Target     string           `json:"target"`
 	NewName    string           `json:"newName"`
 	Capability string           `json:"capability"`
+	Kind       string           `json:"kind"`
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.

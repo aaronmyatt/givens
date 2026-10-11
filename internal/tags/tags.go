@@ -26,7 +26,7 @@ const (
 )
 
 // ErrSyntax is returned for an expression that doesn't parse.
-var ErrSyntax = errors.New("isn't a tag expression")
+var ErrSyntax = errors.New("not a tag expression")
 
 // Expression is a parsed tag expression, in postfix order.
 type Expression struct {
@@ -38,8 +38,7 @@ func Parse(text string) (Expression, error) {
 	assert.That(len(text) <= TokensMax*64, "an expression stays bounded")
 	tokens := tokenize(text)
 	if len(tokens) > TokensMax {
-		return Expression{}, fmt.Errorf("%q has more than %d parts: %w", text, TokensMax,
-			ErrSyntax)
+		return Expression{}, fmt.Errorf("%w: more than %d parts", ErrSyntax, TokensMax)
 	}
 	postfix := make([]string, 0, len(tokens))
 	operators := make([]string, 0, len(tokens))
@@ -48,22 +47,23 @@ func Parse(text string) (Expression, error) {
 		var err error
 		postfix, operators, expectOperand, err = shunt(token, postfix, operators, expectOperand)
 		if err != nil {
-			return Expression{}, fmt.Errorf("%q: %w", text, err)
+			return Expression{}, err
 		}
 	}
 	if len(tokens) > 0 && expectOperand {
-		return Expression{}, fmt.Errorf("%q ends early: %w", text, ErrSyntax)
+		return Expression{}, fmt.Errorf("%w: expected a tag after '%s'", ErrSyntax,
+			tokens[len(tokens)-1])
 	}
 	for index := len(operators) - 1; index >= 0; index-- {
 		if operators[index] == "(" {
-			return Expression{}, fmt.Errorf("%q has an unclosed (: %w", text, ErrSyntax)
+			return Expression{}, fmt.Errorf("%w: expected ) to close (", ErrSyntax)
 		}
 		postfix = append(postfix, operators[index])
 	}
 	expression := Expression{postfix: postfix}
 	assert.That(len(postfix) <= len(tokens), "brackets drop out of the postfix")
 	if err := expression.check(); err != nil {
-		return Expression{}, fmt.Errorf("%q: %w", text, err)
+		return Expression{}, err
 	}
 	return expression, nil
 }
@@ -85,12 +85,13 @@ func shunt(token string, postfix []string, operators []string, expectOperand boo
 	switch {
 	case token == "(" || token == operatorNot:
 		if !expectOperand {
-			return nil, nil, false, fmt.Errorf("%q can't follow a tag: %w", token, ErrSyntax)
+			return nil, nil, false, fmt.Errorf("%w: expected and or or before '%s'", ErrSyntax,
+				token)
 		}
 		return postfix, append(operators, token), true, nil
 	case token == ")":
 		if expectOperand {
-			return nil, nil, false, fmt.Errorf("a ) comes too early: %w", ErrSyntax)
+			return nil, nil, false, fmt.Errorf("%w: expected a tag before ')'", ErrSyntax)
 		}
 		top := len(operators) - 1
 		// bound: top counts down to -1 at most.
@@ -98,12 +99,12 @@ func shunt(token string, postfix []string, operators []string, expectOperand boo
 			postfix = append(postfix, operators[top])
 		}
 		if top < 0 {
-			return nil, nil, false, fmt.Errorf("a ) has no (: %w", ErrSyntax)
+			return nil, nil, false, fmt.Errorf("%w: ')' has no '('", ErrSyntax)
 		}
 		return postfix, operators[:top], false, nil
 	case token == operatorAnd || token == operatorOr:
 		if expectOperand {
-			return nil, nil, false, fmt.Errorf("%q needs a tag before it: %w", token, ErrSyntax)
+			return nil, nil, false, fmt.Errorf("%w: expected a tag before '%s'", ErrSyntax, token)
 		}
 		top := len(operators) - 1
 		// bound: top counts down to -1 at most.
@@ -113,13 +114,13 @@ func shunt(token string, postfix []string, operators []string, expectOperand boo
 		return postfix, append(operators[:top+1], token), true, nil
 	case strings.HasPrefix(token, "@") && len(token) > 1:
 		if !expectOperand {
-			return nil, nil, false, fmt.Errorf("%q needs and or or before it: %w", token,
-				ErrSyntax)
+			return nil, nil, false, fmt.Errorf("%w: expected and or or before '%s'", ErrSyntax,
+				token)
 		}
 		return append(postfix, token), operators, false, nil
 	}
-	return nil, nil, false, fmt.Errorf("%q isn't a tag, and, or, not or a bracket: %w", token,
-		ErrSyntax)
+	return nil, nil, false, fmt.Errorf("%w: '%s' isn't a tag; tags start with @", ErrSyntax,
+		token)
 }
 
 // precedence ranks operators; "(" ranks lowest so nothing pops past it.

@@ -16,7 +16,8 @@ import Testing
         }
         #expect(window.kind == "project")
         #expect(window.title == world.capabilities.path)
-        #expect(window.sidebar.map(\.name) == ["Checkout", "Invites", "Sign in"])
+        let capabilities = window.sidebar.filter { $0.kind == "capability" }.map(\.name)
+        #expect(capabilities == ["Checkout", "Invites", "Sign in"])
         #expect(window.visible.contains("Checkout 5"))
     }
 

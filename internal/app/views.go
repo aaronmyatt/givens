@@ -67,7 +67,8 @@ func (w *Window) ListedScenarios() []Scenario {
 	assert.That(w.app != nil, "a window belongs to an app")
 	w.refresh()
 	listed := make([]Scenario, 0, 16)
-	if w.project == nil || w.selectedView == "" || w.selectedView == ViewShared {
+	if w.project == nil || (w.selectedView == "" && w.selectedStep == "") ||
+		w.selectedView == ViewShared {
 		return listed
 	}
 	for _, capability := range w.project.Capabilities {
@@ -83,8 +84,16 @@ func (w *Window) ListedScenarios() []Scenario {
 
 // inView is true when a scenario belongs in the selected view.
 func (w *Window) inView(scenario Scenario) bool {
-	assert.That(w.selectedView != "", "a view is selected")
+	assert.That(w.selectedView != "" || w.selectedStep != "", "a view or step is selected")
 	assert.That(scenario.Name != "", "the scenario has a name")
+	if w.selectedStep != "" {
+		for _, step := range scenario.Steps {
+			if _, text, _ := strings.Cut(step, " "); text == w.selectedStep {
+				return true
+			}
+		}
+		return false
+	}
 	switch w.selectedView {
 	case ViewErrorStates:
 		return scenario.Error
@@ -111,4 +120,41 @@ func (w *Window) ViewHelpers() []ViewHelper {
 	assert.That(w != nil, "view helpers run on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	return nil
+}
+
+// Sidebar kinds below the capabilities.
+const (
+	KindView = "view"
+	KindTag  = "tag"
+)
+
+// viewItems are the sidebar's views, then one view per tag, each with how many it lists.
+func (w *Window) viewItems() []SidebarItem {
+	assert.That(w.project != nil, "views are of a loaded project")
+	assert.That(!w.holdRefresh || w.watcher != nil, "a snapshot looks at a watched folder")
+	errorStates, unverified := 0, 0
+	tagCounts := make(map[string]int, 8)
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if scenario.Error {
+				errorStates++
+			}
+			status := StatusOf(w.project, scenario, w.app.config.Clock.Now())
+			if !strings.HasPrefix(status, statusVerified) {
+				unverified++
+			}
+			for _, tag := range scenario.Tags {
+				tagCounts[strings.TrimPrefix(tag, "@")]++
+			}
+		}
+	}
+	items := []SidebarItem{
+		{Name: ViewErrorStates, Kind: KindView, Count: errorStates},
+		{Name: ViewUnverified, Kind: KindView, Count: unverified},
+		{Name: ViewShared, Kind: KindView, Count: len(w.Helpers())},
+	}
+	for _, tag := range w.tagViews() {
+		items = append(items, SidebarItem{Name: tag, Kind: KindTag, Count: tagCounts[tag]})
+	}
+	return items
 }

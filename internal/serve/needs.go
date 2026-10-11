@@ -28,6 +28,10 @@ func (s *Server) needs() map[string]handler {
 		"window.editingHelper":    s.onWindow(editingHelper),
 		"window.newHelper":        s.onWindow(newHelper),
 		"window.saveHelper":       s.onWindow(saveHelper),
+		// capabilities/tags and search-everything: Needs/tags.swift, search-everything.swift.
+		"window.searchResults":   s.onWindow(searchResults),
+		"window.listedScenarios": s.onWindow(listedScenarios),
+		"window.filterSearch":    s.onWindow(filterSearch),
 	}
 }
 
@@ -117,4 +121,25 @@ func saveHelper(window *app.Window, given params) (any, error) {
 	assert.That(window != nil, "save helper runs on a window")
 	assert.That(utf8.ValidString(given.Text), "JSON strings are text")
 	return nil, window.SaveHelper(given.Text)
+}
+
+func searchResults(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "search results runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.SearchResults(), nil
+}
+
+func listedScenarios(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "listed scenarios runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.ListedScenarios(), nil
+}
+
+func filterSearch(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "filter search runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if len(given.Kind) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: a kind fits %d bytes", ErrBadRequest, app.NameLengthMax)
+	}
+	return nil, window.FilterSearch(given.Kind)
 }

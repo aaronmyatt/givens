@@ -1,10 +1,8 @@
-2026-10-11 Tags: 8 scenarios ref:tags
 2026-10-11 Copy a setup script: 5 scenarios ref:copy-a-setup-script
 2026-10-11 Drop into a scenario: 44 scenarios ref:drop-into-a-scenario
 2026-10-11 Trust a project: 4 scenarios ref:trust-a-project
 2026-10-11 Read a capability: 4 scenarios ref:read-a-capability
 2026-10-11 Views: 4 scenarios ref:views
-2026-10-11 Search everything: 6 scenarios ref:search-everything
 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios
 2026-10-11 Open a project: 14 scenarios ref:open-a-project
 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit
@@ -16,3 +14,6 @@ x 2026-10-11 2026-10-11 Gherkin files: 7 scenarios ref:gherkin-files — see tas
 x 2026-10-11 2026-10-11 The kit: 12 scenarios ref:the-kit — see tasks/the-kit/notes.md
 x 2026-10-11 2026-10-11 Share setup between scenarios: 12 scenarios ref:share-setup-between-scenarios — see tasks/share-setup-between-scenarios/notes.md
 x 2026-10-11 2026-10-11 Use Givens from the terminal: 8 scenarios ref:use-givens-from-the-terminal — see tasks/use-givens-from-the-terminal/notes.md
+x 2026-10-11 2026-10-11 Tags: 8 scenarios ref:tags — see tasks/tags/notes.md
+x 2026-10-11 2026-10-11 Search everything: 6 scenarios ref:search-everything — built with Tags; see tasks/search-everything/notes.md
+2026-10-11 Cache scenario statuses between snapshots: the Unverified count fingerprints every scenario each time

@@ -40,34 +40,66 @@ struct WelcomeView: View {
     }
 }
 
-/// A project: sidebar on the left, the selected capability or scenario on the right.
+/// A project: sidebar on the left, the selected capability, scenario or view on the right.
+/// ⌘K focuses the search field; each change sends the whole query again.
 /// Ref: https://developer.apple.com/documentation/swiftui/navigationsplitview
+/// Ref: https://developer.apple.com/documentation/swiftui/view/searchable(text:placement:prompt:)
 struct ProjectView: View {
     let window: WindowModel
+    @State private var query = ""
 
     var body: some View {
         NavigationSplitView {
-            List(window.sidebar, id: \.name) { item in
-                Button {
-                    window.app.run { _ in try await window.select(item.name) }
-                } label: {
-                    HStack {
-                        Text(item.name)
-                        if !item.warning.isEmpty {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                                .accessibilityLabel(item.warning)
-                        }
-                        Spacer()
-                        if item.count > 0 { Text("\(item.count)").foregroundStyle(.secondary) }
-                    }
-                }
-                .help(item.warning)
+            List {
+                SidebarSection(window: window, title: "Capabilities", kind: "capability")
+                SidebarSection(window: window, title: "Views", kind: "view")
+                SidebarSection(window: window, title: "Tags", kind: "tag")
             }
         } detail: {
             DetailView(window: window)
         }
         .navigationTitle(window.title)
+        .searchable(text: $query, prompt: "Search ⌘K")
+        .onChange(of: query) { _, typed in
+            window.app.run { _ in
+                try await window.press("⌘K")
+                if !typed.isEmpty { try await window.type(typed) }
+            }
+        }
+    }
+}
+
+/// One part of the sidebar: the items of one kind, each with its count and any warning.
+struct SidebarSection: View {
+    let window: WindowModel
+    let title: String
+    let kind: String
+
+    var body: some View {
+        let items = window.sidebar.filter { $0.kind == kind }
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items, id: \.name) { item in
+                    Button {
+                        window.app.run { _ in try await window.select(item.name) }
+                    } label: {
+                        HStack {
+                            Text(item.name)
+                            if !item.warning.isEmpty {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundStyle(.orange)
+                                    .accessibilityLabel(item.warning)
+                            }
+                            Spacer()
+                            if item.count > 0 {
+                                Text("\(item.count)").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .help(item.warning)
+                }
+            }
+        }
     }
 }
 
@@ -88,6 +120,22 @@ struct DetailView: View {
                 }
                 if let scenario = window.snapshot?.scenario {
                     ScenarioView(scenario: scenario)
+                }
+                ForEach(window.snapshot?.listed ?? [], id: \.name) { scenario in
+                    Button {
+                        window.app.run { _ in try await window.select(scenario.name) }
+                    } label: {
+                        HStack {
+                            Text(scenario.name)
+                            Text(scenario.capability).foregroundStyle(.secondary)
+                            Text(scenario.status).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let search = window.snapshot?.search {
+                    ForEach(search.results, id: \.self) { line in
+                        Button(line) { window.app.run { _ in try await window.select(line) } }
+                    }
                 }
                 if let editor = window.snapshot?.editor {
                     EditorView(window: window, editor: editor)

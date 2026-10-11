@@ -29,6 +29,8 @@ public struct WindowSnapshot: Decodable, Sendable, Equatable {
     public let editor: EditorRecord?
     /// The Drop in page, when one is open.
     public let session: SessionRecord?
+    /// The scenarios a selected view, tag or step lists, with their capability and status.
+    public let listed: [ScenarioRecord]
     /// Every action on offer, by label.
     public let offers: [String]
     /// Plain labels the window shows, like "Recent" or "Open folder…".
