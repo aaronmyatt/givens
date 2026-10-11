@@ -13,6 +13,7 @@ import (
 func (w *Window) Select(name string) error {
 	assert.That(w != nil, "select runs on a window")
 	assert.That(utf8.ValidString(name), "the name is text")
+	w.selectedView = ""
 	if capability, ok := w.findCapability(name); ok {
 		w.selected, w.selectedCapability, w.selectedScenario = name, capability.Slug, ""
 		w.selectedHelper = ""
@@ -21,6 +22,9 @@ func (w *Window) Select(name string) error {
 	if scenario, ok := w.findScenario(name); ok {
 		w.selected, w.selectedCapability = name, scenario.Capability
 		w.selectedScenario, w.selectedHelper = scenario.Capability+"/"+scenario.Name, ""
+		return nil
+	}
+	if w.selectView(name) {
 		return nil
 	}
 	if w.selectHelper(name) {

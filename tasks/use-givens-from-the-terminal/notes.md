@@ -13,3 +13,17 @@ its steps, already written in `acceptance/use-givens-from-the-terminal/`, pass, 
 - Reuse step text across scenarios; a step used word for word is defined once.
 
 ## As built
+- All 8 (2026-10-11), Go only (no window, so no Swift suite).
+- Decided: `list`, `run` and `check` live in the Go `givens` binary, not plain bash as the
+  feature's description says. Options: (A) bash for list/run, Go for check; (B) Go for all.
+  Took B: listing needs the Gherkin parser and the status needs runs and fingerprints, which
+  bash would have to copy. The "small script that runs `open -a Givens`" for opening a
+  folder is still Open a project's; it can call this binary for the rest.
+- `givens list [--json] [--tags <expr>]`: path, kind, status from `app.StatusOf`.
+  `internal/tags` parses Cucumber tag expressions (shunting yard, no recursion).
+- `givens run <key>`: the script with the terminal as stdio, then any `scripts/<slug>.md`
+  steps one at a time (`internal/markdown`), plain text, code blocks bare, Enter or f.
+- `givens check`: "N scenarios, M problems", each problem as
+  "checkout/checkout.feature line 17: expected …" through `spec.Explain`.
+- Views' selection and `ListedScenarios` (Error states, Unverified, tag views) landed here, for
+  "List by tag". The sidebar doesn't list views yet; that's Views'.

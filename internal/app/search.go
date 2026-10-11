@@ -53,13 +53,3 @@ func (w *Window) FilterSearch(kind string) error {
 	assert.That(len(kind) <= NameLengthMax, "the kind fits NameLengthMax")
 	return ErrNotImplemented
 }
-
-// ListedScenarios is the list the main pane shows for what's selected: a view ("Error states"),
-// a tag ("payments"), or a step search result (the scenarios using that step). Needed by
-// capabilities/tags, "List by tag" in capabilities/use-givens-from-the-terminal and "Find every
-// use of a step" in capabilities/search-everything.
-func (w *Window) ListedScenarios() []Scenario {
-	assert.That(w != nil, "listed scenarios run on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
-}

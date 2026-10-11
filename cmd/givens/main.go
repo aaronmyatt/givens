@@ -1,17 +1,20 @@
-// Command givens opens a project's capabilities folder, and lists, runs and checks its
-// scenarios from a terminal. See capabilities/use-givens-from-the-terminal.
+// Command givens lists, runs and checks a project's scenarios from a terminal, and serves the
+// macOS app. See capabilities/use-givens-from-the-terminal.
 //
-// `givens serve` is the core the macOS app runs as a child process. Only `givens check` and
-// `givens serve` work so far; the rest is driven by the backlog in todo.txt.
+//	givens list [--json] [--tags <expression>]
+//	givens run <capability>/<scenario>
+//	givens check [folder]
+//	givens serve --app-data <folder>
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"givens/internal/assert"
 	"givens/internal/serve"
-	"givens/internal/spec"
 )
 
 // Exit codes. Ref: https://pkg.go.dev/os#Exit
@@ -20,6 +23,14 @@ const (
 	exitProblems = 1
 	exitUsage    = 2
 )
+
+// folderDepthMax bounds the walk up from the working folder to the capabilities folder.
+const folderDepthMax = 64
+
+const usage = `usage: givens list [--json] [--tags <expression>]
+       givens run <capability>/<scenario>
+       givens check [folder]
+       givens serve --app-data <folder>`
 
 func main() {
 	assert.That(len(os.Args) >= 1, "the OS passes the program name")
@@ -31,33 +42,56 @@ func main() {
 // run handles one command line and returns the exit code.
 func run(args []string) int {
 	assert.That(args != nil, "args is a list")
-	if len(args) > 0 && args[0] == "serve" {
-		return runServe(args[1:])
-	}
-	if len(args) == 0 || args[0] != "check" {
-		fmt.Println("usage: givens check [capabilities folder]")
-		fmt.Println("       givens serve --app-data <folder>")
+	assert.That(usage != "", "there's usage to print")
+	if len(args) == 0 {
+		fmt.Println(usage)
 		return exitUsage
 	}
-	root := "capabilities"
-	if len(args) > 1 {
-		root = args[1]
+	switch args[0] {
+	case "serve":
+		return runServe(args[1:])
+	case "check":
+		return runCheck(args[1:])
+	case "list":
+		return runList(args[1:])
+	case "run":
+		return runSetup(args[1:])
 	}
-	problems, err := spec.Check(root)
+	fmt.Println(usage)
+	return exitUsage
+}
+
+// complain prints an error to stderr.
+func complain(err error) {
+	assert.That(err != nil, "only an error is printed")
+	assert.That(err.Error() != "", "an error says what's wrong")
+	_, _ = fmt.Fprintln(os.Stderr, err)
+}
+
+// findCapabilities finds the capabilities folder from start: start itself when it's named
+// capabilities, else the first `capabilities` folder in start or a folder above it.
+func findCapabilities(start string) (string, error) {
+	assert.That(start != "", "the search starts somewhere")
+	assert.That(folderDepthMax > 0, "the walk up has a limit")
+	dir, err := filepath.Abs(start)
 	if err != nil {
-		fmt.Println(err)
-		return exitProblems
+		return "", err
 	}
-	for _, problem := range problems {
-		fmt.Println(problem)
+	if filepath.Base(dir) == "capabilities" {
+		return dir, nil
 	}
-	fmt.Printf("%d problems\n", len(problems))
-	problemsMax := spec.CapabilitiesMax * spec.ScenariosPerFeatureMax
-	assert.That(len(problems) <= problemsMax, "problems stay bounded")
-	if len(problems) > 0 {
-		return exitProblems
+	for depth := 0; depth < folderDepthMax; depth++ {
+		candidate := filepath.Join(dir, "capabilities")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
 	}
-	return exitOK
+	return "", errors.New("no capabilities folder here or in any folder above")
 }
 
 // runServe answers the macOS app on stdin and stdout until stdin closes. GIVENS_TEST_SEAMS=1
@@ -69,16 +103,16 @@ func runServe(args []string) int {
 		return exitUsage
 	}
 	if err := os.MkdirAll(args[1], 0o755); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		complain(err)
 		return exitProblems
 	}
 	server, err := serve.New(args[1], os.Getenv("GIVENS_TEST_SEAMS") == "1")
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		complain(err)
 		return exitProblems
 	}
 	if err := server.Serve(os.Stdin, os.Stdout); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		complain(err)
 		return exitProblems
 	}
 	assert.That(server != nil, "serve ran on a server")

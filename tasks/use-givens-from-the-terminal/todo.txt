@@ -1,9 +1,9 @@
-2026-10-11 Pass: List scenarios
-2026-10-11 Pass: Run a setup by name
-2026-10-11 Pass: Check passes
-2026-10-11 Pass: Check finds a problem (error state)
-2026-10-11 Pass: Run a scenario that doesn't exist (error state)
-2026-10-11 Pass: List by tag
-2026-10-11 Pass: Steps done by hand in a terminal
-2026-10-11 Pass: Code blocks in a terminal
+x 2026-10-11 2026-10-11 Pass: List scenarios — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Run a setup by name — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Check passes — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Check finds a problem (error state) — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Run a scenario that doesn't exist (error state) — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: List by tag — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Steps done by hand in a terminal — passes; Go suite only, as no window is involved
+x 2026-10-11 2026-10-11 Pass: Code blocks in a terminal — passes; Go suite only, as no window is involved
 

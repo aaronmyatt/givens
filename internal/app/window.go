@@ -23,6 +23,7 @@ type Window struct {
 	selectedCapability string   // the slug of the capability on show, or ""
 	selectedScenario   string   // "<capability slug>/<name>" of the scenario on show, or ""
 	selectedHelper     string   // "<file>:<name>" of the helper on show, or ""
+	selectedView       string   // the view on show: "Error states", "Unverified", a tag, or ""
 	editor             *Editor  // the file open in the editor, or nil
 	prompt             *prompt  // the question on show, or nil
 	session            *Session // the Drop in on show, or nil
