@@ -1,5 +1,5 @@
-2026-10-11 Pass: Read a story
-2026-10-11 Pass: Read a scenario
-2026-10-11 Pass: A scenario with no setup (error state)
-2026-10-11 Pass: A story image that isn't on disk (error state)
-2026-10-11 Wire Read a capability into the UI shell, after ui-shell
+x 2026-10-11 2026-10-11 Pass: Read a story — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Read a scenario — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A scenario with no setup (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: A story image that isn't on disk (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Wire Read a capability into the UI shell, after ui-shell — scenario view draws lined-up steps and the setup script; not eyeballed

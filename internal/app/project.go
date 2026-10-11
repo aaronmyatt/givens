@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -198,7 +199,7 @@ func (w *Window) capabilityOf(loaded project.Capability) Capability {
 	}
 	if loaded.About != "" {
 		if about, err := os.ReadFile(loaded.About); err == nil {
-			shown.About = string(about)
+			shown.About = withImagePlaceholders(string(about), loaded.Dir)
 		}
 	}
 	for _, scenario := range loaded.Scenarios {
@@ -228,4 +229,26 @@ func (w *Window) scenarioOf(capability project.Capability, loaded project.Scenar
 	}
 	shown.Status = w.statusOf(loaded)
 	return shown
+}
+
+// aboutImage matches a markdown image: ![alt](path).
+const aboutImagePattern = `!\[([^\]]*)\]\(([^)\s]+)\)`
+
+var aboutImage = regexp.MustCompile(aboutImagePattern) //tiger:allow-global compiled once
+
+// withImagePlaceholders replaces each image about.md shows that isn't on disk with a line
+// naming it, so the rest of the story still reads: "Image not found: images/flow.svg".
+func withImagePlaceholders(about string, dir string) string {
+	assert.That(filepath.IsAbs(dir), "the capability's folder is absolute")
+	assert.That(len(about) <= EditorTextBytesMax, "about.md stays bounded")
+	return aboutImage.ReplaceAllStringFunc(about, func(found string) string {
+		path := aboutImage.FindStringSubmatch(found)[2]
+		if strings.Contains(path, "://") {
+			return found
+		}
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path))); err == nil {
+			return found
+		}
+		return "Image not found: " + path
+	})
 }

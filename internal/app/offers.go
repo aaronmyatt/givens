@@ -32,9 +32,12 @@ func (w *Window) Offers() []string {
 		return []string{OfferEdit}
 	}
 	if scenario := w.shownScenario(); scenario != nil {
+		loaded, _ := w.findScenario(w.selectedScenario)
 		offers = append(offers, scenarioOffers(*scenario)...)
-		if loaded, ok := w.findScenario(w.selectedScenario); ok && loaded.Setup != "" &&
-			loaded.Teardown == "" {
+		if noSetup(loaded) {
+			offers = append(offers, OfferCreateScript, OfferWriteSetupSteps)
+		}
+		if loaded.Setup != "" && loaded.Teardown == "" {
 			offers = append(offers, OfferAddTeardown)
 		}
 	} else if w.project != nil {
@@ -123,6 +126,10 @@ func (w *Window) Choose(action string) error {
 	if action == OfferAddTeardown && w.selectedScenario != "" {
 		return w.addTeardown()
 	}
+	if (action == OfferCreateScript || action == OfferWriteSetupSteps) &&
+		w.selectedScenario != "" {
+		return w.createSetup(action == OfferCreateScript)
+	}
 	if action == OfferDropIn && w.selectedScenario != "" {
 		_, err := w.DropIn(w.selectedScenario)
 		return err
@@ -203,6 +210,52 @@ func (w *Window) addTeardown() error {
 	text := KitSourceLine + "\n# Clears what " + scenario.Name +
 		"'s setup leaves behind. It runs before every setup run,\n" +
 		"# so it must cope when there's nothing to clear.\n"
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.editFile(path)
+}
+
+// Offers on a scenario with no setup yet, and what the page says in its place.
+const (
+	OfferCreateScript    = "Create script"
+	OfferWriteSetupSteps = "Write setup steps"
+	MessageNoSetup       = "No setup yet"
+)
+
+// noSetup is true for a scenario with no setup files at all.
+func noSetup(scenario project.Scenario) bool {
+	assert.That(scenario.Capability != "" || scenario.Name == "", "a scenario has a home")
+	assert.That(scenario.Setup == "" || filepath.IsAbs(scenario.Setup), "paths are absolute")
+	return scenario.Name != "" && scenario.Setup == "" && scenario.SetupCards == "" &&
+		scenario.Teardown == ""
+}
+
+// createSetup starts the selected scenario's setup: a script sourcing the kit, or setup steps
+// done by hand as an empty numbered list. It opens the new file in the editor.
+func (w *Window) createSetup(script bool) error {
+	assert.That(w != nil, "create setup runs on a window")
+	assert.That(w.selectedScenario != "", "a scenario is selected")
+	scenario, ok := w.findScenario(w.selectedScenario)
+	if !ok || scenario.Slug == "" {
+		return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
+	}
+	capability, _ := w.findCapability(scenario.Capability)
+	path := filepath.Join(capability.Dir, "scripts", scenario.Slug+".md")
+	text := "1.\n"
+	if script {
+		path = filepath.Join(capability.Dir, "scripts", scenario.Slug+".sh")
+		text = KitSourceLine + "\n"
+	}
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", filepath.Base(path))
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		return err
 	}

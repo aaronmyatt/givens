@@ -78,7 +78,17 @@ public final class WindowModel: Identifiable {
     static func lines(_ scenario: ScenarioRecord) -> [String] {
         // Tags sit above the steps, as the scenario view lays them out.
         [scenario.name, scenario.status, scenario.warning, scenario.tags.joined(separator: " ")]
-            + scenario.steps + [scenario.setup]
+            + linedUp(scenario.steps) + [scenario.setup]
+    }
+
+    /// Pads each step's keyword on the left to the longest keyword's width, so the step texts
+    /// start in one column: "Given …", " When …". internal/app's linedUp does the same.
+    public static func linedUp(_ steps: [String]) -> [String] {
+        let keywords = steps.map { $0.split(separator: " ", maxSplits: 1).first ?? "" }
+        let width = keywords.map(\.count).max() ?? 0
+        return zip(steps, keywords).map { step, keyword in
+            String(repeating: " ", count: width - keyword.count) + step
+        }
     }
 
     /// Selects a sidebar item, scenario, search result or helper by its name.

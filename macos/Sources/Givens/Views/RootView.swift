@@ -198,7 +198,8 @@ struct ScenarioView: View {
         if !scenario.status.isEmpty { Text(scenario.status).foregroundStyle(.secondary) }
         WarningText(warning: scenario.warning)
         Text(scenario.tags.joined(separator: " ")).foregroundStyle(.secondary)
-        ForEach(scenario.steps, id: \.self) { Text($0).monospaced() }
+        ForEach(WindowModel.linedUp(scenario.steps), id: \.self) { Text($0).monospaced() }
+        if !scenario.setup.isEmpty { Text(scenario.setup).monospaced().foregroundStyle(.secondary) }
     }
 }
 

@@ -1,4 +1,3 @@
-2026-10-11 Read a capability: 4 scenarios ref:read-a-capability
 2026-10-11 Views: 4 scenarios ref:views
 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios
 2026-10-11 Open a project: 14 scenarios ref:open-a-project
@@ -18,3 +17,4 @@ x 2026-10-11 2026-10-11 Copy a setup script: 5 scenarios ref:copy-a-setup-script
 x 2026-10-11 2026-10-11 Drop into a scenario: 43 scenarios ref:drop-into-a-scenario — see tasks/drop-into-a-scenario/notes.md
 2026-10-11 Drop in UI: draw outline rows (dropInRows)
 x 2026-10-11 2026-10-11 Trust a project: 4 scenarios ref:trust-a-project — see tasks/trust-a-project/notes.md
+x 2026-10-11 2026-10-11 Read a capability: 4 scenarios ref:read-a-capability — see tasks/read-a-capability/notes.md

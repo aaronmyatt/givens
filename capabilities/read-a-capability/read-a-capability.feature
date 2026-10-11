@@ -8,7 +8,6 @@ Feature: Read a capability
   script. Views in the sidebar, such as "Error states", list scenarios from every capability at
   once.
 
-  @wip
   Scenario: Read a story
     Given a developer has the sample shop project open in Givens
     When they select "Checkout"
@@ -16,7 +15,6 @@ Feature: Read a capability
     And below the story, about.md is shown with the checkout flow diagram
     And its 5 scenarios are listed, with happy paths and error states marked differently
 
-  @wip
   Scenario: Read a scenario
     Given a developer has the sample shop project open in Givens
     When they select the "Card declined" scenario
@@ -25,7 +23,7 @@ Feature: Read a capability
     And its setup script is shown next to the steps
     And they can choose "Copy" or "Drop in"
 
-  @wip @error
+  @error
   Scenario: A scenario with no setup
     Given a developer has the sample shop project open in Givens
     And the "Empty cart" scenario has no setup yet
@@ -34,7 +32,7 @@ Feature: Read a capability
     And in place of a setup they see "No setup yet"
     And they're offered "Create script" and "Write setup steps"
 
-  @wip @error
+  @error
   Scenario: A story image that isn't on disk
     Given a developer has the sample shop project open in Givens
     And Checkout's about.md shows an image that isn't on disk

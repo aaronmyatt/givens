@@ -103,6 +103,9 @@ func (w *Window) Snapshot() WindowSnapshot {
 		labels = append(labels, w.session.hints...)
 	} else if w.selectedScenario != "" {
 		labels = append(labels, w.requirementLabels()...)
+		if loaded, ok := w.findScenario(w.selectedScenario); ok && noSetup(loaded) {
+			labels = append(labels, MessageNoSetup)
+		}
 	} else if w.selectedHelper != "" {
 		labels = append(labels, w.helperLabels()...)
 	}
@@ -195,7 +198,7 @@ func scenarioLines(scenario Scenario) []string {
 		tags += tag
 	}
 	lines := append([]string{scenario.Name, scenario.Status, scenario.Warning, tags},
-		scenario.Steps...)
+		linedUp(scenario.Steps)...)
 	lines = append(lines, scenario.Setup)
 	assert.That(len(lines) >= 4, "a scenario shows its name, status, warning and tags")
 	return lines
@@ -270,4 +273,22 @@ func (w *Window) searchMessages() []string {
 		return []string{`Nothing matches "` + w.search.query + `"`}
 	}
 	return []string{}
+}
+
+// linedUp pads each step's keyword on the left to the longest keyword's width, so the step
+// texts start in one column, as the scenario page shows them: "Given …", " When …".
+func linedUp(steps []string) []string {
+	assert.That(len(steps) <= SetupCardsMax*4, "steps stay bounded")
+	width := 0
+	for _, step := range steps {
+		keyword, _, _ := strings.Cut(step, " ")
+		width = max(width, len(keyword))
+	}
+	lines := make([]string, 0, len(steps))
+	for _, step := range steps {
+		keyword, text, _ := strings.Cut(step, " ")
+		lines = append(lines, strings.Repeat(" ", width-len(keyword))+keyword+" "+text)
+	}
+	assert.That(len(lines) == len(steps), "each step is one line")
+	return lines
 }
