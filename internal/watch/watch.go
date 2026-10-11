@@ -57,6 +57,15 @@ func (w *Watcher) Changed(now time.Time) (bool, error) {
 	if now.Sub(w.looked) < Interval {
 		return false, nil
 	}
+	return w.Look(now)
+}
+
+// Look looks again now, whatever the time since the last look, and is true when a file was
+// added, removed or changed since. A reader that must not see stale files uses it; one that
+// polls on a timer uses Changed.
+func (w *Watcher) Look(now time.Time) (bool, error) {
+	assert.That(w != nil, "look runs on a watcher")
+	assert.That(!now.IsZero(), "now is a time")
 	files, err := look(w.root)
 	if err != nil {
 		return false, err

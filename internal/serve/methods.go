@@ -22,22 +22,23 @@ const (
 
 // params holds every field any method takes. Swift sends most as strings.
 type params struct {
-	Window   string           `json:"window"`
-	Path     string           `json:"path"`
-	Paths    []string         `json:"paths"`
-	BinDir   string           `json:"binDir"`
-	Name     string           `json:"name"`
-	Action   string           `json:"action"`
-	Text     string           `json:"text"`
-	Keys     string           `json:"keys"`
-	Scenario string           `json:"scenario"`
-	Item     string           `json:"item"`
-	Mark     string           `json:"mark"`
-	Note     string           `json:"note"`
-	Seconds  json.RawMessage  `json:"seconds"` // a number, or a number in a string
-	Releases []app.KitRelease `json:"releases"`
-	Target   string           `json:"target"`
-	NewName  string           `json:"newName"`
+	Window     string           `json:"window"`
+	Path       string           `json:"path"`
+	Paths      []string         `json:"paths"`
+	BinDir     string           `json:"binDir"`
+	Name       string           `json:"name"`
+	Action     string           `json:"action"`
+	Text       string           `json:"text"`
+	Keys       string           `json:"keys"`
+	Scenario   string           `json:"scenario"`
+	Item       string           `json:"item"`
+	Mark       string           `json:"mark"`
+	Note       string           `json:"note"`
+	Seconds    json.RawMessage  `json:"seconds"` // a number, or a number in a string
+	Releases   []app.KitRelease `json:"releases"`
+	Target     string           `json:"target"`
+	NewName    string           `json:"newName"`
+	Capability string           `json:"capability"`
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.
@@ -65,6 +66,7 @@ func (s *Server) table() map[string]handler {
 		"session.recordRun":         s.onSession(recordRun),
 		seamPrefix + "shipKits":     s.shipKits,
 		seamPrefix + "advanceClock": s.advanceClock,
+		seamPrefix + "markTrusted":  s.markTrusted,
 	}
 	for name, method := range s.needs() {
 		assert.That(methods[name] == nil, "a Needs method doesn't replace a core one")
@@ -174,6 +176,17 @@ func (s *Server) advanceClock(given params) (any, error) {
 	}
 	s.clock.offset += time.Duration(seconds) * time.Second
 	return nil, nil
+}
+
+// markTrusted trusts a folder as choosing "Trust" would, so a suite can start trusted, as
+// acceptance/world does in Go.
+func (s *Server) markTrusted(given params) (any, error) {
+	assert.That(s != nil, "mark trusted runs on a server")
+	assert.That(s.core != nil, "the server has an app")
+	if err := absolute(given.Path); err != nil {
+		return nil, err
+	}
+	return nil, s.core.MarkTrusted(given.Path)
 }
 
 // absolute rejects a path the app can't have sent: empty, relative or too long.

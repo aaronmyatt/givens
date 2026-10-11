@@ -80,6 +80,9 @@ struct DetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(window.snapshot?.messages ?? [], id: \.self) { Text($0).bold() }
+                ForEach(window.snapshot?.labels ?? [], id: \.self) {
+                    Text($0).foregroundStyle(.secondary)
+                }
                 if let capability = window.snapshot?.capability {
                     CapabilityView(capability: capability)
                 }

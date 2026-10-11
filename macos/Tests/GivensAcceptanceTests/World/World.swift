@@ -36,6 +36,10 @@ final class World {
     /// The last command's exit code.
     var exitCode: Int32 = 0
 
+    /// Keeps openSampleShop from trusting the shop. Scenarios about trust set it; every other
+    /// scenario starts trusted, as if the developer chose "Trust" earlier. Mirrors Go's World.
+    var untrusted = false
+
     /// The file the scenario last edited, for "the file is saved anyway".
     var editedPath: URL?
     var editedText = ""
@@ -93,10 +97,11 @@ final class World {
         app = AppModel(serve: serve, platform: platform)
     }
 
-    /// Copies the sample shop and opens its capabilities folder.
+    /// Copies the sample shop, trusts it unless `untrusted`, and opens its capabilities folder.
     func openSampleShop() async throws {
         try copySampleShop()
         try startApp()
+        if !untrusted { try await app?.markTrusted(capabilities.path) }
         window = try await app?.open(capabilities.path)
     }
 

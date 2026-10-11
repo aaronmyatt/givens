@@ -111,6 +111,8 @@ final class TrustAProjectState {
 
 @MainActor
 func trustAProjectSteps(_ w: World) -> [StepDefinition] {
+    // Trust is what these scenarios are about, so the shop starts untrusted.
+    w.untrusted = true
     let s = TrustAProjectState(w)
     return trustAProjectAskSteps(s) + trustAProjectChoiceSteps(s) + trustAProjectCloneSteps(s)
 }

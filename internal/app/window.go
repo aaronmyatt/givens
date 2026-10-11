@@ -19,11 +19,14 @@ type Window struct {
 	project *project.Project // nil when found is false
 	watcher *watch.Watcher   // nil when found is false
 
-	selected           string  // the name Select was given, or ""
-	selectedCapability string  // the slug of the capability on show, or ""
-	selectedScenario   string  // the run key of the scenario on show, or ""
-	editor             *Editor // the file open in the editor, or nil
-	prompt             *prompt // the question on show, or nil
+	selected           string   // the name Select was given, or ""
+	selectedCapability string   // the slug of the capability on show, or ""
+	selectedScenario   string   // "<capability slug>/<name>" of the scenario on show, or ""
+	selectedHelper     string   // "<file>:<name>" of the helper on show, or ""
+	editor             *Editor  // the file open in the editor, or nil
+	prompt             *prompt  // the question on show, or nil
+	session            *Session // the Drop in on show, or nil
+	holdRefresh        bool     // a snapshot is being built, and has already looked
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -130,7 +133,7 @@ func (w *Window) Capability(name string) (Capability, error) {
 	if !ok {
 		return Capability{}, fmt.Errorf("%s: %w", name, ErrNotFound)
 	}
-	return capabilityOf(loaded), nil
+	return w.capabilityOf(loaded), nil
 }
 
 // Scenario returns a scenario by its name. Names are unique within the project's sample data;
@@ -143,19 +146,5 @@ func (w *Window) Scenario(name string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("%s: %w", name, ErrNotFound)
 	}
 	capability, _ := w.findCapability(loaded.Capability)
-	return scenarioOf(capability, loaded), nil
-}
-
-// DropIn drops in to a scenario: it runs the setup and opens the Drop in page.
-func (w *Window) DropIn(scenario string) (*Session, error) {
-	assert.That(w != nil, "drop in runs on a window")
-	assert.That(len(scenario) <= NameLengthMax, "the name fits NameLengthMax")
-	return nil, ErrNotImplemented
-}
-
-// Session is the current Drop in, or nil.
-func (w *Window) Session() *Session {
-	assert.That(w != nil, "session runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
+	return w.scenarioOf(capability, loaded), nil
 }

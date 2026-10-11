@@ -15,11 +15,15 @@ func (w *Window) Select(name string) error {
 	assert.That(utf8.ValidString(name), "the name is text")
 	if capability, ok := w.findCapability(name); ok {
 		w.selected, w.selectedCapability, w.selectedScenario = name, capability.Slug, ""
+		w.selectedHelper = ""
 		return nil
 	}
 	if scenario, ok := w.findScenario(name); ok {
 		w.selected, w.selectedCapability = name, scenario.Capability
-		w.selectedScenario = scenario.Capability + "/" + scenario.Name
+		w.selectedScenario, w.selectedHelper = scenario.Capability+"/"+scenario.Name, ""
+		return nil
+	}
+	if w.selectHelper(name) {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", name, ErrNotFound)
@@ -43,7 +47,7 @@ func (w *Window) shownCapability() *Capability {
 	if !ok {
 		return nil
 	}
-	shown := capabilityOf(loaded)
+	shown := w.capabilityOf(loaded)
 	return &shown
 }
 
@@ -59,7 +63,7 @@ func (w *Window) shownScenario() *Scenario {
 		return nil
 	}
 	capability, _ := w.findCapability(loaded.Capability)
-	shown := scenarioOf(capability, loaded)
+	shown := w.scenarioOf(capability, loaded)
 	return &shown
 }
 

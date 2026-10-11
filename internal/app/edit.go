@@ -59,6 +59,9 @@ type Editor struct {
 	text     string // what the editor shows, unsaved changes included
 	opened   string // the file's text when it was opened or last saved
 	problems []string
+	line     int // the line the editor opened at, counting from 1; 0 for the top
+
+	helperProblems []HelperProblem // `bash -n` reports, for a helper file
 }
 
 // NewStory creates a capability from the New story dialog: <slug>/<slug>.feature with

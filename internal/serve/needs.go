@@ -3,6 +3,7 @@ package serve
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"givens/internal/app"
@@ -21,6 +22,12 @@ func (s *Server) needs() map[string]handler {
 		"window.setEditorText": s.onWindow(setEditorText),
 		"window.saveEditor":    s.onWindow(saveEditor),
 		"window.rename":        s.onWindow(rename),
+		// capabilities/share-setup-between-scenarios: Needs/share-setup-between-scenarios.swift.
+		"window.helpers":          s.onWindow(sharedHelpers),
+		"window.requiredCommands": s.onWindow(requiredCommands),
+		"window.editingHelper":    s.onWindow(editingHelper),
+		"window.newHelper":        s.onWindow(newHelper),
+		"window.saveHelper":       s.onWindow(saveHelper),
 	}
 }
 
@@ -73,4 +80,41 @@ func rename(window *app.Window, given params) (any, error) {
 		return nil, fmt.Errorf("%w: rename needs a name and a new name", ErrBadRequest)
 	}
 	return nil, window.Rename(given.Name, given.NewName)
+}
+
+func sharedHelpers(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "helpers runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.Helpers(), nil
+}
+
+func requiredCommands(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "required commands runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if given.Scenario == "" || len(given.Scenario) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: required commands names a scenario", ErrBadRequest)
+	}
+	return window.RequiredCommands(given.Scenario)
+}
+
+func editingHelper(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "editing helper runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.EditingHelper(), nil
+}
+
+func newHelper(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "new helper runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if given.Capability == "" || given.Name == "" || strings.ContainsAny(given.Name, "/ \n") {
+		return nil, fmt.Errorf("%w: a helper needs a capability and a function name",
+			ErrBadRequest)
+	}
+	return nil, window.NewHelper(given.Capability, given.Name)
+}
+
+func saveHelper(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "save helper runs on a window")
+	assert.That(utf8.ValidString(given.Text), "JSON strings are text")
+	return nil, window.SaveHelper(given.Text)
 }

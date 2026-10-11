@@ -124,7 +124,9 @@ func (e *Editor) Save() error {
 func (e *Editor) snapshot() *EditorSnapshot {
 	assert.That(e != nil, "snapshot runs on an editor")
 	assert.That(e.problems != nil, "problems is a list")
-	return &EditorSnapshot{
-		Path: e.path, Text: e.text, Problems: append([]string{}, e.problems...),
+	problems := append([]string{}, e.problems...)
+	for _, problem := range e.helperProblems {
+		problems = append(problems, fmt.Sprintf("line %d: %s", problem.Line, problem.Message))
 	}
+	return &EditorSnapshot{Path: e.path, Text: e.text, Problems: problems}
 }

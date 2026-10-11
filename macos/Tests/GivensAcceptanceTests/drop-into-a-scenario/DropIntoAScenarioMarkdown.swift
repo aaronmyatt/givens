@@ -73,6 +73,7 @@ extension DropIntoAScenarioState {
     /// Makes `name` a checkout scenario whose setup is only scripts/<slug>.md, holding
     /// `content`. It doesn't trust the project: a markdown setup runs nothing.
     func markdownSetup(_ name: String, _ content: String) throws {
+        w.untrusted = true
         try w.copySampleShop()
         try w.ensureScenario("checkout", name)
         scenario = name

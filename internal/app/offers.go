@@ -20,7 +20,13 @@ func (w *Window) Offers() []string {
 	if w.prompt != nil {
 		return []string{w.prompt.confirm, OfferCancel}
 	}
+	if w.session != nil {
+		return w.session.offers()
+	}
 	offers := make([]string, 0, 8)
+	if w.selectedHelper != "" {
+		return []string{OfferEdit}
+	}
 	if scenario := w.shownScenario(); scenario != nil {
 		offers = append(offers, scenarioOffers(*scenario)...)
 	} else if w.project != nil {
@@ -92,6 +98,16 @@ func (w *Window) Choose(action string) error {
 	}
 	if action == OfferMoveToOwnCapability {
 		return w.moveToOwnCapability()
+	}
+	if w.session != nil {
+		return w.session.choose(action)
+	}
+	if action == OfferEdit && w.selectedHelper != "" {
+		return w.editHelper()
+	}
+	if action == OfferDropIn && w.selectedScenario != "" {
+		_, err := w.DropIn(w.selectedScenario)
+		return err
 	}
 	return ErrNotImplemented
 }

@@ -129,12 +129,65 @@ ask() {
   printf -v "$_g_name" '%s' "$_g_value"
 }
 
-# _givens_load <folder>: sources every <folder>/*.sh but the kit itself, in name order.
+# from <capability>/<slug> [column=value …]: runs that scenario's teardown, then its setup,
+# before this one, with its "your turn" lines hidden. GIVENS_FROM_CHAIN holds the run keys on
+# the way here, so setups that build on each other in a loop stop instead of running forever.
+from() {
+  local _g_key="${1:-}" _g_script _g_chain _g_pair
+  if [ -z "$_g_key" ]; then fail "from needs a scenario, like checkout/pay-with-saved-card"; fi
+  shift
+  _g_script="$GIVENS_ROOT/${_g_key%%/*}/scripts/${_g_key#*/}.sh"
+  if [ ! -f "$_g_script" ]; then fail "from $_g_key: there's no scenario with that name"; fi
+  _g_chain="${GIVENS_FROM_CHAIN:-$(_givens_key "$GIVENS_SCRIPT")}"
+  case " $_g_chain " in
+    *" $_g_key "*) fail "from loop: $(_givens_slugs "$_g_chain $_g_key")" ;;
+  esac
+  printf '→ from %s\n' "$_g_key${1+ $*}"
+  (
+    export GIVENS_QUIET=1 GIVENS_SCENARIO="$_g_key" GIVENS_FROM_CHAIN="$_g_chain $_g_key"
+    for _g_pair in ${1+"$@"}; do
+      case "${_g_pair%%=*}" in
+        '' | [0-9]* | *[!A-Za-z0-9_]*) fail "from: $_g_pair isn't column=value" ;;
+      esac
+      export "GIVENS_EX_${_g_pair%%=*}=${_g_pair#*=}"
+    done
+    if [ -f "${_g_script%.sh}.teardown.sh" ]; then bash "${_g_script%.sh}.teardown.sh"; fi
+    bash "$_g_script"
+  )
+}
+
+# _givens_key <script>: the run key of a setup script's path, like checkout/card-declined.
+_givens_key() {
+  local _g_dir
+  _g_dir="$(dirname "$(dirname "$1")")"
+  printf '%s/%s' "$(basename "$_g_dir")" "$(basename "$1" .sh)"
+}
+
+# _givens_slugs <keys>: the keys' slugs joined with arrows, for the loop message.
+_givens_slugs() {
+  local _g_key _g_out=''
+  for _g_key in $1; do
+    _g_out="${_g_out:+$_g_out → }${_g_key#*/}"
+  done
+  printf '%s' "$_g_out"
+}
+
+# _givens_load <folder>: sources every <folder>/*.sh but the kit itself, in name order. Two
+# files in one folder defining the same function get a warning naming both, the one in effect
+# first; a capability's helper overriding a shared one is expected, so it's quiet.
 _givens_load() {
-  local _g_file
+  local _g_file _g_name _g_other _g_seen=''
   for _g_file in "$1"/*.sh; do
     [ -f "$_g_file" ] || continue
     [ "$(basename "$_g_file")" = "givens.sh" ] && continue
+    while IFS= read -r _g_name; do
+      _g_other="$(printf '%s' "$_g_seen" | awk -v name="$_g_name" '$1 == name { print $2 }')"
+      if [ -n "$_g_other" ]; then
+        warn "$_g_name is defined in both ${_g_file#"$GIVENS_ROOT"/} and $_g_other"
+      fi
+      _g_seen="$_g_seen$_g_name ${_g_file#"$GIVENS_ROOT"/}
+"
+    done < <(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*()[[:space:]]*{.*/\1/p' "$_g_file")
     # shellcheck source=/dev/null
     source "$_g_file"
   done

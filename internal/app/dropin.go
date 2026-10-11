@@ -2,7 +2,6 @@ package app
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"givens/internal/assert"
 )
@@ -107,15 +106,6 @@ func (s *Session) ClickInlineCode(card int, code string) error {
 	assert.That(card >= 0 && card < SetupCardsMax, "a card index fits SetupCardsMax")
 	assert.That(code != "", "inline code has text")
 	assert.That(!strings.Contains(code, "`"), "inline code is given without its backticks")
-	return ErrNotImplemented
-}
-
-// SetRunNote sets the note that "Record run" saves with the run. Needed by "Record a run".
-func (s *Session) SetRunNote(note string) error {
-	assert.That(s != nil, "set run note runs on a session")
-	assert.That(utf8.ValidString(note), "a note is text")
-	assert.That(!strings.Contains(note, "\n"), "a note is one line, so a run stays one line")
-	assert.That(len(note) <= NameLengthMax, "a note fits NameLengthMax")
 	return ErrNotImplemented
 }
 

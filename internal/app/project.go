@@ -71,16 +71,17 @@ func (w *Window) reload() error {
 }
 
 // refresh reloads the project when another tool changed its files. Givens keeps no copy of
-// its own, so every read of a window starts here. The watcher limits looks to one per
-// watch.Interval of wall-clock time; the app's Clock is for dates, not for this.
-// A folder that can't be read keeps showing what was last read.
+// its own, so every read of a window starts here, and looks at the files each time: a step
+// that writes a file and reads the window at once must see the write. While a snapshot is
+// being built it looks once, not once per part. A folder that can't be read keeps showing what
+// was last read.
 func (w *Window) refresh() {
 	assert.That(w != nil, "refresh runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	if w.watcher == nil {
+	if w.watcher == nil || w.holdRefresh {
 		return
 	}
-	changed, err := w.watcher.Changed(time.Now())
+	changed, err := w.watcher.Look(time.Now())
 	if err != nil || !changed {
 		return
 	}
@@ -171,7 +172,7 @@ func capabilityWarning(loaded project.Capability) string {
 }
 
 // capabilityOf is a loaded capability as a window shows it.
-func capabilityOf(loaded project.Capability) Capability {
+func (w *Window) capabilityOf(loaded project.Capability) Capability {
 	assert.That(loaded.Slug != "", "a capability has a slug")
 	assert.That(loaded.Dir != "", "a capability has a folder")
 	shown := Capability{
@@ -185,13 +186,13 @@ func capabilityOf(loaded project.Capability) Capability {
 		}
 	}
 	for _, scenario := range loaded.Scenarios {
-		shown.Scenarios = append(shown.Scenarios, scenarioOf(loaded, scenario))
+		shown.Scenarios = append(shown.Scenarios, w.scenarioOf(loaded, scenario))
 	}
 	return shown
 }
 
 // scenarioOf is a loaded scenario as a window shows it.
-func scenarioOf(capability project.Capability, loaded project.Scenario) Scenario {
+func (w *Window) scenarioOf(capability project.Capability, loaded project.Scenario) Scenario {
 	assert.That(loaded.Capability != "", "a scenario belongs to a capability")
 	assert.That(len(loaded.Steps) <= project.HelperFilesMax, "steps stay bounded")
 	steps := make([]string, 0, len(loaded.Background)+len(loaded.Steps))
@@ -209,5 +210,6 @@ func scenarioOf(capability project.Capability, loaded project.Scenario) Scenario
 			shown.Setup = string(setup)
 		}
 	}
+	shown.Status = w.statusOf(loaded)
 	return shown
 }

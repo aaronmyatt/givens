@@ -83,24 +83,36 @@ func (w *Window) ID() string {
 func (w *Window) Snapshot() WindowSnapshot {
 	assert.That(w != nil, "snapshot runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	w.refresh()
+	w.holdRefresh = true
+	defer func() { w.holdRefresh = false }()
 	var editor *EditorSnapshot
 	if w.editor != nil {
 		editor = w.editor.snapshot()
 	}
-	messages := make([]string, 0, 4)
+	messages, labels := make([]string, 0, 4), make([]string, 0, 4)
 	if w.prompt != nil {
 		messages = append(messages, w.prompt.message)
 	}
+	var session *SessionSnapshot
+	if w.session != nil {
+		session = w.session.snapshot()
+		messages = append(messages, w.session.messages()...)
+		labels = append(labels, w.session.hints...)
+	} else if w.selectedScenario != "" {
+		labels = append(labels, w.requirementLabels()...)
+	}
 	return WindowSnapshot{
 		ID: w.ID(), Kind: w.kind, Title: w.Title(), Path: w.Path(),
-		Messages:   make([]string, 0, 4),
+		Messages:   messages,
 		Sidebar:    append(make([]SidebarItem, 0, 16), w.Sidebar()...),
 		Selected:   w.Selected(),
 		Capability: w.shownCapability(),
 		Scenario:   w.shownScenario(),
 		Editor:     editor,
+		Session:    session,
 		Offers:     append(make([]string, 0, 8), w.Offers()...),
-		Labels:     make([]string, 0, 4),
+		Labels:     labels,
 	}
 }
 
@@ -172,4 +184,23 @@ func scenarioLines(scenario Scenario) []string {
 		scenario.Steps...)
 	assert.That(len(lines) >= 4, "a scenario shows its name, status, warning and tags")
 	return lines
+}
+
+// requirementLabels say what the selected scenario's setup needs installed: "Requires bb", and
+// for a missing command, "bb: Not installed. brew install borkdude/brew/babashka".
+func (w *Window) requirementLabels() []string {
+	assert.That(w != nil, "requirements run on a window")
+	assert.That(w.selectedScenario != "", "a scenario is selected")
+	required, err := w.RequiredCommands(w.selectedScenario)
+	if err != nil {
+		return []string{}
+	}
+	labels := make([]string, 0, 2*len(required))
+	for _, command := range required {
+		labels = append(labels, "Requires "+command.Command)
+		if !command.Installed {
+			labels = append(labels, command.Command+": Not installed. "+command.Hint)
+		}
+	}
+	return labels
 }
