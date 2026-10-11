@@ -182,6 +182,11 @@ extension DropIntoAScenarioState {
 
     func rowAllPassed(_ name: String, _ card: String) async throws {
         try await outlineOpen(name)
+        try await rowPassed(card)
+    }
+
+    /// Drops in to one row of the selected outline and marks every check, as Go's rowPassed.
+    func rowPassed(_ card: String) async throws {
         try await chooseOnRow("Drop in", card)
         try await dropInMarkAll(try await session())
     }

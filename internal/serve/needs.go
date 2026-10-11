@@ -1,8 +1,10 @@
 package serve
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -32,6 +34,14 @@ func (s *Server) needs() map[string]handler {
 		"window.searchResults":   s.onWindow(searchResults),
 		"window.listedScenarios": s.onWindow(listedScenarios),
 		"window.filterSearch":    s.onWindow(filterSearch),
+		// capabilities/drop-into-a-scenario: Needs/drop-into-a-scenario.swift.
+		"session.cards":           s.onSession(cards),
+		"session.chooseOnCard":    s.onSession(chooseOnCard),
+		"session.copyCodeBlock":   s.onSession(copyCodeBlock),
+		"session.clickInlineCode": s.onSession(clickInlineCode),
+		"session.setRunNote":      s.onSession(setRunNote),
+		"window.dropInRows":       s.onWindow(dropInRows),
+		"window.chooseOnRow":      s.onWindow(chooseOnRow),
 	}
 }
 
@@ -142,4 +152,90 @@ func filterSearch(window *app.Window, given params) (any, error) {
 		return nil, fmt.Errorf("%w: a kind fits %d bytes", ErrBadRequest, app.NameLengthMax)
 	}
 	return nil, window.FilterSearch(given.Kind)
+}
+
+func cards(session *app.Session, _ params) (any, error) {
+	assert.That(session != nil, "cards runs on a session")
+	assert.That(session.Status() != "", "a session has a status")
+	return session.Cards(), nil
+}
+
+func chooseOnCard(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "choose on card runs on a session")
+	assert.That(app.SetupCardsMax > 0, "cards have a limit")
+	card, err := indexOf(given.Card, app.SetupCardsMax)
+	if err != nil {
+		return nil, err
+	}
+	if given.Action == "" || len(given.Action) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: choose on card needs an action", ErrBadRequest)
+	}
+	return nil, session.ChooseOnCard(card, given.Action)
+}
+
+func copyCodeBlock(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "copy code block runs on a session")
+	assert.That(app.CodeBlocksMax > 0, "blocks have a limit")
+	card, err := indexOf(given.Card, app.SetupCardsMax)
+	if err != nil {
+		return nil, err
+	}
+	block, err := indexOf(given.Block, app.CodeBlocksMax)
+	if err != nil {
+		return nil, err
+	}
+	return nil, session.CopyCodeBlock(card, block)
+}
+
+func clickInlineCode(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "click inline code runs on a session")
+	assert.That(app.SetupCardsMax > 0, "cards have a limit")
+	card, err := indexOf(given.Card, app.SetupCardsMax)
+	if err != nil {
+		return nil, err
+	}
+	if given.Code == "" || len(given.Code) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: inline code has text", ErrBadRequest)
+	}
+	return nil, session.ClickInlineCode(card, given.Code)
+}
+
+func setRunNote(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "set run note runs on a session")
+	assert.That(utf8.ValidString(given.Note), "JSON strings are text")
+	if len(given.Note) > app.NameLengthMax || strings.Contains(given.Note, "\n") {
+		return nil, fmt.Errorf("%w: a note is one line of %d bytes at most", ErrBadRequest,
+			app.NameLengthMax)
+	}
+	return nil, session.SetRunNote(given.Note)
+}
+
+func dropInRows(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "drop in rows runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.DropInRows(), nil
+}
+
+func chooseOnRow(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "choose on row runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if given.Row == "" || given.Action == "" || len(given.Row) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: choose on row names a row and an action", ErrBadRequest)
+	}
+	return nil, window.ChooseOnRow(given.Row, given.Action)
+}
+
+// indexOf reads an index sent as a number or a number in a string, from 0 to below max.
+func indexOf(raw json.RawMessage, max int) (int, error) {
+	assert.That(max > 0, "indexes have a limit")
+	assert.That(len(raw) < LineLengthBytesMax, "an index came in one line")
+	text := string(raw)
+	if unquoted, err := strconv.Unquote(text); err == nil {
+		text = unquoted
+	}
+	index, err := strconv.Atoi(text)
+	if err != nil || index < 0 || index >= max {
+		return 0, fmt.Errorf("%w: %s isn't an index below %d", ErrBadRequest, raw, max)
+	}
+	return index, nil
 }

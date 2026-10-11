@@ -74,7 +74,9 @@ func (w *Window) ListedScenarios() []Scenario {
 	for _, capability := range w.project.Capabilities {
 		for _, loaded := range capability.Scenarios {
 			shown := w.scenarioOf(capability, loaded)
-			if w.inView(shown) {
+			if w.selectedView == ViewUnverified && loaded.Outline {
+				listed = append(listed, w.unverifiedRows(shown, loaded)...)
+			} else if w.inView(shown) {
 				listed = append(listed, shown)
 			}
 		}
@@ -157,4 +159,22 @@ func (w *Window) viewItems() []SidebarItem {
 		items = append(items, SidebarItem{Name: tag, Kind: KindTag, Count: tagCounts[tag]})
 	}
 	return items
+}
+
+// unverifiedRows lists an outline's rows that aren't verified, each as its own entry, named
+// after the outline and the row: "Card rejected by the bank: stolen".
+func (w *Window) unverifiedRows(shown Scenario, loaded project.Scenario) []Scenario {
+	assert.That(loaded.Outline, "only an outline has rows")
+	assert.That(shown.Name == loaded.Name, "the shown scenario is the loaded one")
+	listed := make([]Scenario, 0, 2)
+	for _, row := range rowsOf(loaded) {
+		status := rowStatus(w.project, loaded, row, w.app.config.Clock.Now())
+		if strings.HasPrefix(status, statusVerified) {
+			continue
+		}
+		entry := shown
+		entry.Name, entry.Status = shown.Name+": "+rowName(row.values), status
+		listed = append(listed, entry)
+	}
+	return listed
 }

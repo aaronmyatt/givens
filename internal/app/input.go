@@ -24,6 +24,10 @@ func (w *Window) Type(text string) error {
 		w.search.query += text
 		return nil
 	}
+	if w.session != nil && w.session.answering() {
+		w.session.cardInput += text
+		return nil
+	}
 	return ErrNotImplemented
 }
 

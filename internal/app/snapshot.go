@@ -142,7 +142,7 @@ func visibleLines(snapshot WindowSnapshot) []string {
 		lines = append(lines, scenarioLines(*snapshot.Scenario)...)
 	}
 	for _, scenario := range snapshot.Listed {
-		lines = append(lines, scenario.Name, scenario.Capability, scenario.Status)
+		lines = append(lines, scenario.Name+" — "+scenario.Status, scenario.Capability)
 	}
 	if snapshot.Search != nil {
 		lines = append(lines, snapshot.Search.Results...)

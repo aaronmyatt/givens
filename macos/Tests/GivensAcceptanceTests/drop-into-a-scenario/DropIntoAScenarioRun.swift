@@ -59,7 +59,9 @@ extension DropIntoAScenarioState {
         let session = try await session()
         guard try await dropInEventually({ dropInIndex(session.output, Self.firstLine) != nil })
         else {
-            throw StepFailure("the first line never appeared while setup ran: \(session.output)")
+            throw StepFailure(
+                "the first line never appeared while setup ran: \(session.output); setup is "
+                    + "\(session.status), the window shows \(try await w.front().visible)")
         }
         guard session.status == SessionModel.running else {
             throw StepFailure("setup is \"\(session.status)\" while it waits, not running")

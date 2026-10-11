@@ -62,6 +62,10 @@ public final class ServeClient {
     public var onSnapshot: ((AppSnapshot) -> Void)?
 
     private var process: Process?
+    /// Parses serve's output in order; see startIfNeeded.
+    private var reader: Task<Void, Never>?
+    /// Feeds the reader; finished when serve stops, so the reader ends too.
+    private var sink: AsyncStream<Data>.Continuation?
     private var nextID = 0
     private var pending: [Int: CheckedContinuation<Data, Error>] = [:]
     private var buffer = Data()
@@ -108,6 +112,7 @@ public final class ServeClient {
 
     /// Stops serve. Pending calls fail.
     public func stop() {
+        sink?.finish()
         process?.terminate()
         process = nil
         failPending(.serveUnavailable("stopped"))
@@ -128,11 +133,18 @@ public final class ServeClient {
         child.standardInput = input
         child.standardOutput = output
         child.standardError = output
-        // readabilityHandler runs on a background queue; hop to the main actor to parse.
+        // readabilityHandler runs on a background queue. Chunks go through one AsyncStream to
+        // one reader on the main actor, so they're parsed in the order serve wrote them: a Task
+        // per chunk could apply an older pushed snapshot after a newer reply.
         // Ref: https://developer.apple.com/documentation/foundation/filehandle/readabilityhandler
-        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let chunk = handle.availableData
-            Task { @MainActor in self?.receive(chunk) }
+        // Ref: https://developer.apple.com/documentation/swift/asyncstream
+        let (chunks, sink) = AsyncStream.makeStream(of: Data.self)
+        self.sink = sink
+        output.fileHandleForReading.readabilityHandler = { handle in
+            sink.yield(handle.availableData)
+        }
+        reader = Task { @MainActor [weak self] in
+            for await chunk in chunks { self?.receive(chunk) }
         }
         child.terminationHandler = { [weak self] ended in
             let status = ended.terminationStatus
@@ -183,11 +195,19 @@ public final class ServeClient {
     private func ended(_ status: Int32) {
         if let output = process?.standardOutput as? Pipe {
             output.fileHandleForReading.readabilityHandler = nil
-            receive(output.fileHandleForReading.readDataToEndOfFile())
+            sink?.yield(output.fileHandleForReading.readDataToEndOfFile())
         }
+        sink?.finish()
         process = nil
-        let said = strayLines.joined(separator: "\n")
-        failPending(.serveUnavailable("givens serve exited \(status)\n\(said)"))
+        // Pending calls fail once the reader has parsed what serve printed last, so the
+        // failure can quote it.
+        let reading = reader
+        Task { @MainActor [weak self] in
+            await reading?.value
+            guard let self else { return }
+            let said = self.strayLines.joined(separator: "\n")
+            self.failPending(.serveUnavailable("givens serve exited \(status)\n\(said)"))
+        }
     }
 
     private func scheduleTimeout(_ id: Int, _ method: String) {

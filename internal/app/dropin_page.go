@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 
 	"givens/internal/assert"
 )
@@ -14,7 +16,7 @@ func (s *Session) snapshot() *SessionSnapshot {
 	assert.That(s.window != nil, "a session belongs to a window")
 	return &SessionSnapshot{
 		Scenario: s.scenario.Name, Status: s.Status(), Output: s.Output(),
-		Cards: make([]string, 0, 4), Checklist: s.Checklist(),
+		Cards: s.cardLines(), Checklist: s.Checklist(),
 	}
 }
 
@@ -42,6 +44,9 @@ func (s *Session) offers() []string {
 	assert.That(s != nil, "offers runs on a session")
 	assert.That(s.window != nil, "a session belongs to a window")
 	offers := make([]string, 0, 4)
+	if pending := s.pendingCard(); pending >= 0 {
+		offers = append(offers, s.cards[pending].Offers...)
+	}
 	switch s.Status() {
 	case SessionRunning:
 		if s.stillRunning() != "" {
@@ -49,12 +54,13 @@ func (s *Session) offers() []string {
 		}
 		offers = append(offers, OfferStop)
 	case SessionReady:
-		offers = append(offers, OfferRecordRun)
-	case SessionFailed, SessionStopped:
-		if s.scenario.Setup != "" {
-			offers = append(offers, OfferEditScript)
+		// Unnamed Examples blocks would share their runs, so a row can't be recorded.
+		if examplesWarning(s.scenario) == "" {
+			offers = append(offers, OfferRecordRun)
 		}
-		offers = append(offers, OfferTryAgain)
+		offers = append(offers, OfferResetState)
+	case SessionFailed, SessionStopped:
+		offers = append(offers, s.failedOffers()...)
 	}
 	if len(s.hints) > 0 {
 		offers = append(offers, OfferCopy)
@@ -67,6 +73,10 @@ func (s *Session) choose(action string) error {
 	assert.That(s != nil, "choose runs on a session")
 	assert.That(action != "", "an action has a label")
 	window := s.window
+	if pending := s.pendingCard(); pending >= 0 &&
+		slices.Contains(s.cards[pending].Offers, action) {
+		return s.ChooseOnCard(pending, action)
+	}
 	switch action {
 	case OfferStop:
 		if s.process == nil {
@@ -77,20 +87,76 @@ func (s *Session) choose(action string) error {
 	case OfferKeepWaiting:
 		s.keepWaiting = true
 		return nil
-	case OfferTryAgain:
-		_, err := window.DropIn(s.scenario.Capability + "/" + s.scenario.Name)
-		return err
+	case OfferTryAgain, OfferResetState:
+		return s.restart(false)
+	case OfferRunSetupAnyway:
+		return s.restart(true)
 	case OfferEditScript:
-		relative, err := filepath.Rel(window.path, s.scenario.Setup)
-		if err != nil {
-			return err
-		}
-		_, err = window.Edit(relative)
-		return err
+		return window.editFile(s.scenario.Setup)
+	case OfferEditTeardown:
+		return window.editFile(s.scenario.Teardown)
+	case OfferEditSetup:
+		return window.editFile(s.scenario.SetupCards)
 	case OfferRecordRun:
 		return s.RecordRun(s.note)
 	case OfferCopy:
 		return window.app.config.Clipboard.WriteText(s.hints[0])
 	}
 	return ErrNotImplemented
+}
+
+// failedOffers are the Drop in page's buttons once setup has failed or been stopped.
+func (s *Session) failedOffers() []string {
+	assert.That(s.status == SessionFailed || s.status == SessionStopped, "setup has ended")
+	assert.That(s.scenario.Name != "", "the session has a scenario")
+	if s.teardown && s.status == SessionFailed {
+		return []string{OfferEditTeardown, OfferRunSetupAnyway}
+	}
+	if s.markdownFailed {
+		return []string{OfferEditSetup, OfferTryAgain}
+	}
+	offers := make([]string, 0, 2)
+	if s.scenario.Setup != "" {
+		offers = append(offers, OfferEditScript)
+	}
+	return append(offers, OfferTryAgain)
+}
+
+// editFile opens a file inside the capabilities folder in the editor.
+func (w *Window) editFile(path string) error {
+	assert.That(w != nil, "edit file runs on a window")
+	assert.That(path == "" || filepath.IsAbs(path), "the path is absolute")
+	if path == "" {
+		return ErrNotFound
+	}
+	relative, err := filepath.Rel(w.path, path)
+	if err != nil {
+		return err
+	}
+	_, err = w.Edit(relative)
+	return err
+}
+
+// cardLines are the cards as the Drop in page shows them: the markdown setup's intro first,
+// then each card's heading, text, links and warning.
+func (s *Session) cardLines() []string {
+	assert.That(s != nil, "card lines run on a session")
+	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
+	lines := make([]string, 0, 4*len(s.cards)+1)
+	if s.intro != "" {
+		lines = append(lines, s.intro)
+	}
+	for index, card := range s.cards {
+		switch card.Kind {
+		case CardByHand:
+			lines = append(lines, "By hand, in "+card.Where)
+		case CardMarkdown:
+			lines = append(lines, fmt.Sprintf("Step %d", index-s.markdownFrom+1))
+		}
+		lines = append(append(lines, card.Text), card.Images...)
+		if card.Warning != "" {
+			lines = append(lines, card.Warning)
+		}
+	}
+	return lines
 }

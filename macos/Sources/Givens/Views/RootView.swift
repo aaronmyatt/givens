@@ -125,10 +125,9 @@ struct DetailView: View {
                     Button {
                         window.app.run { _ in try await window.select(scenario.name) }
                     } label: {
-                        HStack {
-                            Text(scenario.name)
+                        VStack(alignment: .leading) {
+                            Text("\(scenario.name) — \(scenario.status)")
                             Text(scenario.capability).foregroundStyle(.secondary)
-                            Text(scenario.status).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -140,9 +139,8 @@ struct DetailView: View {
                 if let editor = window.snapshot?.editor {
                     EditorView(window: window, editor: editor)
                 }
-                if let session = window.snapshot?.session {
-                    ForEach(session.output, id: \.self) { Text($0).monospaced() }
-                    ForEach(session.checklist, id: \.text) { Text("\($0.mark) \($0.text)") }
+                if let session = window.session {
+                    DropInView(window: window, session: session)
                 }
                 HStack {
                     ForEach(window.offers, id: \.self) { offer in
@@ -226,5 +224,45 @@ struct EditorView: View {
             }
         }
         .keyboardShortcut("s")
+    }
+}
+
+/// The Drop in page: setup's output, the cards it's paused at, and the checklist with its
+/// marks. Card buttons are the window's offers, so they sit with the others below.
+struct DropInView: View {
+    let window: WindowModel
+    let session: SessionModel
+    @State private var answer = ""
+
+    var body: some View {
+        ForEach(Array(session.output.enumerated()), id: \.offset) { _, line in
+            Text(line).monospaced()
+        }
+        ForEach(Array(session.cards.enumerated()), id: \.offset) { _, line in
+            Text(line).padding(.leading, 8)
+        }
+        if session.status == SessionModel.waiting {
+            TextField("Type the value", text: $answer)
+                .onSubmit { window.app.run { _ in try await window.type(answer) } }
+        }
+        ForEach(session.checklist, id: \.text) { item in
+            HStack {
+                Text(item.mark.isEmpty ? "○" : item.mark)
+                Text(item.text)
+                Spacer()
+                if item.kind == "then" {
+                    Button("Pass") {
+                        window.app.run { _ in try await session.mark(item.text, "pass") }
+                    }
+                    Button("Fail") {
+                        window.app.run { _ in try await session.mark(item.text, "fail") }
+                    }
+                } else {
+                    Button("Done") {
+                        window.app.run { _ in try await session.mark(item.text, "done") }
+                    }
+                }
+            }
+        }
     }
 }

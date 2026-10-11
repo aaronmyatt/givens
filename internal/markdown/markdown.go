@@ -171,3 +171,19 @@ func Plain(text string) string {
 	assert.That(!strings.Contains(plain, "`"), "no inline code marks are left")
 	return plain
 }
+
+// Rendered is markdown as the Drop in page shows it: links as their text (their targets are
+// in Step.Links), images left out (they're in Step.Images), and no code or bold marks.
+func Rendered(text string) string {
+	assert.That(len(text) <= TextBytesMax, "the text stays bounded")
+	shown := link.ReplaceAllStringFunc(text, func(found string) string {
+		match := link.FindStringSubmatch(found)
+		if match[1] == "!" {
+			return ""
+		}
+		return match[2]
+	})
+	shown = strings.ReplaceAll(strings.ReplaceAll(shown, "`", ""), "**", "")
+	assert.That(!strings.Contains(shown, "]("), "no link markup is left")
+	return strings.TrimSpace(shown)
+}

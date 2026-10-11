@@ -10,7 +10,6 @@ Feature: Drop into a scenario
   Before running anything, Givens reads the `need` lines in the script and the helpers it calls,
   so a missing command is caught before any state changes.
 
-  @wip
   Scenario: Drop in
     Given a developer has the sample shop project open in Givens
     And the "Card declined" setup prints a line, then waits before printing the next
@@ -20,7 +19,7 @@ Feature: Drop into a scenario
     And when it finishes, any manual Givens, then the When steps, are shown as a checklist
     And each Then step can be marked "Pass" or "Fail"
 
-  @wip @error
+  @error
   Scenario: The setup script fails
     Given a developer has the sample shop project open in Givens
     And the "Card declined" setup script stops with an error part way through
@@ -30,7 +29,7 @@ Feature: Drop into a scenario
     And no checklist is shown
     And they're offered "Edit script" and "Try again"
 
-  @wip @error
+  @error
   Scenario: A command the setup needs isn't installed
     Given a developer has the sample shop project open in Givens
     And the "Card declined" setup script needs a command called shopctl, which isn't installed
@@ -39,7 +38,7 @@ Feature: Drop into a scenario
     And they see "This scenario needs shopctl"
     And the install hint "brew install shop/tap/shopctl" is shown with a copy button
 
-  @wip @error
+  @error
   Scenario: Setup is still running after two minutes
     Given a developer has the sample shop project open in Givens
     And the "Card declined" setup script takes more than two minutes
@@ -50,7 +49,6 @@ Feature: Drop into a scenario
     And choosing "Stop" ends the script and keeps its output so far
 
   # A scenario can set its own limit with a tag, like `@timeout:5m`.
-  @wip
   Scenario: A longer timeout
     Given "Card declined" is tagged @timeout:5m
     And its setup takes 3 minutes
@@ -58,14 +56,13 @@ Feature: Drop into a scenario
     Then no "Still running" message is shown
     And setup finishes as normal
 
-  @wip @error
+  @error
   Scenario: A timeout Givens can't read
     Given "Card declined" is tagged @timeout:soon
     When they drop in to "Card declined"
     Then setup runs with the usual 2-minute timeout
     And "Card declined" is marked "@timeout must look like @timeout:90s or @timeout:5m"
 
-  @wip
   Scenario: Record a run
     Given a developer has dropped in to "Card declined" and marked every Then step "Pass"
     When they add the note "Retry button is below the fold on small screens"
@@ -73,7 +70,7 @@ Feature: Drop into a scenario
     Then a line for checkout/card-declined is added to today's file in runs/, with the result and their note
     And "Card declined" shows "Verified today"
 
-  @wip @error
+  @error
   Scenario: Record a run before marking every check
     Given a developer has dropped in to "Card declined" and marked only the first Then step
     When they choose "Record run"
@@ -84,21 +81,18 @@ Feature: Drop into a scenario
   # scenario's path, so renaming a scenario starts its runs over. New capabilities folders get a
   # `.gitattributes` line, `runs/** merge=union`, which tells git to keep both sides' lines in a
   # merge.
-  @wip
   Scenario: A run records who ran it
     Given a developer whose git user.name is "Sam" has dropped in to "Card declined" and marked every Then step "Pass"
     When they choose "Record run"
     Then the run line includes "Sam"
     And "Card declined" shows "Verified today by Sam"
 
-  @wip
   Scenario: Runs on two branches merge cleanly
     Given Sam and Ali each recorded a run for "Card declined" today, on different branches
     When the branches are merged
     Then git merges runs/ with no conflict
     And both run lines are kept
 
-  @wip
   Scenario: Reset state part way through
     Given a developer has dropped in to "Card declined" and ticked "they place the order"
     When they choose "Reset state"
@@ -110,7 +104,6 @@ Feature: Drop into a scenario
   # teardown script, `scripts/<slug>.teardown.sh`, which sources the kit like any setup script.
   # Givens runs it before every setup run, so it must also cope when there's nothing to clean
   # up.
-  @wip
   Scenario: Running setup twice gives the same state
     Given "Card declined" has no teardown script
     And a developer has dropped in to "Card declined" once
@@ -118,21 +111,19 @@ Feature: Drop into a scenario
     Then setup finishes without errors
     And the shop has one shopper "sam@example.com", not two
 
-  @wip
   Scenario: Teardown runs before setup
     Given "Card declined" has a script called card-declined.teardown.sh
     When a developer drops in, or chooses "Reset state" or "Try again"
     Then the output shows "→ teardown" followed by the teardown's output
     And then setup runs from the start
 
-  @wip
   Scenario: Add a teardown
     Given "Card declined" has no teardown script
     When a developer chooses "Add teardown"
     Then checkout/scripts/card-declined.teardown.sh is created, starting with the line that sources givens.sh
     And it opens in the editor
 
-  @wip @error
+  @error
   Scenario: The teardown fails
     Given the "Card declined" teardown stops with an error
     When a developer drops in to "Card declined"
@@ -140,7 +131,6 @@ Feature: Drop into a scenario
     And setup doesn't run
     And they're offered "Edit teardown" and "Run setup anyway"
 
-  @wip
   Scenario: A scenario that builds on another
     Given a developer has the sample shop project open in Givens
     And "Pay with saved card" has a setup that prints "✓ saved card added"
@@ -161,7 +151,6 @@ Feature: Drop into a scenario
   #
   # When a `from` scenario has a teardown, it runs just before that scenario's setup, so each
   # level cleans up its own state.
-  @wip
   Scenario: Each level tears down its own state
     Given the "3-D Secure challenge" setup starts with "from checkout/pay-with-saved-card"
     And both scenarios have a teardown script
@@ -173,7 +162,7 @@ Feature: Drop into a scenario
   # A missing `from` scenario or a loop is caught before anything runs, the same way a missing
   # command is. The kit guards against loops too, so a script run in a terminal can't loop
   # forever.
-  @wip @error
+  @error
   Scenario: Builds on a scenario that doesn't exist
     Given a developer has the sample shop project open in Givens
     And the "3-D Secure challenge" setup starts with "from checkout/pay-with-card"
@@ -182,7 +171,7 @@ Feature: Drop into a scenario
     And they see "from checkout/pay-with-card: there's no scenario with that name"
     And they're offered "Edit script"
 
-  @wip @error
+  @error
   Scenario: Setups that build on each other in a loop
     Given a developer has the sample shop project open in Givens
     And "Pay with saved card" starts with "from checkout/3-d-secure-challenge"
@@ -191,7 +180,7 @@ Feature: Drop into a scenario
     Then nothing in the script runs
     And they see "These setups build on each other in a loop: 3-d-secure-challenge → pay-with-saved-card → 3-d-secure-challenge"
 
-  @wip @error
+  @error
   Scenario: A loop run from the terminal
     Given the same loop as from-loop
     When a developer runs "bash capabilities/checkout/scripts/3-d-secure-challenge.sh" from the project's root folder
@@ -200,7 +189,6 @@ Feature: Drop into a scenario
 
   # `first_you` lines are hidden by `GIVENS_QUIET=1` like the other "your turn" lines, so Givens
   # shows them at the top of the checklist instead.
-  @wip
   Scenario: Steps done by hand come first
     Given the "Card declined" setup ends with first_you 'select "Checkout"'
     When a developer drops in to "Card declined"
@@ -214,7 +202,6 @@ Feature: Drop into a scenario
   # back. Both show even with `GIVENS_QUIET=1`, since they're part of setup, not the scenario's
   # steps. The 2-minute timer pauses while a card waits. Automate a step when you can, with
   # `ssh` or a browser driver checked by `need`, and use these only when you can't.
-  @wip
   Scenario: A step done by hand
     Given the "Card declined" setup has a by_hand step for "DigitalOcean console" with the snippet "shopctl flags set new_checkout on"
     When a developer drops in to "Card declined"
@@ -222,7 +209,7 @@ Feature: Drop into a scenario
     And they can choose "Copy" to copy the snippet
     And choosing "Done" carries on with the rest of setup
 
-  @wip @error
+  @error
   Scenario: A step done by hand fails
     Given a developer has dropped in to "Card declined" and setup is paused at its by_hand step
     When they choose "Failed"
@@ -230,34 +217,30 @@ Feature: Drop into a scenario
     And no checklist is shown
     And they're offered "Edit script" and "Try again"
 
-  @wip
   Scenario: A step in the browser
     Given the "Card declined" setup has by_hand --url "http://localhost:3000/admin" for "Browser"
     When a developer drops in and setup pauses at that step
     Then the card offers "Open"
     And choosing it opens the page in their default browser
 
-  @wip
   Scenario: A step on another device
     Given the "Magic link" setup has by_hand --qr "http://192.168.1.20:3000/magic/abc" for "Your phone"
     When a developer drops in and setup pauses at that step
     Then the card shows the link as a QR code
     And the link is shown as text beneath it
 
-  @wip
   Scenario: A value from elsewhere
     Given the "Accept invite" setup has ask INVITE_CODE "Paste the invite code shown on the phone"
     When a developer drops in, types "K7Q2" into the card and chooses "Continue"
     Then the rest of setup runs with INVITE_CODE set to "K7Q2"
 
-  @wip @error
+  @error
   Scenario: Continue with nothing typed
     Given setup is paused at an ask card
     When a developer chooses "Continue" with the field empty
     Then they see "Enter a value first"
     And setup stays paused
 
-  @wip
   Scenario: A step by hand in a scenario it builds on
     Given the "Pay with saved card" setup has a by_hand step
     And the "3-D Secure challenge" setup starts with "from checkout/pay-with-saved-card"
@@ -265,7 +248,6 @@ Feature: Drop into a scenario
     Then the card for Pay with saved card's step is shown
     And its other "your turn" lines stay hidden
 
-  @wip
   Scenario: Waiting doesn't count as slow
     Given a developer has dropped in to "Card declined" and setup is paused at its by_hand step
     When 5 minutes pass before they choose "Done"
@@ -276,7 +258,6 @@ Feature: Drop into a scenario
   # row's values fill the `<placeholders>` in the steps, and reach the setup script as
   # `GIVENS_EX_<column>`. Doc strings and data tables reach it as files, through
   # `GIVENS_ARG_<n>`.
-  @wip
   Scenario: See every row on one page
     Given checkout.feature has the outline "Card rejected by the bank"
     And a developer has the sample shop project open in Givens
@@ -285,7 +266,6 @@ Feature: Drop into a scenario
     And each row shows its steps with the placeholders filled in, like "Then they see "Your card has expired""
     And each row shows its status and its own "Drop in" button
 
-  @wip
   Scenario: Drop in to one row
     Given a developer has "Card rejected by the bank" open
     When they choose "Drop in" on the "expired" row
@@ -293,14 +273,12 @@ Feature: Drop into a scenario
     And that row's checklist opens beneath it
     And the "stolen" row stays readable but greyed out, with its "Drop in" disabled
 
-  @wip
   Scenario: Switch to another row
     Given a developer has dropped in to the "expired" row and marked one Then step
     When they choose "Switch to this row" on the "stolen" row
     Then they're asked "Leave the expired row? Its marks aren't recorded"
     And choosing "Leave" closes the expired checklist and runs setup for "stolen"
 
-  @wip
   Scenario: Record a run for one row
     Given a developer has dropped in to "Card rejected by the bank" with the "expired" row and marked every Then step "Pass"
     When they choose "Record run"
@@ -308,14 +286,12 @@ Feature: Drop into a scenario
     And the scenario shows "1 of 2 rows verified"
     And the Unverified view lists the "stolen" row as "Never run"
 
-  @wip
   Scenario: Step data reaches the script
     Given the "Pay with saved card" Given step has a data table of two cart items
     When a developer drops in to "Pay with saved card"
     Then GIVENS_ARG_1 holds the path to a CSV file with a header row and both items
     And the setup script can seed the cart from it
 
-  @wip
   Scenario: Build on one row of an outline
     Given checkout.feature has the outline "Card rejected by the bank" and the scenario "Retry after rejection"
     And the "Retry after rejection" setup starts with "from checkout/card-rejected-by-the-bank card=stolen"
@@ -323,7 +299,7 @@ Feature: Drop into a scenario
     Then the output shows "→ from checkout/card-rejected-by-the-bank card=stolen"
     And that setup runs with GIVENS_EX_card set to "stolen"
 
-  @wip @error
+  @error
   Scenario: Build on an outline without a row
     Given checkout.feature has the outline "Card rejected by the bank" and the scenario "Retry after rejection"
     And the "Retry after rejection" setup starts with "from checkout/card-rejected-by-the-bank"
@@ -331,7 +307,7 @@ Feature: Drop into a scenario
     Then nothing in the script runs
     And they see "card-rejected-by-the-bank is an outline: pick a row, like card=expired"
 
-  @wip @error
+  @error
   Scenario: Several unnamed Examples blocks
     Given "Card rejected by the bank" has two Examples blocks with no names
     When a developer opens the sample shop in Givens
@@ -350,7 +326,6 @@ Feature: Drop into a scenario
   #   3. Add the test card `4242 4242 4242 4242` under Wallet
   #
   #      ![Wallet screen](../images/wallet.png)
-  @wip
   Scenario: Setup steps shown as cards
     Given "Pay in app" has scripts/pay-in-app.md with 3 numbered steps, and no .sh script
     When a developer drops in to "Pay in app"
@@ -358,14 +333,13 @@ Feature: Drop into a scenario
     And they see "You'll need the TestFlight build of the shop app" above 3 cards, with the link and the wallet screenshot shown
     And choosing "Done" on the last card shows the checklist
 
-  @wip
   Scenario: Cards after a script
     Given "Pay in app" has both scripts/pay-in-app.sh and scripts/pay-in-app.md
     When a developer drops in to "Pay in app"
     Then the script's output appears first
     And when it finishes, the cards from pay-in-app.md are shown
 
-  @wip @error
+  @error
   Scenario: A card marked failed
     Given a developer has dropped in to "Pay in app" and marked the first card "Done"
     When they choose "Failed" on the second card
@@ -389,27 +363,24 @@ Feature: Drop into a scenario
   #      ```js
   #      localStorage.removeItem("cart")
   #      ```
-  @wip
   Scenario: Copy a code block
     Given step 2 of pay-in-app.md holds a bash code block, indented under its list item
     When a developer chooses "Copy" on that code block in Drop in
     Then the clipboard holds "sudo -u shop shopctl flags set new_checkout on"
     And it holds no fences, list number or leading spaces
 
-  @wip
   Scenario: Several code blocks
     Given step 2 holds a bash code block and step 3 holds a js code block
     When a developer looks at those cards in Drop in
     Then each code block has its own Copy button, labelled "bash" and "js"
     And copying one never includes the other
 
-  @wip
   Scenario: Copy inline code
     Given a card says "Sign in as sam@example.com"
     When a developer clicks sam@example.com
     Then the clipboard holds "sam@example.com"
 
-  @wip @error
+  @error
   Scenario: A code block that never closes
     Given step 2 of pay-in-app.md opens a code fence that never closes
     When a developer drops in to "Pay in app"

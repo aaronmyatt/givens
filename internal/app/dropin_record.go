@@ -57,6 +57,9 @@ func (s *Session) RecordRun(note string) error {
 	if s.Status() != SessionReady {
 		return errors.New("setup hasn't finished, so there's no run to record")
 	}
+	if warning := examplesWarning(s.scenario); warning != "" {
+		return errors.New(warning)
+	}
 	result := runs.ResultPass
 	for _, item := range s.checklist {
 		if item.Mark == "" {
@@ -91,5 +94,5 @@ func (s *Session) RecordRun(note string) error {
 func (s *Session) key() string {
 	assert.That(s.scenario.Slug != "", "the scenario has a slug")
 	assert.That(s.scenario.Capability != "", "the scenario belongs to a capability")
-	return s.scenario.Key()
+	return runs.Key(s.scenario.Key(), s.examples)
 }

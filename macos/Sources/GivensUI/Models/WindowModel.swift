@@ -49,7 +49,7 @@ public final class WindowModel: Identifiable {
         lines += snapshot.sidebar.flatMap { [$0.name, "\($0.name) \($0.count)", $0.warning] }
         if let capability = snapshot.capability { lines += Self.lines(capability) }
         if let scenario = snapshot.scenario { lines += Self.lines(scenario) }
-        lines += snapshot.listed.flatMap { [$0.name, $0.capability, $0.status] }
+        lines += snapshot.listed.flatMap { ["\($0.name) — \($0.status)", $0.capability] }
         if let search = snapshot.search { lines += search.results }
         if let editor = snapshot.editor { lines += editor.problems }
         if let session = snapshot.session {

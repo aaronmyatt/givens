@@ -66,3 +66,12 @@ func (r *recorder) taken() []Effect {
 	assert.That(len(r.effects) <= EffectsPerCallMax, "effects stay bounded")
 	return r.effects
 }
+
+// OpenURL asks the app to open a link in the default browser.
+// Ref: https://developer.apple.com/documentation/appkit/nsworkspace/open(_:)
+func (r *recorder) OpenURL(url string) error {
+	assert.That(r != nil, "open runs on a recorder")
+	assert.That(url != "", "a link has text")
+	r.add(Effect{Kind: "openURL", Text: url})
+	return nil
+}

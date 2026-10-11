@@ -144,6 +144,22 @@ func (w *Window) findIn(capabilityName string, name string) (project.Scenario, b
 	return project.Scenario{}, false
 }
 
+// MessageTimeoutTag is the warning on a scenario whose @timeout tag can't be read.
+const MessageTimeoutTag = "@timeout must look like @timeout:90s or @timeout:5m"
+
+// scenarioWarning says what's wrong with a scenario as written, or "".
+func scenarioWarning(capability project.Capability, scenario project.Scenario) string {
+	assert.That(scenario.Capability == capability.Slug, "the scenario is in the capability")
+	assert.That(scenario.StillRunning >= 0, "a timeout is never negative")
+	if clash := slugClash(capability, scenario); clash != "" {
+		return clash
+	}
+	if scenario.StillRunning == 0 {
+		return MessageTimeoutTag
+	}
+	return examplesWarning(scenario)
+}
+
 // slugClash is the warning on a scenario whose slug another scenario in its capability
 // makes too, or "". Runs and setup files are named by slug, so neither scenario can use them.
 func slugClash(capability project.Capability, scenario project.Scenario) string {
@@ -202,7 +218,7 @@ func (w *Window) scenarioOf(capability project.Capability, loaded project.Scenar
 	}
 	shown := Scenario{
 		Name: loaded.Name, Slug: loaded.Slug, Capability: capability.Name, Rule: loaded.Rule,
-		Warning: slugClash(capability, loaded),
+		Warning: scenarioWarning(capability, loaded),
 		Error:   loaded.Error, Tags: append([]string{}, loaded.Tags...), Steps: steps,
 	}
 	if loaded.Setup != "" {

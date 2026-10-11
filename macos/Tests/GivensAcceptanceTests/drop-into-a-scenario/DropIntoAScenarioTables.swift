@@ -141,8 +141,10 @@ extension DropIntoAScenarioState {
     /// Drops in to a row and marks every check, expecting no "Record run"; then names the
     /// Examples blocks and expects the warning to clear and "Record run" to return.
     func recordDisabledUntilNamed() async throws {
-        try await rowAllPassed(Self.outlineName, "expired")
+        // As in Go: the blocks stay unnamed for the first run. rowAllPassed would name them.
         let window = try await w.front()
+        try await window.select(Self.outlineName)
+        try await rowPassed("expired")
         guard !window.offers.contains("Record run") else {
             throw StepFailure("\"Record run\" is offered with the blocks unnamed: \(window.offers)")
         }
@@ -151,7 +153,7 @@ extension DropIntoAScenarioState {
             try await window.scenario(Self.outlineName).warning.isEmpty
         }
         guard named else { throw StepFailure("the warning stayed after the blocks were named") }
-        try await rowAllPassed(Self.outlineName, "expired")
+        try await rowPassed("expired")
         try expect(window.offers, "Record run", "the offered actions once named")
     }
 }

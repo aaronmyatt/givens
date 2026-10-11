@@ -25,23 +25,34 @@ func (w *Window) statusOf(scenario project.Scenario) string {
 }
 
 // StatusOf says where a scenario stands: verified while its latest run passed and nothing its
-// setup depends on has changed since. The givens command uses it too. See capabilities/views
-// and capabilities/share-setup-between-scenarios.
+// setup depends on has changed since. An outline sums up its rows. The givens command uses it
+// too. See capabilities/views and capabilities/share-setup-between-scenarios.
 func StatusOf(loaded *project.Project, scenario project.Scenario, now time.Time) string {
 	assert.That(loaded != nil, "status is read in a loaded project")
 	assert.That(!now.IsZero(), "now is a time")
 	if scenario.Slug == "" {
 		return StatusNeverRun
 	}
+	if scenario.Outline {
+		return outlineStatus(loaded, scenario, now)
+	}
+	return statusFor(loaded, scenario, scenario.Key(), nil, now)
+}
+
+// statusFor says where one run key, with its row's values, stands.
+func statusFor(loaded *project.Project, scenario project.Scenario, key string,
+	values []runs.Pair, now time.Time) string {
+	assert.That(loaded != nil, "status is read in a loaded project")
+	assert.That(key != "", "a run key is given")
 	recorded, err := runs.Read(loaded.Root)
 	if err != nil {
 		return StatusNeverRun
 	}
-	latest, ok := runs.Latest(recorded, scenario.Key(), nil)
+	latest, ok := runs.Latest(recorded, key, values)
 	if !ok {
 		return StatusNeverRun
 	}
-	current, err := fingerprint.Of(loaded, scenario, nil)
+	current, err := fingerprint.Of(loaded, scenario, values)
 	if err != nil {
 		return StatusNeverRun
 	}

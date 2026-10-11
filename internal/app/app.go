@@ -67,6 +67,7 @@ type Config struct {
 type App struct {
 	config      Config
 	windows     []*Window // front first
+	opener      URLOpener // opens links; nil until UseURLOpener
 	windowsEver int       // windows opened so far; numbers the next one
 }
 

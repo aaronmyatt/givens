@@ -40,6 +40,10 @@ type params struct {
 	NewName    string           `json:"newName"`
 	Capability string           `json:"capability"`
 	Kind       string           `json:"kind"`
+	Card       json.RawMessage  `json:"card"`  // a number, or a number in a string
+	Block      json.RawMessage  `json:"block"` // a number, or a number in a string
+	Row        string           `json:"row"`
+	Code       string           `json:"code"`
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.

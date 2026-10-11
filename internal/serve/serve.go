@@ -99,6 +99,9 @@ func New(appData string, seams bool) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := core.UseURLOpener(effects); err != nil {
+		return nil, err
+	}
 	server := &Server{core: core, effects: effects, clock: clock, seams: seams}
 	server.handlers = server.table()
 	assert.That(len(server.handlers) > 0, "the server answers some methods")
