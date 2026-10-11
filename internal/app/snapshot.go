@@ -2,10 +2,12 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"givens/internal/assert"
+	"givens/internal/runs"
 )
 
 // The snapshot is the whole app as `givens serve` sends it after every call. Its JSON keys
@@ -34,6 +36,7 @@ type WindowSnapshot struct {
 	Editor            *EditorSnapshot  `json:"editor"`
 	Session           *SessionSnapshot `json:"session"`
 	Listed            []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
+	Rows              []DropInRow      `json:"rows"`   // the selected outline's Examples rows
 	Offers            []string         `json:"offers"`
 	Labels            []string         `json:"labels"`
 	FolderPickerShown bool             `json:"folderPickerShown"`
@@ -144,6 +147,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 		Session:    session,
 		Search:     searching,
 		Listed:     append(make([]Scenario, 0, 16), w.ListedScenarios()...),
+		Rows:       w.DropInRows(),
 		Offers:     append(make([]string, 0, 8), w.Offers()...),
 		Labels:     labels,
 	}
@@ -166,6 +170,9 @@ func visibleLines(snapshot WindowSnapshot) []string {
 	}
 	for _, scenario := range snapshot.Listed {
 		lines = append(lines, scenario.Name+" — "+scenario.Status, scenario.Capability)
+	}
+	for _, row := range snapshot.Rows {
+		lines = append(lines, rowLine(row))
 	}
 	if snapshot.Search != nil {
 		lines = append(lines, snapshot.Search.Results...)
@@ -311,4 +318,21 @@ func linedUp(steps []string) []string {
 	}
 	assert.That(len(lines) == len(steps), "each step is one line")
 	return lines
+}
+
+// rowLine is an outline row as one line: its values in column-name order, then its status,
+// like "card=expired — Never run". WindowModel.rowLine in Swift says it the same way.
+func rowLine(row DropInRow) string {
+	assert.That(len(row.Values) <= runs.FieldsMax, "a row stays bounded")
+	assert.That(row.Status != "", "a row has a status")
+	columns := make([]string, 0, len(row.Values))
+	for column := range row.Values {
+		columns = append(columns, column)
+	}
+	sort.Strings(columns)
+	values := make([]string, 0, len(columns))
+	for _, column := range columns {
+		values = append(values, column+"="+row.Values[column])
+	}
+	return strings.Join(values, ", ") + " — " + row.Status
 }

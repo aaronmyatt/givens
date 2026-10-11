@@ -9,7 +9,6 @@ x 2026-10-11 2026-10-11 Tags: 8 scenarios ref:tags — see tasks/tags/notes.md
 x 2026-10-11 2026-10-11 Search everything: 6 scenarios ref:search-everything — built with Tags; see tasks/search-everything/notes.md
 x 2026-10-11 2026-10-11 Copy a setup script: 5 scenarios ref:copy-a-setup-script — see tasks/copy-a-setup-script/notes.md
 x 2026-10-11 2026-10-11 Drop into a scenario: 43 scenarios ref:drop-into-a-scenario — see tasks/drop-into-a-scenario/notes.md
-2026-10-11 Drop in UI: draw outline rows (dropInRows)
 x 2026-10-11 2026-10-11 Trust a project: 4 scenarios ref:trust-a-project — see tasks/trust-a-project/notes.md
 x 2026-10-11 2026-10-11 Read a capability: 4 scenarios ref:read-a-capability — see tasks/read-a-capability/notes.md
 x 2026-10-11 2026-10-11 Views: 4 scenarios ref:views — see tasks/views/notes.md
@@ -20,3 +19,4 @@ x 2026-10-11 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit — see t
 2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin
 x 2026-10-11 Finish: no @wip tags left and scripts/check.sh passes — all 152 scenarios pass in Go (and every windowed one in Swift); check.sh passes; Release signing waits on a Developer ID
 x 2026-10-11 2026-10-11 Cache scenario statuses between snapshots: the Unverified count fingerprints every scenario each time — statuses and the Shared list kept until a file changes or the day turns; a sample-shop snapshot went from 1.7 ms to 0.46 ms, the rest is the folder look
+x 2026-10-11 2026-10-11 Drop in UI: draw outline rows (dropInRows) — rows are in the snapshot and drawn with their buttons, greyed while another row is live; QR left out, as the QR scenario was removed

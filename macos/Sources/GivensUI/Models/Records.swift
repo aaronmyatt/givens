@@ -31,6 +31,8 @@ public struct WindowSnapshot: Decodable, Sendable, Equatable {
     public let session: SessionRecord?
     /// The scenarios a selected view, tag or step lists, with their capability and status.
     public let listed: [ScenarioRecord]
+    /// The selected outline's Examples rows.
+    public let rows: [DropInRowRecord]
     /// Every action on offer, by label.
     public let offers: [String]
     /// Plain labels the window shows, like "Recent" or "Open folder…".

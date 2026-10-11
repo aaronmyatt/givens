@@ -57,8 +57,11 @@ func fillPlaceholders(text string, row []runs.Pair) string {
 func (w *Window) rowNamed(name string) (project.Scenario, outlineRow, bool) {
 	assert.That(w != nil, "row named runs on a window")
 	assert.That(name != "", "a row is named by a value")
+	if w.selectedScenario == "" {
+		return project.Scenario{}, outlineRow{}, false
+	}
 	scenario, ok := w.findScenario(w.selectedScenario)
-	if w.selectedScenario == "" || !ok || !scenario.Outline {
+	if !ok || !scenario.Outline {
 		return project.Scenario{}, outlineRow{}, false
 	}
 	for _, row := range rowsOf(scenario) {
@@ -77,8 +80,11 @@ func (w *Window) rowNamed(name string) (project.Scenario, outlineRow, bool) {
 func (w *Window) DropInRows() []DropInRow {
 	assert.That(w != nil, "drop in rows runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	if w.selectedScenario == "" {
+		return []DropInRow{}
+	}
 	scenario, ok := w.findScenario(w.selectedScenario)
-	if w.selectedScenario == "" || !ok || !scenario.Outline {
+	if !ok || !scenario.Outline {
 		return []DropInRow{}
 	}
 	live := w.session != nil && w.session.scenario.Key() == scenario.Key() &&

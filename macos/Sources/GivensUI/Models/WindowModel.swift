@@ -50,6 +50,7 @@ public final class WindowModel: Identifiable {
         if let capability = snapshot.capability { lines += Self.lines(capability) }
         if let scenario = snapshot.scenario { lines += Self.lines(scenario) }
         lines += snapshot.listed.flatMap { ["\($0.name) — \($0.status)", $0.capability] }
+        lines += snapshot.rows.map(Self.rowLine)
         if let search = snapshot.search { lines += search.results }
         if let editor = snapshot.editor { lines += editor.problems + editor.preview }
         if let session = snapshot.session {
@@ -79,6 +80,13 @@ public final class WindowModel: Identifiable {
         // Tags sit above the steps, as the scenario view lays them out.
         [scenario.name, scenario.status, scenario.warning, scenario.tags.joined(separator: " ")]
             + linedUp(scenario.steps) + [scenario.setup]
+    }
+
+    /// An outline row as one line: values in column-name order, then its status, like
+    /// "card=expired — Never run". internal/app's rowLine says it the same way.
+    public static func rowLine(_ row: DropInRowRecord) -> String {
+        let values = row.values.keys.sorted().map { "\($0)=\(row.values[$0] ?? "")" }
+        return values.joined(separator: ", ") + " — " + row.status
     }
 
     /// Pads each step's keyword on the left to the longest keyword's width, so the step texts

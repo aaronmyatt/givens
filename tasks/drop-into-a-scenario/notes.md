@@ -47,3 +47,7 @@ its steps, already written in `acceptance/drop-into-a-scenario/`, pass, and `scr
   serve's output in its own Task, so an older pushed snapshot could land after a newer reply
   and the window lost its session. Chunks now go through one AsyncStream to one reader, in
   order; a dead serve fails pending calls after the reader drains. 5 full runs clean since.
+- Rows in the UI (2026-10-11): the snapshot carries the selected outline's rows (`rows`), and
+  both visible lists show each as "card=expired — Never run". RowView draws its steps and
+  buttons, greyed while another row is live. QR codes aren't drawn: the "A step on another
+  device" scenario and `--qr` were removed from the spec.

@@ -122,6 +122,9 @@ struct DetailView: View {
                 if let scenario = window.snapshot?.scenario {
                     ScenarioView(scenario: scenario)
                 }
+                ForEach(Array((window.snapshot?.rows ?? []).enumerated()), id: \.offset) { _, row in
+                    RowView(window: window, row: row)
+                }
                 ForEach(window.snapshot?.listed ?? [], id: \.name) { scenario in
                     Button {
                         window.app.run { _ in try await window.select(scenario.name) }
@@ -325,5 +328,35 @@ struct DropInView: View {
                 }
             }
         }
+    }
+}
+
+/// One Examples row of the selected outline: its values and status, its steps, and its
+/// buttons; a row greyed out while another is live.
+struct RowView: View {
+    let window: WindowModel
+    let row: DropInRowRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(WindowModel.rowLine(row)).bold()
+            ForEach(row.steps, id: \.self) { Text($0).monospaced() }
+            HStack {
+                ForEach(row.offers, id: \.self) { offer in
+                    Button(offer) {
+                        window.app.run { _ in try await window.chooseOnRow(name, offer) }
+                    }
+                }
+                ForEach(row.disabled, id: \.self) { Button($0) {}.disabled(true) }
+            }
+        }
+        .opacity(row.greyed ? 0.5 : 1)
+        .padding(.vertical, 4)
+    }
+
+    /// The row as ChooseOnRow names it: its first column's value, like "card=expired".
+    private var name: String {
+        guard let column = row.values.keys.sorted().first else { return "" }
+        return "\(column)=\(row.values[column] ?? "")"
     }
 }
