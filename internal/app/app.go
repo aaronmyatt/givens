@@ -60,14 +60,18 @@ type Config struct {
 	Clipboard  Clipboard
 	Trash      Trash
 	Clock      Clock
+	// Command is the givens command that "Install givens command" links to; "" means the
+	// running program, which is the givens binary under serve.
+	Command string
 }
 
 // App is one running Givens. It isn't safe for concurrent use: `givens serve` and the steps
 // each call it one command at a time.
 type App struct {
 	config  Config
-	windows []*Window // front first
-	opener  URLOpener // opens links; nil until UseURLOpener
+	windows []*Window    // front first
+	opener  URLOpener    // opens links; nil until UseURLOpener
+	picker  FolderPicker // shows the folder picker; nil until UseFolderPicker
 	// pendingTrash holds paths sent to the Trash that are still on disk; see trash.
 	pendingTrash map[string]bool
 	windowsEver  int // windows opened so far; numbers the next one
@@ -80,14 +84,6 @@ func New(config Config) (*App, error) {
 	assert.That(config.Trash != nil, "the app has a trash")
 	assert.That(config.Clock != nil, "the app has a clock")
 	return &App{config: config, windows: make([]*Window, 0, WindowsMax)}, nil
-}
-
-// Launch starts Givens: it reopens the windows open at the last quit, or shows the welcome
-// window. See capabilities/open-a-project.
-func (a *App) Launch() error {
-	assert.That(a != nil, "launch runs on an app")
-	assert.That(a.config.AppDataDir != "", "the app knows where its data lives")
-	return ErrNotImplemented
 }
 
 // Open opens a capabilities folder, or a project folder holding one, in a window. Opening a
@@ -113,6 +109,10 @@ func (a *App) Open(path string) (*Window, error) {
 	if err := window.reload(); err != nil {
 		return nil, err
 	}
+	if err := a.rememberRecent(folder); err != nil {
+		return nil, err
+	}
+	a.closeWelcome()
 	a.windows = append([]*Window{window}, a.windows...)
 	assert.That(a.windows[0] == window, "an opened window is in front")
 	return window, nil

@@ -17,3 +17,19 @@ its steps, already written in `acceptance/open-a-project/`, pass, and `scripts/c
   so tests can record what would open; otherwise `open -a Givens`.
 - A missing folder prints "There's no folder at ~/…" with `~` for the home folder, and exits non-zero.
 - Kit releases come from `App.ShipKits` in tests; the built-in kit otherwise.
+- All 14 (2026-10-11), Go and Swift.
+- Launch reopens the windows open at the last quit (app data `open-windows.txt`), else shows
+  the welcome window: "Open folder…" (sets FolderPickerShown; under serve, a `folderPicker`
+  effect) and, with any, "Recent" and the recent folders (`recents.txt`, newest first, 16).
+  Opening a project closes the welcome window. A Dock drop launches first if nothing's open.
+- A project opens on its first capability's story until something is selected.
+- No capabilities: "No capabilities here yet" and "Create capabilities folder", which writes
+  GIVENS.md (`internal/starter/GIVENS.md`, kept equal to ours up to "This repository" by a
+  test), the kit, the starter with a setup script per scenario, and `runs/** merge=union`.
+- "Install givens command" symlinks the givens binary (`Config.Command`, else the running
+  program) into the chosen folder and says where.
+- `givens <folder>` runs `open -a Givens <absolute folder>` (or `$GIVENS_OPEN_COMMAND`); a
+  missing folder prints "There's no folder at ~/…" and exits 1.
+- `scripts/run-app.sh [folder]` builds the app with givens beside it and runs it, for a look
+  on screen. Known gap: whether a dev build opens a folder passed on the command line isn't
+  checked; "Open folder…" works either way. Not eyeballed.

@@ -48,10 +48,15 @@ func (w *Window) Selected() string {
 func (w *Window) shownCapability() *Capability {
 	assert.That(w != nil, "shown capability runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	if w.selectedCapability == "" {
+	name := w.selectedCapability
+	if w.selected == "" && w.project != nil && len(w.project.Capabilities) > 0 {
+		// A project opens on its first capability's story.
+		name = w.project.Capabilities[0].Slug
+	}
+	if name == "" {
 		return nil
 	}
-	loaded, ok := w.findCapability(w.selectedCapability)
+	loaded, ok := w.findCapability(name)
 	if !ok {
 		return nil
 	}

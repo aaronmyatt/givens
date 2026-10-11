@@ -1,17 +1,17 @@
-2026-10-11 Pass: Open a documented project
-2026-10-11 Pass: Open the project folder instead
-2026-10-11 Pass: Open a folder with no capabilities (error state)
-2026-10-11 Pass: Create a capabilities folder
-2026-10-11 Pass: Files written by other tools appear
-2026-10-11 Pass: Start with nothing open
-2026-10-11 Pass: Reopen a recent project
-2026-10-11 Pass: Drop a folder on Givens
-2026-10-11 Pass: Install the givens command
-2026-10-11 Pass: Open a project from the terminal
-2026-10-11 Pass: Open a folder that doesn't exist from the terminal (error state)
-2026-10-11 Pass: Open a second project
-2026-10-11 Pass: Open a project that's already open
-2026-10-11 Pass: Reopen windows after quitting
-2026-10-11 Wire Open a project into the UI shell, after ui-shell
-2026-10-11 Starter: a setup script per scenario in internal/starter/add-a-story/scripts
-2026-10-11 CLI: givens <folder> runs $GIVENS_OPEN_COMMAND -a Givens <path> when set
+x 2026-10-11 2026-10-11 Pass: Open a documented project — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open the project folder instead — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open a folder with no capabilities (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Create a capabilities folder — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Files written by other tools appear — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Start with nothing open — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Reopen a recent project — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Drop a folder on Givens — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Install the givens command — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open a project from the terminal — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open a folder that doesn't exist from the terminal (error state) — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open a second project — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Open a project that's already open — passes in Go and Swift
+x 2026-10-11 2026-10-11 Pass: Reopen windows after quitting — passes in Go and Swift
+x 2026-10-11 2026-10-11 Wire Open a project into the UI shell, after ui-shell — done; see tasks/open-a-project/notes.md
+x 2026-10-11 2026-10-11 Starter: a setup script per scenario in internal/starter/add-a-story/scripts — done; see tasks/open-a-project/notes.md
+x 2026-10-11 2026-10-11 CLI: givens <folder> runs $GIVENS_OPEN_COMMAND -a Givens <path> when set — done; see tasks/open-a-project/notes.md

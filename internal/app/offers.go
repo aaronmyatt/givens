@@ -20,6 +20,12 @@ func (w *Window) Offers() []string {
 	if w.prompt != nil {
 		return []string{w.prompt.confirm, w.prompt.cancel}
 	}
+	if w.kind == WindowWelcome {
+		return []string{OfferOpenFolder}
+	}
+	if w.project == nil {
+		return []string{OfferCreateFolder}
+	}
 	if w.session != nil {
 		return w.session.offers()
 	}
@@ -110,6 +116,12 @@ func (w *Window) Choose(action string) error {
 	}
 	if answered, err := w.answer(action); answered {
 		return err
+	}
+	switch action {
+	case OfferOpenFolder:
+		return w.openFolder()
+	case OfferCreateFolder:
+		return w.createCapabilities()
 	}
 	if file, ok := strings.CutPrefix(action, editPrefix); ok {
 		for _, capability := range w.problemCapabilities() {

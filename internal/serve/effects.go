@@ -75,3 +75,12 @@ func (r *recorder) OpenURL(url string) error {
 	r.add(Effect{Kind: "openURL", Text: url})
 	return nil
 }
+
+// ShowFolderPicker asks the app to show its folder picker, for "Open folder…".
+// Ref: https://developer.apple.com/documentation/appkit/nsopenpanel
+func (r *recorder) ShowFolderPicker() error {
+	assert.That(r != nil, "show picker runs on a recorder")
+	assert.That(len(r.effects) < EffectsPerCallMax, "there's room for an effect")
+	r.add(Effect{Kind: "folderPicker"})
+	return nil
+}

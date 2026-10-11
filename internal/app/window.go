@@ -29,6 +29,7 @@ type Window struct {
 	holdRefresh        bool     // a snapshot is being built, and has already looked
 	search             *search  // the ⌘K panel while it's open, or nil
 	selectedStep       string   // the step result on show, as its text, or ""
+	folderPicker       bool     // "Open folder…" showed the folder picker
 }
 
 // SidebarItem is one line in a project window's sidebar.

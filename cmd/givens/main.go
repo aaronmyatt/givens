@@ -1,6 +1,7 @@
 // Command givens lists, runs and checks a project's scenarios from a terminal, and serves the
 // macOS app. See capabilities/use-givens-from-the-terminal.
 //
+//	givens <folder>
 //	givens list [--json] [--tags <expression>]
 //	givens run <capability>/<scenario>
 //	givens check [folder]
@@ -11,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"givens/internal/assert"
 	"givens/internal/serve"
@@ -27,7 +30,8 @@ const (
 // folderDepthMax bounds the walk up from the working folder to the capabilities folder.
 const folderDepthMax = 64
 
-const usage = `usage: givens list [--json] [--tags <expression>]
+const usage = `usage: givens <folder>
+       givens list [--json] [--tags <expression>]
        givens run <capability>/<scenario>
        givens check [folder]
        givens serve --app-data <folder>`
@@ -56,6 +60,9 @@ func run(args []string) int {
 		return runList(args[1:])
 	case "run":
 		return runSetup(args[1:])
+	}
+	if len(args) == 1 && !strings.HasPrefix(args[0], "-") {
+		return openFolder(args[0])
 	}
 	fmt.Println(usage)
 	return exitUsage
@@ -117,4 +124,48 @@ func runServe(args []string) int {
 	}
 	assert.That(server != nil, "serve ran on a server")
 	return exitOK
+}
+
+// openCommandEnv names a stand-in for `open`, so the acceptance suite can see what would open.
+const openCommandEnv = "GIVENS_OPEN_COMMAND"
+
+// openFolder opens a project in the Givens app, like `code .`: `open -a Givens <folder>`.
+// Ref: https://ss64.com/mac/open.html
+func openFolder(folder string) int {
+	assert.That(folder != "", "a folder is named")
+	assert.That(openCommandEnv != "", "the stand-in has a name")
+	absolute, err := filepath.Abs(folder)
+	if err != nil {
+		complain(err)
+		return exitProblems
+	}
+	if info, err := os.Stat(absolute); err != nil || !info.IsDir() {
+		fmt.Println("There's no folder at " + homeShort(absolute))
+		return exitProblems
+	}
+	opener := os.Getenv(openCommandEnv)
+	if opener == "" {
+		opener = "open"
+	}
+	command := exec.Command(opener, "-a", "Givens", absolute)
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	if err := command.Run(); err != nil {
+		complain(err)
+		return exitProblems
+	}
+	return exitOK
+}
+
+// homeShort writes a path under the home folder with ~, as a person would type it.
+func homeShort(path string) string {
+	assert.That(filepath.IsAbs(path), "the path is absolute")
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	if rest, ok := strings.CutPrefix(path, home+string(filepath.Separator)); ok {
+		return "~/" + rest
+	}
+	assert.That(!strings.HasPrefix(path, home+"/"), "a path under home was shortened")
+	return path
 }

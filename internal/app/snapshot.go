@@ -111,6 +111,13 @@ func (w *Window) Snapshot() WindowSnapshot {
 	} else if w.selectedHelper != "" {
 		labels = append(labels, w.helperLabels()...)
 	}
+	if w.kind == WindowWelcome {
+		if recents := w.app.Recents(); len(recents) > 0 {
+			labels = append(append(labels, LabelRecent), recents...)
+		}
+	} else if w.project == nil {
+		messages = append(messages, MessageNoCapabilities)
+	}
 	if empty := w.emptyView(); empty != "" {
 		messages = append(messages, empty)
 	}

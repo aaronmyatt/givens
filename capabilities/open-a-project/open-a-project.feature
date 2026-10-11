@@ -7,7 +7,6 @@ Feature: Open a project
   writes these files, including agents, editors and `git pull`, shows up in Givens as soon as
   it's saved.
 
-  @wip
   Scenario: Open a documented project
     Given a developer has the sample shop project, with checkout/checkout.feature, invites/invites.feature and sign-in/sign-in.feature
     When they open its capabilities folder in Givens
@@ -15,14 +14,13 @@ Feature: Open a project
     And each capability shows how many scenarios it has
     And the Checkout story is shown
 
-  @wip
   Scenario: Open the project folder instead
     Given a developer has the sample shop project
     When they open the project's root folder in Givens
     Then Givens finds the capabilities folder inside it
     And the window title shows the path to that capabilities folder
 
-  @wip @error
+  @error
   Scenario: Open a folder with no capabilities
     Given a developer has a project with no capabilities folder
     When they open it in Givens
@@ -30,7 +28,6 @@ Feature: Open a project
     And they're offered "Create capabilities folder"
     And nothing is written to the project
 
-  @wip
   Scenario: Create a capabilities folder
     Given a developer has a project with no capabilities folder open in Givens
     When they choose "Create capabilities folder"
@@ -39,7 +36,6 @@ Feature: Open a project
     And it contains .gitattributes marking runs/ as merge=union
     And the sidebar lists "Add a story"
 
-  @wip
   Scenario: Files written by other tools appear
     Given a developer has the sample shop project open in Givens
     And "Checkout" is selected
@@ -53,14 +49,12 @@ Feature: Open a project
   # projects. From a terminal, `givens <folder>` opens a project, like `code .`. The command is
   # a small script inside the app that runs `open -a Givens`, so `open -a Givens .` also works
   # without installing anything.
-  @wip
   Scenario: Start with nothing open
     Given a developer has never opened a project in Givens
     When they open Givens
     Then they see a welcome window with "Open folder…"
     And choosing "Open folder…" shows a folder picker
 
-  @wip
   Scenario: Reopen a recent project
     Given a developer has opened the sample shop project in Givens before
     And no project was open when they last quit Givens
@@ -68,47 +62,41 @@ Feature: Open a project
     Then the welcome window lists the sample shop under "Recent"
     And choosing it opens the project
 
-  @wip
   Scenario: Drop a folder on Givens
     Given a developer has Givens in their Dock
     When they drag the sample shop's folder onto it
     Then the sample shop project opens in Givens
 
-  @wip
   Scenario: Install the givens command
     Given a developer has Givens open
     When they choose "Install givens command" from the Givens menu
     Then givens works in new terminal windows
     And Givens says where it installed it
 
-  @wip
   Scenario: Open a project from the terminal
     Given a developer has installed the givens command
     When they run "givens ." in the sample shop's folder
     Then the sample shop project opens in Givens
 
-  @wip @error
+  @error
   Scenario: Open a folder that doesn't exist from the terminal
     Given a developer has installed the givens command
     When they run "givens ~/code/nope"
     Then the command prints "There's no folder at ~/code/nope"
     And Givens doesn't open a window
 
-  @wip
   Scenario: Open a second project
     Given a developer has the sample shop project open in Givens
     When they open another project's capabilities folder
     Then it opens in a second window
     And each window's title shows its own project's path
 
-  @wip
   Scenario: Open a project that's already open
     Given a developer has the sample shop project open in Givens
     When they open the sample shop's capabilities folder again
     Then its existing window comes to the front
     And no second window opens
 
-  @wip
   Scenario: Reopen windows after quitting
     Given a developer has two projects open in Givens
     When they quit Givens and open it again

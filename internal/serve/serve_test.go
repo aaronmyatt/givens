@@ -73,14 +73,15 @@ func TestOpenAndCapability(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	replies := call(t, false,
-		`{"id":1,"method":"launch"}`,
+		`{"id":0,"method":"launch"}`,
+		`{"id":1,"method":"window.press","params":{"window":"w1","keys":"⌘E"}}`,
 		`{"id":2,"method":"test.advanceClock","params":{"seconds":5}}`,
 		`{"id":3,"method":"nope"}`,
 		`{"id":4,"method":"open","params":{"path":"relative"}}`,
 		`{"id":5,"method":"window.select","params":{"window":"w9","name":"Checkout"}}`,
 		`not json`,
 	)
-	want := []string{CodeNotBuilt, CodeNoTestSeams, CodeUnknownMethod, CodeBadRequest,
+	want := []string{"", CodeNotBuilt, CodeNoTestSeams, CodeUnknownMethod, CodeBadRequest,
 		CodeBadRequest, CodeBadRequest}
 	for index, reply := range replies {
 		if errorCode(reply) != want[index] {
