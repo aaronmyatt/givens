@@ -44,3 +44,10 @@ its steps, already written in `acceptance/write-stories-and-scenarios/`, pass, a
 - UI: New story and New scenario sheets; the editor shows its preview. Known gap: step
   suggestions aren't shown while typing in the SwiftUI text editor (the core only sees typing
   through Type). Not eyeballed.
+- Suggestions in the Mac editor (2026-10-11): TextEditor doesn't expose its cursor, so the
+  editor takes the line where the text last changed as the line being typed. After a 150 ms
+  pause it sends that line to `window.stepSuggestions` (`text` param), which calls
+  `Editor.SuggestionsFor`; with no `text` the call still answers for the core's typed line, as
+  the steps use it. Choosing a suggestion swaps the line's words in the local text, keeping its
+  indent and keyword; Save writes it as before. A step already written out word for word
+  offers nothing.

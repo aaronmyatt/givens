@@ -145,3 +145,26 @@ func TestFilesWrittenByOtherToolsAppear(t *testing.T) {
 	}
 	t.Error("the added scenario didn't appear within 2 seconds")
 }
+
+// TestSuggestionsForALine offers steps for the line the Mac editor is on, and none for a line
+// that isn't a step or a step already written out.
+func TestSuggestionsForALine(t *testing.T) {
+	window, err := newApp(t).Open(sampleShop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	editor, err := window.Edit("sign-in/sign-in.feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offered := editor.SuggestionsFor("    Given a shopper has")
+	if len(offered) != 2 || offered[0].Label != "used in 1" {
+		t.Errorf("offered %v, want the two \"a shopper has\" steps", offered)
+	}
+	lines := []string{"Feature: a shopper has", "Given ", "Given a shopper has an account"}
+	for _, line := range lines {
+		if got := editor.SuggestionsFor(line); len(got) != 0 {
+			t.Errorf("%q offered %v, want none", line, got)
+		}
+	}
+}

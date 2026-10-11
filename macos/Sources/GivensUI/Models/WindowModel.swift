@@ -89,6 +89,34 @@ public final class WindowModel: Identifiable {
         return values.joined(separator: ", ") + " — " + row.status
     }
 
+    /// The 0-based line where two texts first differ: the line just typed on in the editor.
+    /// nil when nothing changed.
+    public static func changedLine(from old: String, to new: String) -> Int? {
+        let before = old.split(separator: "\n", omittingEmptySubsequences: false)
+        let after = new.split(separator: "\n", omittingEmptySubsequences: false)
+        guard old != new, !after.isEmpty else { return nil }
+        let same = zip(before, after).prefix { $0 == $1 }.count
+        return min(same, after.count - 1)
+    }
+
+    /// One line of a text, or "" past its end.
+    public static func line(_ index: Int, of text: String) -> String {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        return lines.indices.contains(index) ? String(lines[index]) : ""
+    }
+
+    /// The text with one step line's words swapped for an offered step, keeping its indent
+    /// and keyword: "    Given a sh" becomes "    Given a shopper has an account".
+    /// internal/app's ChooseSuggestion does the same to the line it's typing.
+    public static func withSuggestion(_ text: String, line index: Int, step: String) -> String {
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard lines.indices.contains(index) else { return text }
+        let indent = lines[index].prefix { $0 == " " || $0 == "\t" }
+        let keyword = lines[index].dropFirst(indent.count).split(separator: " ").first ?? ""
+        lines[index] = indent + keyword + " " + step
+        return lines.joined(separator: "\n")
+    }
+
     /// Pads each step's keyword on the left to the longest keyword's width, so the step texts
     /// start in one column: "Given …", " When …". internal/app's linedUp does the same.
     public static func linedUp(_ steps: [String]) -> [String] {

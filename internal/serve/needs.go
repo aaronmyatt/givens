@@ -298,9 +298,13 @@ func editorMarks(editor *app.Editor, _ params) (any, error) {
 	return editor.Marks(), nil
 }
 
-func stepSuggestions(editor *app.Editor, _ params) (any, error) {
+func stepSuggestions(editor *app.Editor, given params) (any, error) {
 	assert.That(editor != nil, "suggestions runs on an editor")
 	assert.That(editor.Path() != "", "an editor holds a file")
+	// The Mac editor sends the line it's on; the steps send nothing and type through the core.
+	if given.Text != "" {
+		return editor.SuggestionsFor(given.Text), nil
+	}
 	return editor.Suggestions(), nil
 }
 

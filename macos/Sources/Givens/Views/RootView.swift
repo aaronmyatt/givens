@@ -269,6 +269,9 @@ struct EditorView: View {
     let window: WindowModel
     let editor: EditorRecord
     @State private var text = ""
+    /// The line last typed on, and the project's steps that start like it.
+    @State private var typing: Int?
+    @State private var suggestions: [StepSuggestionRecord] = []
 
     var body: some View {
         Text(editor.path).font(.caption).foregroundStyle(.secondary)
@@ -277,6 +280,25 @@ struct EditorView: View {
             .frame(minHeight: 240)
             .onAppear { text = editor.text }
             .onChange(of: editor.text) { _, saved in text = saved }
+            .onChange(of: text) { old, new in typing = WindowModel.changedLine(from: old, to: new) }
+            // .task(id:) cancels the last lookup when the line changes, so a pause in typing
+            // is what asks. Ref: https://developer.apple.com/documentation/swiftui/view/task(id:priority:_:)
+            .task(id: typingLine) {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                suggestions = (try? await window.stepSuggestions(forLine: typingLine)) ?? []
+            }
+        ForEach(suggestions, id: \.text) { suggestion in
+            Button {
+                guard let typing else { return }
+                text = WindowModel.withSuggestion(text, line: typing, step: suggestion.text)
+                suggestions = []
+            } label: {
+                Text(suggestion.text).monospaced()
+                Text(suggestion.label).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+        }
         ForEach(editor.problems, id: \.self) { WarningText(warning: $0) }
         ForEach(Array(editor.preview.enumerated()), id: \.offset) { _, line in
             Text(line).monospaced().foregroundStyle(.secondary)
@@ -288,6 +310,11 @@ struct EditorView: View {
             }
         }
         .keyboardShortcut("s")
+    }
+
+    /// The text of the line last typed on, or "" before any typing.
+    private var typingLine: String {
+        typing.map { WindowModel.line($0, of: text) } ?? ""
     }
 }
 

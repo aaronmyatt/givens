@@ -70,7 +70,34 @@ func (e *Editor) Suggestions() []StepSuggestion {
 	assert.That(e != nil, "suggestions runs on an editor")
 	assert.That(e.window != nil, "an editor belongs to a window")
 	_, partial, ok := e.typedStep()
-	if !ok || e.window.project == nil {
+	if !ok {
+		return []StepSuggestion{}
+	}
+	return e.suggestionsFor(partial)
+}
+
+// SuggestionsFor lists the steps offered for a step line as the Mac editor holds it: "Given a
+// card" offers steps starting "a card". A line that isn't a step, or a step already written
+// out word for word, offers none.
+func (e *Editor) SuggestionsFor(line string) []StepSuggestion {
+	assert.That(e != nil, "suggestions runs on an editor")
+	assert.That(!strings.Contains(line, "\n"), "suggestions are for one line")
+	keyword, partial, _ := strings.Cut(strings.TrimSpace(line), " ")
+	if !isStepKeyword(keyword) || strings.TrimSpace(partial) == "" {
+		return []StepSuggestion{}
+	}
+	offered := e.suggestionsFor(partial)
+	if len(offered) == 1 && offered[0].Text == partial {
+		return []StepSuggestion{}
+	}
+	return offered
+}
+
+// suggestionsFor lists the project's steps starting with partial, most used first.
+func (e *Editor) suggestionsFor(partial string) []StepSuggestion {
+	assert.That(e.window != nil, "an editor belongs to a window")
+	assert.That(partial != "", "suggestions start from what's typed")
+	if e.window.project == nil {
 		return []StepSuggestion{}
 	}
 	uses := make(map[string]int, 32)

@@ -57,6 +57,15 @@ extension WindowModel {
         try await writeStoriesValue("window.stepSuggestions", [:], [StepSuggestionRecord].self)
     }
 
+    /// The steps offered for one step line as the Mac editor holds it, like "Given a sh".
+    /// None for a line that isn't a step.
+    public func stepSuggestions(forLine line: String) async throws -> [StepSuggestionRecord] {
+        precondition(!line.contains("\n"), "suggestions are for one line")
+        guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return try await writeStoriesValue(
+            "window.stepSuggestions", ["text": line], [StepSuggestionRecord].self)
+    }
+
     /// Replaces the step being typed with an offered one, word for word.
     /// Needed by "Reuse an existing step".
     public func chooseStepSuggestion(_ text: String) async throws {
