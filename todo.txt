@@ -15,8 +15,8 @@ x 2026-10-11 2026-10-11 Views: 4 scenarios ref:views — see tasks/views/notes.m
 x 2026-10-11 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios — see tasks/write-stories-and-scenarios/notes.md
 x 2026-10-11 2026-10-11 Open a project: 14 scenarios ref:open-a-project — see tasks/open-a-project/notes.md
 x 2026-10-11 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit — see tasks/update-the-kit/notes.md
-2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin
 x 2026-10-11 Finish: no @wip tags left and scripts/check.sh passes — all 152 scenarios pass in Go (and every windowed one in Swift); check.sh passes; Release signing waits on a Developer ID
 x 2026-10-11 2026-10-11 Cache scenario statuses between snapshots: the Unverified count fingerprints every scenario each time — statuses and the Shared list kept until a file changes or the day turns; a sample-shop snapshot went from 1.7 ms to 0.46 ms, the rest is the folder look
 x 2026-10-11 2026-10-11 Drop in UI: draw outline rows (dropInRows) — rows are in the snapshot and drawn with their buttons, greyed while another row is live; QR left out, as the QR scenario was removed
 x 2026-10-11 2026-10-11 Editor UI: show step suggestions while typing in the SwiftUI text editor — the Mac editor offers steps for the line just typed on, with "used in N"; clicking one fills in the line
+x 2026-10-11 2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin — the menu item opens a folder picker at the first PATH folder the developer can write to, ~/.local/bin first; known gap: no warning when the picked folder isn't on PATH

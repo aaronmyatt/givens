@@ -61,6 +61,7 @@ func (s *Server) table() map[string]handler {
 		"quit":                      s.quit,
 		"openDropped":               s.openDropped,
 		"installCommand":            s.installCommand,
+		"installFolders":            s.installFolders,
 		"window.select":             s.onWindow(selectItem),
 		"window.choose":             s.onWindow(choose),
 		"window.type":               s.onWindow(typeText),
@@ -156,6 +157,12 @@ func (s *Server) installCommand(given params) (any, error) {
 		return nil, err
 	}
 	return s.core.InstallCommand(given.BinDir)
+}
+
+func (s *Server) installFolders(_ params) (any, error) {
+	assert.That(s != nil, "install folders runs on a server")
+	assert.That(s.core != nil, "the server has an app")
+	return s.core.InstallFolders(), nil
 }
 
 func (s *Server) shipKits(given params) (any, error) {

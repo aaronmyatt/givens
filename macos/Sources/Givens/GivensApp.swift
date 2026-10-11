@@ -70,14 +70,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.run { try await $0.quit() }
     }
 
-    /// Installs the command into /usr/local/bin and shows what Givens says.
+    /// Asks where to install the command, starting at the first folder on the developer's
+    /// PATH they can write to, then installs it there and shows what Givens says.
+    /// Ref: https://developer.apple.com/documentation/appkit/nsopenpanel
     func installCommand() {
         model.run { model in
-            let said = try await model.installCommand(into: "/usr/local/bin")
+            let folders = try await model.installFolders()
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.canCreateDirectories = true
+            panel.prompt = "Install"
+            panel.message =
+                folders.isEmpty
+                ? "None of the folders on your PATH can be written to. Pick one, like "
+                    + "~/.local/bin, then add it to your PATH."
+                : "Pick a folder on your PATH. You can write to: "
+                    + folders.prefix(4).map(Self.tilde).joined(separator: ", ")
+            panel.directoryURL = URL(
+                fileURLWithPath: folders.first ?? NSHomeDirectory() + "/.local/bin")
+            guard panel.runModal() == .OK, let folder = panel.url?.path else { return }
+            let said = try await model.installCommand(into: folder)
             let alert = NSAlert()
             alert.messageText = said
             alert.runModal()
         }
+    }
+
+    /// A path with the home folder shown as ~, as a terminal would say it.
+    static func tilde(_ path: String) -> String {
+        path.hasPrefix(NSHomeDirectory() + "/")
+            ? "~" + path.dropFirst(NSHomeDirectory().count) : path
     }
 }
 

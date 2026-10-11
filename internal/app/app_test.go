@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -166,5 +167,26 @@ func TestSuggestionsForALine(t *testing.T) {
 		if got := editor.SuggestionsFor(line); len(got) != 0 {
 			t.Errorf("%q offered %v, want none", line, got)
 		}
+	}
+}
+
+// TestWritableFolders offers PATH folders that exist and can be written to, ~/.local/bin
+// first.
+func TestWritableFolders(t *testing.T) {
+	home := t.TempDir()
+	mine := filepath.Join(home, ".local", "bin")
+	shared := t.TempDir()
+	locked := t.TempDir()
+	if err := os.MkdirAll(mine, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	list := strings.Join([]string{shared, locked, "relative/bin", filepath.Join(home, "gone"),
+		mine, shared}, string(filepath.ListSeparator))
+	got := writableFolders(list, home)
+	if len(got) != 2 || got[0] != mine || got[1] != shared {
+		t.Errorf("offered %v, want [%s %s]", got, mine, shared)
 	}
 }

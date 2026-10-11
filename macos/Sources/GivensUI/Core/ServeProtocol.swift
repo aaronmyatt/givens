@@ -24,6 +24,8 @@ public enum ServeMethod {
     public static let openDropped = "openDropped"
     /// App.InstallCommand.
     public static let installCommand = "installCommand"
+    /// App.InstallFolders.
+    public static let installFolders = "installFolders"
     /// Window.Select.
     public static let select = "window.select"
     /// Window.Choose.

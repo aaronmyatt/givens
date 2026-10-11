@@ -33,3 +33,10 @@ its steps, already written in `acceptance/open-a-project/`, pass, and `scripts/c
 - `scripts/run-app.sh [folder]` builds the app with givens beside it and runs it, for a look
   on screen. Known gap: whether a dev build opens a folder passed on the command line isn't
   checked; "Open folder…" works either way. Not eyeballed.
+- Install folder (2026-10-11): "Install givens command" no longer assumes /usr/local/bin. It
+  asks serve's `installFolders` (App.InstallFolders) for the PATH folders the developer can
+  write to, then opens a folder picker at the first. The PATH comes from `$SHELL -l -i -c`
+  (3 s cap), since a Mac app gets launchd's short PATH; a marker skips anything rc files print.
+  ~/.local/bin, ~/bin, /opt/homebrew/bin and /usr/local/bin rank first, then the rest in PATH
+  order, so nvm's and cargo's folders aren't offered first. Picking a folder that isn't on PATH
+  still installs; Givens doesn't warn about it yet.

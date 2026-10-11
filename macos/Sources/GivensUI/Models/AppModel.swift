@@ -62,6 +62,15 @@ public final class AppModel {
         return reply.value ?? ""
     }
 
+    /// The folders on the developer's PATH they can write to, ~/.local/bin and the like first:
+    /// where "Install givens command" offers to put it.
+    public func installFolders() async throws -> [String] {
+        let reply = try await serve.call(
+            ServeMethod.installFolders, [String: String](), returning: [String].self)
+        try apply(reply)
+        return reply.value ?? []
+    }
+
     /// Closes every window, remembering which projects were open, and stops serve.
     public func quit() async throws {
         try await send(ServeMethod.quit)
