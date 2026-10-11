@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -58,24 +57,12 @@ func (w *Window) findSteps(words string) []SearchResult {
 	assert.That(w.project != nil, "search runs in a loaded project")
 	assert.That(words != "", "there are words to find")
 	found := make([]SearchResult, 0, 8)
-	index := make(map[string]int, 16)
-	for _, capability := range w.project.Capabilities {
-		for _, scenario := range capability.Scenarios {
-			for _, step := range uniqueSteps(scenario) {
-				if !strings.Contains(strings.ToLower(step.Text), words) {
-					continue
-				}
-				if at, seen := index[step.Text]; seen {
-					found[at].Uses++
-					continue
-				}
-				name := step.Keyword + " " + step.Text
-				index[step.Text] = len(found)
-				found = append(found, SearchResult{
-					Name: name, Capability: capability.Name, Uses: 1,
-					Matches: matchesIn(words, name, ""),
-				})
-			}
+	for _, step := range w.searchIndexOf().steps {
+		if strings.Contains(step.lower, words) {
+			found = append(found, SearchResult{
+				Name: step.name, Capability: step.capability, Uses: step.uses,
+				Matches: matchesIn(words, step.name, ""),
+			})
 		}
 	}
 	return limit(found)
@@ -102,55 +89,29 @@ func (w *Window) findScripts(words string) []SearchResult {
 	assert.That(w.project != nil, "search runs in a loaded project")
 	assert.That(words != "", "there are words to find")
 	named, mentioned := make([]SearchResult, 0, 8), make([]SearchResult, 0, 8)
-	for _, capability := range w.project.Capabilities {
-		for _, scenario := range capability.Scenarios {
-			for _, path := range []string{scenario.Setup, scenario.SetupCards,
-				scenario.Teardown} {
-				result, ok := w.scriptResult(capability.Name, path, words)
-				switch {
-				case !ok:
-				case strings.Contains(strings.ToLower(result.Name), words):
-					named = append(named, result)
-				default:
-					mentioned = append(mentioned, result)
-				}
+	for _, script := range w.searchIndexOf().scripts {
+		detail := ""
+		for index, line := range script.lowerLines {
+			if strings.Contains(line, words) {
+				detail = script.lines[index]
+				break
 			}
+		}
+		isNamed := strings.Contains(script.lowerName, words)
+		if detail == "" && !isNamed {
+			continue
+		}
+		result := SearchResult{
+			Name: script.name, Detail: detail, Capability: script.capability,
+			Matches: matchesIn(words, script.name, detail),
+		}
+		if isNamed {
+			named = append(named, result)
+		} else {
+			mentioned = append(mentioned, result)
 		}
 	}
 	return limit(append(named, mentioned...))
-}
-
-// scriptResult is a setup file as a result, when its name or a line holds the words.
-func (w *Window) scriptResult(capability string, path string, words string) (SearchResult,
-	bool) {
-	assert.That(capability != "", "a script belongs to a capability")
-	assert.That(words != "", "there are words to find")
-	if path == "" {
-		return SearchResult{}, false
-	}
-	relative, err := filepath.Rel(w.path, path)
-	if err != nil {
-		return SearchResult{}, false
-	}
-	name := filepath.ToSlash(relative)
-	text, err := helpers.ReadScript(path)
-	if err != nil {
-		return SearchResult{}, false
-	}
-	detail := ""
-	for _, line := range strings.Split(text, "\n") {
-		if strings.Contains(strings.ToLower(line), words) {
-			detail = strings.TrimSpace(line)
-			break
-		}
-	}
-	if detail == "" && !strings.Contains(strings.ToLower(name), words) {
-		return SearchResult{}, false
-	}
-	return SearchResult{
-		Name: name, Detail: detail, Capability: capability,
-		Matches: matchesIn(words, name, detail),
-	}, true
 }
 
 // findHelpers finds documented helpers whose name or description holds the words.

@@ -15,6 +15,8 @@ const (
 	MarkDone = "done"
 	MarkPass = "pass"
 	MarkFail = "fail"
+	// MarkClear takes a mark off, like unticking a When step.
+	MarkClear = "clear"
 )
 
 // MessageMarkEachCheck is shown when "Record run" comes before every check is marked.
@@ -23,12 +25,16 @@ const MessageMarkEachCheck = "Mark each check first"
 // Mark marks a checklist item: "done" for Givens and Whens, "pass" or "fail" for Thens.
 func (s *Session) Mark(item string, mark string) error {
 	assert.That(s != nil, "mark runs on a session")
-	assert.That(mark == MarkDone || mark == MarkPass || mark == MarkFail,
-		"a mark is done, pass or fail")
+	assert.That(mark == MarkDone || mark == MarkPass || mark == MarkFail || mark == MarkClear,
+		"a mark is done, pass, fail or clear")
 	s.poll()
 	for index := range s.checklist {
 		if s.checklist[index].Text != item {
 			continue
+		}
+		if mark == MarkClear {
+			s.checklist[index].Mark = ""
+			return nil
 		}
 		then := s.checklist[index].Kind == "then"
 		if then == (mark == MarkDone) {
@@ -86,7 +92,7 @@ func (s *Session) RecordRun(note string) error {
 	if err := runs.Append(window.path, run); err != nil {
 		return err
 	}
-	s.message = ""
+	s.message, s.recorded = "", true
 	return nil
 }
 

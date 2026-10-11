@@ -10,9 +10,59 @@ import (
 
 // Select selects a sidebar item, scenario, search result or helper by its name. A capability
 // shows its story and scenarios; a scenario shows its steps next to its capability's.
-// See capabilities/read-a-capability.
+// See capabilities/read-a-capability. Selecting closes the editor and leaves an open Drop in,
+// asking first when changes aren't saved or marks aren't recorded.
 func (w *Window) Select(name string) error {
 	assert.That(w != nil, "select runs on a window")
+	assert.That(utf8.ValidString(name), "the name is text")
+	if w.editor != nil {
+		return w.closeEditor(func() error { return w.leaveThenSelect(name) })
+	}
+	return w.leaveThenSelect(name)
+}
+
+// leaveThenSelect leaves an open Drop in, asking first when its marks aren't recorded, then
+// selects by name.
+func (w *Window) leaveThenSelect(name string) error {
+	assert.That(w.editor == nil, "the editor is closed before selecting")
+	assert.That(utf8.ValidString(name), "the name is text")
+	if w.session == nil {
+		return w.selectNow(name)
+	}
+	if !w.session.marked() || w.session.recorded {
+		if err := w.leaveSession(); err != nil {
+			return err
+		}
+		return w.selectNow(name)
+	}
+	question := "Leave " + w.session.scenario.Name + "? Its marks aren't recorded"
+	w.ask(question, OfferLeave, func() error {
+		if err := w.leaveSession(); err != nil {
+			return err
+		}
+		return w.selectNow(name)
+	})
+	return nil
+}
+
+// leaveSession closes the Drop in page: setup still running is stopped, and its arguments
+// folder removed.
+func (w *Window) leaveSession() error {
+	assert.That(w.session != nil, "there's a Drop in to leave")
+	session := w.session
+	assert.That(session.window == w, "the Drop in is this window's")
+	w.session = nil
+	session.removeArguments()
+	session.scripts = nil
+	if session.process == nil {
+		return nil
+	}
+	return session.process.Stop()
+}
+
+// selectNow selects by name, with no Drop in open.
+func (w *Window) selectNow(name string) error {
+	assert.That(w.session == nil, "a Drop in is left before selecting")
 	assert.That(utf8.ValidString(name), "the name is text")
 	w.selectedView, w.selectedStep = "", ""
 	if w.selectStep(name) {

@@ -32,6 +32,19 @@ for arch in arm64 amd64; do
 done
 lipo -create -output "$app/Contents/Helpers/givens" "$work/givens-arm64" "$work/givens-amd64"
 
+# The icon: the app draws it (AppIcon.swift), then sips cuts every size iconutil wants.
+# Ref: https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/Optimizing/Optimizing.html
+"$app/Contents/MacOS/Givens" --write-icon "$work/icon.png"
+iconset="$work/Givens.iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" "$work/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  double=$((size * 2))
+  sips -z "$double" "$double" "$work/icon.png" \
+    --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/Givens.icns"
+
 sed "s/VERSION/$version/g" macos/Bundle/Info.plist > "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 rm -rf "$work"

@@ -45,7 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var model: AppModel = {
         let picker = OpenPanelPicker()
         let platform = Platform(
-            clipboard: SystemClipboard(), trash: FinderTrash(), folderPicker: picker,
+            clipboard: SayingClipboard(SystemClipboard()), trash: SayingTrash(FinderTrash()),
+            folderPicker: picker,
             urlOpener: WorkspaceURLOpener())
         let model = AppModel(
             serve: .init(
@@ -55,7 +56,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return model
     }()
 
+    /// `Givens --write-icon <file.png>` writes the icon and quits, for scripts/build-app.sh.
+    /// Otherwise the icon drawn in AppIcon is the Dock and ⌘Tab icon, also in a dev build,
+    /// which has no bundle to carry a .icns.
+    /// Ref: https://developer.apple.com/documentation/appkit/nsapplication/applicationiconimage
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let arguments = CommandLine.arguments
+        if let flag = arguments.firstIndex(of: "--write-icon"), flag + 1 < arguments.count {
+            do {
+                try AppIcon.writePNG(to: arguments[flag + 1])
+                exit(0)
+            } catch {
+                FileHandle.standardError.write(Data("can't write the icon: \(error)\n".utf8))
+                exit(1)
+            }
+        }
+        NSApplication.shared.applicationIconImage = AppIcon.image()
+        // A dev build is a bare executable with no bundle, so AppKit doesn't make it a regular
+        // app: no Dock icon, and keystrokes never reach its text fields. Say so, then come to
+        // the front. Ref: https://developer.apple.com/documentation/appkit/nsapplication/setactivationpolicy(_:)
+        NSApplication.shared.setActivationPolicy(.regular)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Ref: https://developer.apple.com/documentation/appkit/nsapplication/activate()
+        NSApplication.shared.activate()
         model.run { try await $0.launch() }
     }
 
@@ -91,9 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fileURLWithPath: folders.first ?? NSHomeDirectory() + "/.local/bin")
             guard panel.runModal() == .OK, let folder = panel.url?.path else { return }
             let said = try await model.installCommand(into: folder)
-            let alert = NSAlert()
-            alert.messageText = said
-            alert.runModal()
+            Feedback.shared.say(said, symbol: "terminal.fill")
         }
     }
 
@@ -105,13 +128,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppModel {
-    /// Runs an action, showing a failure as an alert rather than dropping it.
-    func run(_ action: @escaping @MainActor (AppModel) async throws -> Void) {
+    /// Runs an action. While it runs, "Working…" shows if it's slow; after, `done` shows as a
+    /// notification, and a failure shows as a red one rather than being dropped.
+    func run(_ done: String? = nil, _ action: @escaping @MainActor (AppModel) async throws -> Void)
+    {
         Task { @MainActor in
+            Feedback.shared.begin()
+            defer { Feedback.shared.end() }
             do {
                 try await action(self)
+                if let done { Feedback.shared.say(done) }
             } catch {
-                NSAlert(error: error).runModal()
+                Feedback.shared.fail(error)
             }
         }
     }

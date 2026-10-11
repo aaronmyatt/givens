@@ -24,6 +24,8 @@ public struct SharedHelperRecord: Decodable, Sendable, Equatable {
     public let overrides: String
     /// Why it's flagged, such as a second definition at the same level, or "".
     public let warning: String
+    /// The function as written, from its `name() {` line to its closing brace.
+    public let code: String
 }
 
 /// One command a scenario's setup needs. Mirrors internal/app's RequiredCommand.

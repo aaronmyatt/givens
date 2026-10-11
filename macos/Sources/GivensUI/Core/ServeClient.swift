@@ -1,7 +1,9 @@
 import Foundation
 
 /// Why a call into the core didn't return a result.
-public enum GivensError: Error, Equatable, CustomStringConvertible {
+/// LocalizedError gives alerts the description, not "GivensError error 1".
+/// Ref: https://developer.apple.com/documentation/foundation/localizederror
+public enum GivensError: LocalizedError, Equatable, CustomStringConvertible {
     /// `givens serve` couldn't start, or stopped; carries what it printed.
     case serveUnavailable(String)
     /// The core answered with an operating error.
@@ -20,6 +22,9 @@ public enum GivensError: Error, Equatable, CustomStringConvertible {
         case .badReply(let detail): "givens serve sent a reply Swift can't read: \(detail)"
         }
     }
+
+    /// What an alert shows.
+    public var errorDescription: String? { description }
 }
 
 /// Runs `givens serve` as a child process and talks to it in JSON lines over its stdin and

@@ -169,13 +169,13 @@ private func gherkinFilesEditStep(_ s: GherkinFilesState, _ name: String) async 
 /// Expects neither action offered on either scenario, renames the second in Givens, and then
 /// expects both actions offered on both.
 @MainActor
-private func gherkinFilesDisabledUntilRenamed(
-    _ s: GherkinFilesState, _ first: String, _ second: String
-) async throws {
+private func gherkinFilesDisabledUntilRenamed(_ s: GherkinFilesState, _ action: String)
+    async throws
+{
     let window = try await s.w.front()
     for name in s.names {
         try await window.select(name)
-        for action in [first, second] where window.offers.contains(action) {
+        if window.offers.contains(action) {
             throw StepFailure("\"\(action)\" is offered on \"\(name)\" while its slug clashes")
         }
     }
@@ -184,12 +184,10 @@ private func gherkinFilesDisabledUntilRenamed(
     try await window.rename(s.names[1], to: renamed)
     for name in [s.names[0], renamed] {
         try await window.select(name)
-        for action in [first, second] {
-            do {
-                try expect(window.offers, action, "\(name)'s actions")
-            } catch {
-                throw StepFailure("after the rename: \(error)")
-            }
+        do {
+            try expect(window.offers, action, "\(name)'s actions")
+        } catch {
+            throw StepFailure("after the rename: \(error)")
         }
     }
 }
@@ -391,8 +389,8 @@ private func gherkinFilesProblemSteps(_ s: GherkinFilesState) -> [StepDefinition
                 }
             }
         },
-        def(#"^"([^"]*)" and "([^"]*)" are disabled on both until one is renamed$"#) { call in
-            try await gherkinFilesDisabledUntilRenamed(s, call[0], call[1])
+        def(#"^"([^"]*)" is disabled on both until one is renamed$"#) { call in
+            try await gherkinFilesDisabledUntilRenamed(s, call[0])
         },
     ]
 }

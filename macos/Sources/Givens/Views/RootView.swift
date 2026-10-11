@@ -7,383 +7,66 @@ struct RootView: View {
     let app: AppModel
 
     var body: some View {
-        if let window = app.front {
-            switch window.kind {
-            case "project": ProjectView(window: window)
-            default: WelcomeView(app: app, window: window)
+        Group {
+            if let window = app.front {
+                switch window.kind {
+                case "project": ProjectView(window: window)
+                default: WelcomeView(app: app, window: window)
+                }
+            } else {
+                ProgressView()
             }
-        } else {
-            ProgressView()
         }
+        .overlay(alignment: .bottom) { FeedbackOverlay() }
     }
 }
 
-/// "Open folder…" and the recent projects.
+/// The app icon and name, "Open folder…" and the recent projects.
 struct WelcomeView: View {
     let app: AppModel
     let window: WindowModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(window.snapshot?.messages ?? [], id: \.self) { Text($0) }
-            ForEach(window.offers, id: \.self) { offer in
-                Button(offer) { app.run { _ in try await window.choose(offer) } }
+        HStack(spacing: 0) {
+            VStack(spacing: 14) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: 112, height: 112)
+                Text("Givens").font(.largeTitle).bold()
+                Text("Set up a scenario. Walk through it.").foregroundStyle(.secondary)
+                ForEach(window.snapshot?.messages ?? [], id: \.self) { Text($0) }
+                ForEach(window.offers, id: \.self) { offer in
+                    Button(offer) { app.run { _ in try await window.choose(offer) } }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(32)
             if !app.recents.isEmpty {
-                Text("Recent").font(.headline)
-                ForEach(app.recents, id: \.self) { path in
-                    Button(path) { app.run { _ in try await window.openRecent(path) } }
-                }
-            }
-        }
-        .padding()
-    }
-}
-
-/// A project: sidebar on the left, the selected capability, scenario or view on the right.
-/// ⌘K focuses the search field; each change sends the whole query again.
-/// Ref: https://developer.apple.com/documentation/swiftui/navigationsplitview
-/// Ref: https://developer.apple.com/documentation/swiftui/view/searchable(text:placement:prompt:)
-struct ProjectView: View {
-    let window: WindowModel
-    @State private var query = ""
-
-    var body: some View {
-        NavigationSplitView {
-            List {
-                SidebarSection(window: window, title: "Capabilities", kind: "capability")
-                SidebarSection(window: window, title: "Views", kind: "view")
-                SidebarSection(window: window, title: "Tags", kind: "tag")
-            }
-        } detail: {
-            DetailView(window: window)
-        }
-        .navigationTitle(window.title)
-        .searchable(text: $query, prompt: "Search ⌘K")
-        .onChange(of: query) { _, typed in
-            window.app.run { _ in
-                try await window.press("⌘K")
-                if !typed.isEmpty { try await window.type(typed) }
-            }
-        }
-    }
-}
-
-/// One part of the sidebar: the items of one kind, each with its count and any warning.
-struct SidebarSection: View {
-    let window: WindowModel
-    let title: String
-    let kind: String
-
-    var body: some View {
-        let items = window.sidebar.filter { $0.kind == kind }
-        if !items.isEmpty {
-            Section(title) {
-                ForEach(items, id: \.name) { item in
-                    Button {
-                        window.app.run { _ in try await window.select(item.name) }
-                    } label: {
-                        HStack {
-                            Text(item.name)
-                            if !item.warning.isEmpty {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundStyle(.orange)
-                                    .accessibilityLabel(item.warning)
+                Divider()
+                List {
+                    Section("Recent") {
+                        ForEach(app.recents, id: \.self) { path in
+                            Button {
+                                app.run { _ in try await window.openRecent(path) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(
+                                        URL(fileURLWithPath: path).deletingLastPathComponent()
+                                            .lastPathComponent)
+                                    Text(path).font(.caption).foregroundStyle(.secondary)
+                                        .lineLimit(1).truncationMode(.head)
+                                }
                             }
-                            Spacer()
-                            if item.count > 0 {
-                                Text("\(item.count)").foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .help(item.warning)
-                }
-            }
-        }
-    }
-}
-
-/// Messages, the shown capability or scenario, the editor, the Drop in page and the offered
-/// actions. Each piece of text drawn here is one WindowModel.visible lists, in the same order.
-struct DetailView: View {
-    let window: WindowModel
-    @State private var dialog: AuthoringDialog?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(window.snapshot?.messages ?? [], id: \.self) { Text($0).bold() }
-                ForEach(window.snapshot?.labels ?? [], id: \.self) {
-                    Text($0).foregroundStyle(.secondary)
-                }
-                if let capability = window.snapshot?.capability {
-                    CapabilityView(capability: capability)
-                }
-                if let scenario = window.snapshot?.scenario {
-                    ScenarioView(scenario: scenario)
-                }
-                ForEach(Array((window.snapshot?.rows ?? []).enumerated()), id: \.offset) { _, row in
-                    RowView(window: window, row: row)
-                }
-                ForEach(window.snapshot?.listed ?? [], id: \.name) { scenario in
-                    Button {
-                        window.app.run { _ in try await window.select(scenario.name) }
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text("\(scenario.name) — \(scenario.status)")
-                            Text(scenario.capability).foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                            .help(path)
                         }
                     }
                 }
-                if let search = window.snapshot?.search {
-                    ForEach(search.results, id: \.self) { line in
-                        Button(line) { window.app.run { _ in try await window.select(line) } }
-                    }
-                }
-                if let editor = window.snapshot?.editor {
-                    EditorView(window: window, editor: editor)
-                }
-                if let session = window.session {
-                    DropInView(window: window, session: session)
-                }
-                HStack {
-                    ForEach(window.offers, id: \.self) { offer in
-                        Button(offer) {
-                            switch offer {
-                            case "New story": dialog = .story
-                            case "New scenario": dialog = .scenario
-                            default: window.app.run { _ in try await window.choose(offer) }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding()
-        }
-        .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
-    }
-}
-
-/// Which authoring dialog is up.
-enum AuthoringDialog: String, Identifiable {
-    case story, scenario
-    var id: String { rawValue }
-}
-
-/// The New story and New scenario dialogs: their fields, then one call into the core.
-/// Ref: https://developer.apple.com/documentation/swiftui/view/sheet(item:ondismiss:content:)
-struct AuthoringSheet: View {
-    let window: WindowModel
-    let kind: AuthoringDialog
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var asA = ""
-    @State private var iWant = ""
-    @State private var soThat = ""
-    @State private var errorState = false
-
-    var body: some View {
-        Form {
-            TextField("Name", text: $name)
-            if kind == .story {
-                TextField("As a", text: $asA)
-                TextField("I want", text: $iWant)
-                TextField("So that", text: $soThat)
-            } else {
-                Toggle("Error state", isOn: $errorState)
-            }
-            HStack {
-                Button("Cancel") { dismiss() }
-                Button("Create") {
-                    window.app.run { _ in
-                        if kind == .story {
-                            try await window.newStory(
-                                name: name, asA: asA, iWant: iWant, soThat: soThat)
-                        } else {
-                            try await window.newScenario(name, error: errorState)
-                        }
-                    }
-                    dismiss()
-                }
-                .disabled(name.isEmpty)
+                .frame(width: 280)
             }
         }
-        .padding()
-        .frame(minWidth: 360)
-    }
-}
-
-/// A warning line, or nothing when there's none.
-struct WarningText: View {
-    let warning: String
-
-    var body: some View {
-        if !warning.isEmpty {
-            Label(warning, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-        }
-    }
-}
-
-/// The middle column: the story, about.md, and the scenarios grouped under their Rule: blocks.
-/// Ref: https://cucumber.io/docs/gherkin/reference/#rule
-struct CapabilityView: View {
-    let capability: CapabilityRecord
-
-    var body: some View {
-        Text(capability.name).font(.title)
-        WarningText(warning: capability.warning)
-        ForEach(capability.story, id: \.self) { Text($0) }
-        if !capability.about.isEmpty { Text(capability.about) }
-        ForEach(Array(capability.scenarios.enumerated()), id: \.offset) { index, scenario in
-            let previous = index == 0 ? "" : capability.scenarios[index - 1].rule
-            if scenario.rule != previous && !scenario.rule.isEmpty {
-                Text(scenario.rule).font(.headline).padding(.top, 4)
-            }
-            HStack {
-                Image(systemName: scenario.error ? "xmark.octagon" : "checkmark.circle")
-                Text(scenario.name)
-                Text(scenario.status).foregroundStyle(.secondary)
-            }
-            WarningText(warning: scenario.warning)
-        }
-    }
-}
-
-/// The right-hand side: a scenario's tags above its steps.
-struct ScenarioView: View {
-    let scenario: ScenarioRecord
-
-    var body: some View {
-        Text(scenario.name).font(.title2)
-        if !scenario.status.isEmpty { Text(scenario.status).foregroundStyle(.secondary) }
-        WarningText(warning: scenario.warning)
-        Text(scenario.tags.joined(separator: " ")).foregroundStyle(.secondary)
-        ForEach(WindowModel.linedUp(scenario.steps), id: \.self) { Text($0).monospaced() }
-        if !scenario.setup.isEmpty { Text(scenario.setup).monospaced().foregroundStyle(.secondary) }
-    }
-}
-
-/// The editor: the file's whole text, comments and all, saved as typed.
-/// Ref: https://developer.apple.com/documentation/swiftui/texteditor
-struct EditorView: View {
-    let window: WindowModel
-    let editor: EditorRecord
-    @State private var text = ""
-    /// The line last typed on, and the project's steps that start like it.
-    @State private var typing: Int?
-    @State private var suggestions: [StepSuggestionRecord] = []
-
-    var body: some View {
-        Text(editor.path).font(.caption).foregroundStyle(.secondary)
-        TextEditor(text: $text)
-            .font(.body.monospaced())
-            .frame(minHeight: 240)
-            .onAppear { text = editor.text }
-            .onChange(of: editor.text) { _, saved in text = saved }
-            .onChange(of: text) { old, new in typing = WindowModel.changedLine(from: old, to: new) }
-            // .task(id:) cancels the last lookup when the line changes, so a pause in typing
-            // is what asks. Ref: https://developer.apple.com/documentation/swiftui/view/task(id:priority:_:)
-            .task(id: typingLine) {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { return }
-                suggestions = (try? await window.stepSuggestions(forLine: typingLine)) ?? []
-            }
-        ForEach(suggestions, id: \.text) { suggestion in
-            Button {
-                guard let typing else { return }
-                text = WindowModel.withSuggestion(text, line: typing, step: suggestion.text)
-                suggestions = []
-            } label: {
-                Text(suggestion.text).monospaced()
-                Text(suggestion.label).foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-        }
-        ForEach(editor.problems, id: \.self) { WarningText(warning: $0) }
-        ForEach(Array(editor.preview.enumerated()), id: \.offset) { _, line in
-            Text(line).monospaced().foregroundStyle(.secondary)
-        }
-        Button("Save") {
-            window.app.run { _ in
-                try await window.setEditorText(text)
-                try await window.saveEditor()
-            }
-        }
-        .keyboardShortcut("s")
-    }
-
-    /// The text of the line last typed on, or "" before any typing.
-    private var typingLine: String {
-        typing.map { WindowModel.line($0, of: text) } ?? ""
-    }
-}
-
-/// The Drop in page: setup's output, the cards it's paused at, and the checklist with its
-/// marks. Card buttons are the window's offers, so they sit with the others below.
-struct DropInView: View {
-    let window: WindowModel
-    let session: SessionModel
-    @State private var answer = ""
-
-    var body: some View {
-        ForEach(Array(session.output.enumerated()), id: \.offset) { _, line in
-            Text(line).monospaced()
-        }
-        ForEach(Array(session.cards.enumerated()), id: \.offset) { _, line in
-            Text(line).padding(.leading, 8)
-        }
-        if session.status == SessionModel.waiting {
-            TextField("Type the value", text: $answer)
-                .onSubmit { window.app.run { _ in try await window.type(answer) } }
-        }
-        ForEach(session.checklist, id: \.text) { item in
-            HStack {
-                Text(item.mark.isEmpty ? "○" : item.mark)
-                Text(item.text)
-                Spacer()
-                if item.kind == "then" {
-                    Button("Pass") {
-                        window.app.run { _ in try await session.mark(item.text, "pass") }
-                    }
-                    Button("Fail") {
-                        window.app.run { _ in try await session.mark(item.text, "fail") }
-                    }
-                } else {
-                    Button("Done") {
-                        window.app.run { _ in try await session.mark(item.text, "done") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// One Examples row of the selected outline: its values and status, its steps, and its
-/// buttons; a row greyed out while another is live.
-struct RowView: View {
-    let window: WindowModel
-    let row: DropInRowRecord
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(WindowModel.rowLine(row)).bold()
-            ForEach(row.steps, id: \.self) { Text($0).monospaced() }
-            HStack {
-                ForEach(row.offers, id: \.self) { offer in
-                    Button(offer) {
-                        window.app.run { _ in try await window.chooseOnRow(name, offer) }
-                    }
-                }
-                ForEach(row.disabled, id: \.self) { Button($0) {}.disabled(true) }
-            }
-        }
-        .opacity(row.greyed ? 0.5 : 1)
-        .padding(.vertical, 4)
-    }
-
-    /// The row as ChooseOnRow names it: its first column's value, like "card=expired".
-    private var name: String {
-        guard let column = row.values.keys.sorted().first else { return "" }
-        return "\(column)=\(row.values[column] ?? "")"
+        .frame(minWidth: 640, minHeight: 400)
     }
 }

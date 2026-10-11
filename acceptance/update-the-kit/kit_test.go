@@ -8,6 +8,7 @@ package updatethekit
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -48,6 +49,10 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^git diff shows only givens\.sh changed$`, s.onlyKitChanged),
 		world.Def(`^the sample shop's givens\.sh has local edits$`, s.kitEdited),
 		world.Def(`^reading, searching and copying still work$`, s.readSearchCopyWork),
+		world.Def(`^the sample shop has no givens\.sh$`, s.noKit),
+		world.Def(`^givens\.sh is written at version (\d+)$`, s.replacedWith),
+		world.Def(`^deleting givens\.sh while the sample shop is open puts version (\d+) back$`,
+			s.deletedKitComesBack),
 	}
 }
 
@@ -217,4 +222,28 @@ func (s *state) readSearchCopyWork() error {
 		return err
 	}
 	return world.Expect(window.Visible(), "Card declined", "the search results")
+}
+
+// noKit copies the shop and takes its kit away.
+func (s *state) noKit() error {
+	if err := s.CopySampleShop(); err != nil {
+		return err
+	}
+	return os.Remove(filepath.Join(s.Project, filepath.FromSlash(kitPath)))
+}
+
+// deletedKitComesBack deletes the kit from the open project, then reads the window, as any
+// screen does, and checks the kit is back.
+func (s *state) deletedKitComesBack(version int) error {
+	if err := os.Remove(filepath.Join(s.Project, filepath.FromSlash(kitPath))); err != nil {
+		return err
+	}
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	if _, err := window.Capability("Checkout"); err != nil {
+		return err
+	}
+	return s.replacedWith(version)
 }

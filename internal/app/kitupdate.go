@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,6 +88,9 @@ func (w *Window) kitMessages() []string {
 	if !w.found || w.kind != WindowProject {
 		return []string{}
 	}
+	if w.kitProblem != "" {
+		return []string{w.kitProblem}
+	}
 	_, version, latest := w.kitState()
 	switch {
 	case version == 0:
@@ -122,4 +126,27 @@ func (w *Window) updateKit() error {
 		return err
 	})
 	return nil
+}
+
+// restoreKit writes the kit Givens ships when the capabilities folder has none, since every
+// setup script's first line sources it. It runs whenever the project is read from disk: on
+// opening, and after any change to its files. A write that fails shows across the top.
+// Needed by "A missing kit is put back".
+func (w *Window) restoreKit() {
+	assert.That(w.found, "the window shows a capabilities folder")
+	assert.That(filepath.IsAbs(w.path), "the capabilities folder is absolute")
+	path := filepath.Join(w.path, filepath.FromSlash(kitFile))
+	w.kitProblem = ""
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	shipped := w.app.shippedKits()
+	latest := shipped[len(shipped)-1]
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		w.kitProblem = "Couldn't put back " + kitFile + ": " + err.Error()
+		return
+	}
+	if err := os.WriteFile(path, []byte(latest.Text), 0o644); err != nil {
+		w.kitProblem = "Couldn't put back " + kitFile + ": " + err.Error()
+	}
 }

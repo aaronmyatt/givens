@@ -55,13 +55,7 @@ func (w *Window) Offers() []string {
 	}
 	if scenario := w.shownScenario(); scenario != nil {
 		loaded, _ := w.findScenario(w.selectedScenario)
-		offers = append(offers, scenarioOffers(*scenario)...)
-		if noSetup(loaded) {
-			offers = append(offers, OfferCreateScript, OfferWriteSetupSteps)
-		}
-		if loaded.Setup != "" && loaded.Teardown == "" {
-			offers = append(offers, OfferAddTeardown)
-		}
+		offers = append(offers, scenarioPageOffers(*scenario, loaded)...)
 	} else if w.project != nil {
 		// A capability's warning in the sidebar carries its fix, so fixes are offered with
 		// nothing selected; the selected capability's come first.
@@ -152,23 +146,8 @@ func (w *Window) Choose(action string) error {
 	if action == OfferEdit && w.selectedHelper != "" {
 		return w.editHelper()
 	}
-	if action == OfferCopy && w.selectedScenario != "" {
-		scenario, ok := w.findScenario(w.selectedScenario)
-		if !ok {
-			return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
-		}
-		return w.copySetup(scenario)
-	}
-	if action == OfferAddTeardown && w.selectedScenario != "" {
-		return w.addTeardown()
-	}
-	if (action == OfferCreateScript || action == OfferWriteSetupSteps) &&
-		w.selectedScenario != "" {
-		return w.createSetup(action == OfferCreateScript)
-	}
-	if action == OfferDropIn && w.selectedScenario != "" {
-		_, err := w.DropIn(w.selectedScenario)
-		return err
+	if w.selectedScenario != "" {
+		return w.chooseOnScenarioPage(action)
 	}
 	return ErrNotImplemented
 }
@@ -193,7 +172,7 @@ func scenarioOffers(scenario Scenario) []string {
 	if scenario.Warning == MessageNameExamples {
 		return []string{OfferCopy, OfferDropIn}
 	}
-	return []string{OfferCopy, OfferDropIn, OfferRecordRun}
+	return []string{OfferCopy, OfferDropIn}
 }
 
 // moveToOwnCapability moves an extra .feature file, the selected capability's first, into a
@@ -299,4 +278,71 @@ func (w *Window) createSetup(script bool) error {
 		return err
 	}
 	return w.editFile(path)
+}
+
+// scenarioFileOf says which of a scenario's setup files an edit offer opens, or nil for any
+// other offer.
+func scenarioFileOf(action string) func(project.Scenario) string {
+	assert.That(action != "", "an action has a label")
+	assert.That(OfferEditScript != OfferEditSetup, "each file has its own offer")
+	switch action {
+	case OfferEditScript:
+		return func(scenario project.Scenario) string { return scenario.Setup }
+	case OfferEditSetup:
+		return func(scenario project.Scenario) string { return scenario.SetupCards }
+	case OfferEditTeardown:
+		return func(scenario project.Scenario) string { return scenario.Teardown }
+	}
+	return nil
+}
+
+// scenarioPageOffers is what a scenario's page offers: its own actions, then ways to write
+// a missing setup or to open each setup file there is.
+func scenarioPageOffers(shown Scenario, loaded project.Scenario) []string {
+	assert.That(shown.Name != "", "a shown scenario has a name")
+	assert.That(loaded.Name == "" || loaded.Name == shown.Name, "both are the same scenario")
+	offers := scenarioOffers(shown)
+	if noSetup(loaded) {
+		// With no setup there's nothing to copy; the setup can be written instead.
+		offers = slices.DeleteFunc(offers, func(offer string) bool { return offer == OfferCopy })
+		offers = append(offers, OfferCreateScript, OfferWriteSetupSteps)
+	}
+	// Each setup file can be read and changed from the scenario's page.
+	for _, file := range []struct{ path, offer string }{
+		{loaded.Setup, OfferEditScript}, {loaded.SetupCards, OfferEditSetup},
+		{loaded.Teardown, OfferEditTeardown},
+	} {
+		if file.path != "" {
+			offers = append(offers, file.offer)
+		}
+	}
+	if loaded.Setup != "" && loaded.Teardown == "" {
+		offers = append(offers, OfferAddTeardown)
+	}
+	return offers
+}
+
+// chooseOnScenarioPage takes an action offered on the selected scenario's page.
+func (w *Window) chooseOnScenarioPage(action string) error {
+	assert.That(w.selectedScenario != "", "a scenario is selected")
+	assert.That(w.session == nil, "the scenario's page has no Drop in open")
+	scenario, ok := w.findScenario(w.selectedScenario)
+	if !ok {
+		return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
+	}
+	if editing := scenarioFileOf(action); editing != nil {
+		return w.editFile(editing(scenario))
+	}
+	switch action {
+	case OfferCopy:
+		return w.copySetup(scenario)
+	case OfferAddTeardown:
+		return w.addTeardown()
+	case OfferCreateScript, OfferWriteSetupSteps:
+		return w.createSetup(action == OfferCreateScript)
+	case OfferDropIn:
+		_, err := w.DropIn(w.selectedScenario)
+		return err
+	}
+	return ErrNotImplemented
 }

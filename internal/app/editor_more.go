@@ -18,6 +18,10 @@ const (
 	OfferKeepMine  = "Keep mine"
 	OfferUseTheirs = "Use theirs"
 	OfferCompare   = "Compare"
+	// OfferCloseEditor closes the editor; with unsaved changes it asks first.
+	OfferCloseEditor = "Close"
+	// OfferDiscardChanges answers that question: close, losing what wasn't saved.
+	OfferDiscardChanges = "Discard changes"
 	// SuggestionsMax bounds the steps offered while typing.
 	SuggestionsMax = 20
 )
@@ -195,7 +199,40 @@ func (e *Editor) editorOffers() []string {
 	if e.conflict() {
 		return []string{OfferKeepMine, OfferUseTheirs, OfferCompare}
 	}
-	return []string{OfferPreview}
+	if e.previewable() {
+		return []string{OfferPreview, OfferCloseEditor}
+	}
+	return []string{OfferCloseEditor}
+}
+
+// previewable is true for what Preview can show: a scenario's block, or about.md.
+func (e *Editor) previewable() bool {
+	assert.That(e != nil, "previewable runs on an editor")
+	assert.That(e.path != "", "an editor holds a file")
+	return e.scenario != "" || filepath.Base(e.path) == "about.md"
+}
+
+// dirty is true while the editor holds changes that aren't saved.
+func (e *Editor) dirty() bool {
+	assert.That(e != nil, "dirty runs on an editor")
+	assert.That(len(e.text) <= EditorTextBytesMax, "the text stays bounded")
+	return e.text != e.opened
+}
+
+// closeEditor closes the editor and then runs next, asking first when changes aren't saved.
+func (w *Window) closeEditor(next func() error) error {
+	assert.That(w.editor != nil, "there's an editor to close")
+	assert.That(next != nil, "something runs after closing")
+	if !w.editor.dirty() {
+		w.editor = nil
+		return next()
+	}
+	question := "Close " + filepath.Base(w.editor.path) + "? Your changes aren't saved"
+	w.ask(question, OfferDiscardChanges, func() error {
+		w.editor = nil
+		return next()
+	})
+	return nil
 }
 
 // chooseInEditor takes one of the editor's offers.
@@ -224,8 +261,11 @@ func (e *Editor) chooseInEditor(action string) error {
 		e.problems = []string{MessageChangedOnDisk, "Theirs:\n" + theirs}
 		return nil
 	case OfferPreview:
-		e.previewing = true
+		// Preview toggles: chosen again, it hides.
+		e.previewing = !e.previewing
 		return nil
+	case OfferCloseEditor:
+		return e.window.closeEditor(func() error { return nil })
 	}
 	return ErrNotImplemented
 }

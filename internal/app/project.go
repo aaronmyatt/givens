@@ -58,6 +58,7 @@ func (w *Window) reload() error {
 		w.project, w.watcher = nil, nil
 		return nil
 	}
+	w.restoreKit()
 	// The watcher's first look comes before the load, so a write in between is seen next time.
 	watcher, err := watch.New(w.path, time.Now())
 	if err != nil {
@@ -69,6 +70,7 @@ func (w *Window) reload() error {
 	}
 	w.app.withoutTrashed(loaded)
 	w.project, w.watcher, w.statuses, w.helpers = loaded, watcher, nil, nil
+	w.histories, w.index, w.searchMemo = nil, nil, nil
 	return nil
 }
 
@@ -87,7 +89,8 @@ func (w *Window) refresh() {
 	if err != nil || !changed {
 		return
 	}
-	w.statuses, w.helpers = nil, nil
+	w.statuses, w.helpers, w.histories, w.index, w.searchMemo = nil, nil, nil, nil, nil
+	w.restoreKit()
 	if loaded, err := project.Load(w.path); err == nil {
 		w.app.withoutTrashed(loaded)
 		w.project = loaded

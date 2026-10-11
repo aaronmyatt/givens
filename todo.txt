@@ -20,3 +20,4 @@ x 2026-10-11 2026-10-11 Cache scenario statuses between snapshots: the Unverifie
 x 2026-10-11 2026-10-11 Drop in UI: draw outline rows (dropInRows) — rows are in the snapshot and drawn with their buttons, greyed while another row is live; QR left out, as the QR scenario was removed
 x 2026-10-11 2026-10-11 Editor UI: show step suggestions while typing in the SwiftUI text editor — the Mac editor offers steps for the line just typed on, with "used in N"; clicking one fills in the line
 x 2026-10-11 2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin — the menu item opens a folder picker at the first PATH folder the developer can write to, ~/.local/bin first; known gap: no warning when the picked folder isn't on PATH
+2026-10-11 Spec the scenario page's run history and Copy steps in read-a-capability, with Go and Swift steps (built from a UI request, unit-tested only)

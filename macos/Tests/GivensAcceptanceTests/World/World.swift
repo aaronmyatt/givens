@@ -145,6 +145,13 @@ final class World {
         try content.write(to: url, atomically: true, encoding: .utf8)
     }
 
+    /// Deletes `relative`, inside the sample shop.
+    func removeFile(_ relative: String) throws {
+        precondition(!relative.hasPrefix("/"), "relative is inside the sample shop")
+        guard let project else { throw StepFailure("no sample shop to delete \(relative) from") }
+        try FileManager.default.removeItem(at: project.appendingPathComponent(relative))
+    }
+
     /// Reads `relative`, inside the sample shop.
     func readFile(_ relative: String) throws -> String {
         precondition(!relative.hasPrefix("/"), "relative is inside the sample shop")

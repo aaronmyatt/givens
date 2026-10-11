@@ -43,8 +43,9 @@ func errorCode(reply map[string]any) string {
 }
 
 func TestOpenAndCapability(t *testing.T) {
-	shop, err := filepath.Abs("../../testdata/sample-shop")
-	if err != nil {
+	// A copy, since opening a project can write to it (a missing kit is put back).
+	shop := t.TempDir()
+	if err := os.CopyFS(shop, os.DirFS("../../testdata/sample-shop")); err != nil {
 		t.Fatal(err)
 	}
 	replies := call(t, false,

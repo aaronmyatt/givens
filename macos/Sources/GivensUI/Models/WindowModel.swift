@@ -50,6 +50,7 @@ public final class WindowModel: Identifiable {
         if let capability = snapshot.capability { lines += Self.lines(capability) }
         if let scenario = snapshot.scenario { lines += Self.lines(scenario) }
         lines += snapshot.listed.flatMap { ["\($0.name) — \($0.status)", $0.capability] }
+        lines += snapshot.runs.flatMap { [$0.text, $0.note] }
         lines += snapshot.rows.map(Self.rowLine)
         if let search = snapshot.search { lines += search.results }
         if let editor = snapshot.editor { lines += editor.problems + editor.preview }
@@ -87,6 +88,17 @@ public final class WindowModel: Identifiable {
     public static func rowLine(_ row: DropInRowRecord) -> String {
         let values = row.values.keys.sorted().map { "\($0)=\(row.values[$0] ?? "")" }
         return values.joined(separator: ", ") + " — " + row.status
+    }
+
+    /// A scenario as Gherkin text, for "Copy steps": its tags, its Scenario: line, then its
+    /// steps indented. An outline, whose steps hold <placeholders>, is a Scenario Outline.
+    /// Ref: https://cucumber.io/docs/gherkin/reference/
+    public static func gherkin(_ scenario: ScenarioRecord) -> String {
+        let outline = scenario.steps.contains { $0.contains("<") && $0.contains(">") }
+        var lines = scenario.tags.isEmpty ? [] : [scenario.tags.joined(separator: " ")]
+        lines.append((outline ? "Scenario Outline: " : "Scenario: ") + scenario.name)
+        lines += scenario.steps.map { "  " + $0 }
+        return lines.joined(separator: "\n") + "\n"
     }
 
     /// The 0-based line where two texts first differ: the line just typed on in the editor.

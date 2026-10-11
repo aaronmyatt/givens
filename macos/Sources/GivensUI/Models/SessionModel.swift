@@ -40,9 +40,11 @@ public struct SessionModel {
         return status
     }
 
-    /// Marks a checklist item: "done" for Givens and Whens, "pass" or "fail" for Thens.
+    /// Marks a checklist item: "done" for Givens and Whens, "pass" or "fail" for Thens, or
+    /// "clear" to take a mark off.
     public func mark(_ item: String, _ mark: String) async throws {
-        precondition(["done", "pass", "fail"].contains(mark), "a mark is done, pass or fail")
+        precondition(
+            ["done", "pass", "fail", "clear"].contains(mark), "a mark is done, pass, fail or clear")
         try await window.call(ServeMethod.mark, ["item": item, "mark": mark])
     }
 

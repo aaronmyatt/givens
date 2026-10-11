@@ -58,7 +58,7 @@ func (w *Window) listHelpers(found []helpers.Helper, capability string,
 		entry := Helper{
 			Name: helper.Name, Signature: helper.Signature, Description: helper.Description,
 			Capability: capability, DefinedIn: helper.File, Line: helper.Line,
-			Callers: w.callersOf(helper),
+			Callers: w.callersOf(helper), Code: w.helperCode(helper.File, helper.Line),
 		}
 		for _, other := range found {
 			if other.Name == helper.Name && other.File != helper.File {
@@ -145,4 +145,30 @@ func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
 		}
 	}
 	return ""
+}
+
+// helperCodeLinesMax bounds how much of a helper the Shared page shows.
+const helperCodeLinesMax = 200
+
+// helperCode is a helper's function as written: from its `name() {` line, counting from 1,
+// to the first line that is only a closing brace. "" when the file can't be read.
+func (w *Window) helperCode(file string, line int) string {
+	assert.That(!filepath.IsAbs(file), "a helper's file is relative to the capabilities folder")
+	assert.That(line >= 0, "lines count from 1")
+	text, err := helpers.ReadScript(filepath.Join(w.path, filepath.FromSlash(file)))
+	if err != nil || line < 1 {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	if line > len(lines) {
+		return ""
+	}
+	end := min(len(lines), line-1+helperCodeLinesMax)
+	for index := line - 1; index < end; index++ {
+		if strings.TrimRight(lines[index], " \t") == "}" {
+			end = index + 1
+			break
+		}
+	}
+	return strings.Join(lines[line-1:end], "\n")
 }

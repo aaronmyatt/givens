@@ -81,6 +81,7 @@ type Session struct {
 	keepWaiting bool
 	checklist   []CheckItem
 	note        string
+	recorded    bool // "Record run" saved this checklist, so leaving loses nothing
 }
 
 // Session is the Drop in on show, or nil.

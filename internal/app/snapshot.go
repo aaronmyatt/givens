@@ -37,6 +37,7 @@ type WindowSnapshot struct {
 	Session           *SessionSnapshot `json:"session"`
 	Listed            []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
 	Rows              []DropInRow      `json:"rows"`   // the selected outline's Examples rows
+	Runs              []RunLine        `json:"runs"`   // the shown scenario's runs, newest first
 	Offers            []string         `json:"offers"`
 	Labels            []string         `json:"labels"`
 	FolderPickerShown bool             `json:"folderPickerShown"`
@@ -54,6 +55,7 @@ type EditorSnapshot struct {
 	Text     string   `json:"text"`
 	Problems []string `json:"problems"`
 	Preview  []string `json:"preview"` // what "Preview" shows, when it's chosen
+	Dirty    bool     `json:"dirty"`   // the text has changes that aren't saved
 }
 
 // SessionSnapshot is the Drop in page. Records.swift's SessionRecord.
@@ -148,6 +150,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 		Search:     searching,
 		Listed:     append(make([]Scenario, 0, 16), w.ListedScenarios()...),
 		Rows:       w.DropInRows(),
+		Runs:       w.shownHistory(),
 		Offers:     append(make([]string, 0, 8), w.Offers()...),
 		Labels:     labels,
 	}
@@ -170,6 +173,9 @@ func visibleLines(snapshot WindowSnapshot) []string {
 	}
 	for _, scenario := range snapshot.Listed {
 		lines = append(lines, scenario.Name+" — "+scenario.Status, scenario.Capability)
+	}
+	for _, run := range snapshot.Runs {
+		lines = append(lines, run.Text, run.Note)
 	}
 	for _, row := range snapshot.Rows {
 		lines = append(lines, rowLine(row))

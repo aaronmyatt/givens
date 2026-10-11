@@ -45,7 +45,7 @@ Feature: Gherkin files
     Given checkout.feature has scenarios named "Card declined" and "Card declined!"
     When a developer opens the sample shop in Givens
     Then both are listed with the warning "Both names make the slug card-declined"
-    And "Drop in" and "Record run" are disabled on both until one is renamed
+    And "Drop in" is disabled on both until one is renamed
 
   @error
   Scenario: Two .feature files in one capability

@@ -17,6 +17,8 @@
   <string>dev.givens.Givens</string>
   <key>CFBundleExecutable</key>
   <string>Givens</string>
+  <key>CFBundleIconFile</key>
+  <string>Givens</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

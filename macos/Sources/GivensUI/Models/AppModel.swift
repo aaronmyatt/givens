@@ -53,6 +53,12 @@ public final class AppModel {
         try await send(ServeMethod.openDropped, ["paths": paths])
     }
 
+    /// Puts text on the clipboard, through the platform's clipboard, so tests can read it.
+    public func copyText(_ text: String) {
+        precondition(!text.isEmpty, "there's text to copy")
+        platform.clipboard.writeText(text)
+    }
+
     /// "Install givens command" in the Givens menu; returns what Givens says.
     public func installCommand(into binDirectory: String) async throws -> String {
         precondition(binDirectory.hasPrefix("/"), "the install folder is absolute")

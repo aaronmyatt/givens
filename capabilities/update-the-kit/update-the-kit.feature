@@ -19,6 +19,17 @@ Feature: Update the kit
     Then givens.sh is replaced with version 2
     And git diff shows only givens.sh changed
 
+  # Every setup script's first line sources _shared/givens.sh, so a capabilities folder without
+  # it can't run anything. Givens writes the kit it ships whenever it finds the file missing:
+  # when a project opens, and when the file goes while the project is open.
+  @error
+  Scenario: A missing kit is put back
+    Given the sample shop has no givens.sh
+    And Givens ships version 2
+    When a developer opens the sample shop
+    Then givens.sh is written at version 2
+    And deleting givens.sh while the sample shop is open puts version 2 back
+
   @error
   Scenario: The kit was edited by hand
     Given the sample shop's givens.sh has local edits

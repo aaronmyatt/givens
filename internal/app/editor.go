@@ -148,5 +148,7 @@ func (e *Editor) snapshot() *EditorSnapshot {
 			preview = append(preview, strings.TrimSpace(line.Text+" "+line.Mark))
 		}
 	}
-	return &EditorSnapshot{Path: e.path, Text: e.text, Problems: problems, Preview: preview}
+	return &EditorSnapshot{
+		Path: e.path, Text: e.text, Problems: problems, Preview: preview, Dirty: e.dirty(),
+	}
 }

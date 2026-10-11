@@ -17,6 +17,8 @@ type Helper struct {
 	Overrides string `json:"overrides"`
 	// Why it's flagged, such as a second definition at the same level.
 	Warning string `json:"warning"`
+	// The function as written, from its `name() {` line to its closing brace.
+	Code string `json:"code"`
 }
 
 // RequiredCommand is one command a scenario's setup needs, found from the `need` lines in its

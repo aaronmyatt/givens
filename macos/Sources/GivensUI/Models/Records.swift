@@ -33,6 +33,8 @@ public struct WindowSnapshot: Decodable, Sendable, Equatable {
     public let listed: [ScenarioRecord]
     /// The selected outline's Examples rows.
     public let rows: [DropInRowRecord]
+    /// The shown scenario's recorded runs, newest first.
+    public let runs: [RunRecord]
     /// Every action on offer, by label.
     public let offers: [String]
     /// Plain labels the window shows, like "Recent" or "Open folder…".
@@ -93,6 +95,16 @@ public struct ScenarioRecord: Decodable, Sendable, Equatable {
     public let warning: String
 }
 
+/// One recorded run, as a scenario's page lists it. Mirrors internal/app's RunLine.
+public struct RunRecord: Decodable, Sendable, Equatable {
+    /// "pass" or "fail".
+    public let result: String
+    /// "Passed today at 14:05 by Sam", with " · card=expired" for an outline row.
+    public let text: String
+    /// What was written with the run, or "".
+    public let note: String
+}
+
 /// The ⌘K search.
 public struct SearchRecord: Decodable, Sendable, Equatable {
     /// What's typed.
@@ -111,6 +123,8 @@ public struct EditorRecord: Decodable, Sendable, Equatable {
     public let problems: [String]
     /// What "Preview" shows beside the text, once it's chosen.
     public let preview: [String]
+    /// The text has changes that aren't saved.
+    public let dirty: Bool
 }
 
 /// The Drop in page.

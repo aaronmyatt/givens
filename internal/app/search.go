@@ -97,9 +97,16 @@ func (w *Window) SearchResults() SearchResults {
 	if w.search == nil {
 		return SearchResults{Groups: []SearchGroup{}}
 	}
+	if memo := w.searchMemo; memo != nil && memo.query == w.search.query &&
+		memo.filter == w.search.filter {
+		return memo.results
+	}
 	results := SearchResults{
 		Query: w.search.query, Filter: w.search.filter, Groups: make([]SearchGroup, 0, 5),
 	}
+	defer func() {
+		w.searchMemo = &searchMemo{query: results.Query, filter: results.Filter, results: results}
+	}()
 	read := readQuery(w.search.query)
 	if w.project == nil || read.problem != "" || (read.words == "" && !read.tagged) {
 		return results

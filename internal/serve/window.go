@@ -103,8 +103,9 @@ func wait(session *app.Session, given params) (any, error) {
 func mark(session *app.Session, given params) (any, error) {
 	assert.That(session != nil, "mark runs on a session")
 	assert.That(session.Status() != "unknown", "a session has a known status")
-	if given.Mark != "done" && given.Mark != "pass" && given.Mark != "fail" {
-		return nil, fmt.Errorf("%w: a mark is done, pass or fail", ErrBadRequest)
+	if given.Mark != app.MarkDone && given.Mark != app.MarkPass && given.Mark != app.MarkFail &&
+		given.Mark != app.MarkClear {
+		return nil, fmt.Errorf("%w: a mark is done, pass, fail or clear", ErrBadRequest)
 	}
 	return nil, session.Mark(given.Item, given.Mark)
 }

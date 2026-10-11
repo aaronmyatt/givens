@@ -3,9 +3,13 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"givens/internal/kit"
+	"givens/internal/runs"
 )
 
 // fakes stands in for the clipboard, the Trash and the clock.
@@ -31,17 +35,27 @@ func newApp(t *testing.T) *App {
 
 const sampleShop = "../../testdata/sample-shop"
 
+// copyShop copies the sample shop into a fresh folder, since opening a project can write to
+// it (a missing kit is put back) and testdata must stay as checked in.
+func copyShop(t *testing.T) string {
+	t.Helper()
+	shop := t.TempDir()
+	// Ref: https://pkg.go.dev/os#CopyFS
+	if err := os.CopyFS(shop, os.DirFS(sampleShop)); err != nil {
+		t.Fatal(err)
+	}
+	return shop
+}
+
 // TestOpenProjectFolder opens the sample shop's root and finds its capabilities folder.
 func TestOpenProjectFolder(t *testing.T) {
 	core := newApp(t)
-	window, err := core.Open(sampleShop)
+	shop := copyShop(t)
+	window, err := core.Open(shop)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := filepath.Abs(filepath.Join(sampleShop, "capabilities"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	want := filepath.Join(shop, "capabilities")
 	if window.Title() != want || window.Path() != want || core.Front() != window {
 		t.Errorf("title %q, path %q, want %q", window.Title(), window.Path(), want)
 	}
@@ -54,7 +68,7 @@ func TestOpenProjectFolder(t *testing.T) {
 
 // TestCapabilityAndScenario reads what a window shows for Checkout and Card declined.
 func TestCapabilityAndScenario(t *testing.T) {
-	window, err := newApp(t).Open(filepath.Join(sampleShop, "capabilities"))
+	window, err := newApp(t).Open(filepath.Join(copyShop(t), "capabilities"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +164,7 @@ func TestFilesWrittenByOtherToolsAppear(t *testing.T) {
 // TestSuggestionsForALine offers steps for the line the Mac editor is on, and none for a line
 // that isn't a step or a step already written out.
 func TestSuggestionsForALine(t *testing.T) {
-	window, err := newApp(t).Open(sampleShop)
+	window, err := newApp(t).Open(copyShop(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,5 +202,163 @@ func TestWritableFolders(t *testing.T) {
 	got := writableFolders(list, home)
 	if len(got) != 2 || got[0] != mine || got[1] != shared {
 		t.Errorf("offered %v, want [%s %s]", got, mine, shared)
+	}
+}
+
+// TestNoCopyWithoutSetup offers no Copy for a scenario with nothing to copy, only ways to
+// write its setup.
+func TestNoCopyWithoutSetup(t *testing.T) {
+	shop := copyShop(t)
+	script := filepath.Join(shop, "capabilities", "checkout", "scripts", "empty-cart.sh")
+	if err := os.Remove(script); err != nil {
+		t.Fatal(err)
+	}
+	core := newApp(t)
+	window, err := core.Open(shop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := core.MarkTrusted(window.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if err := window.Select("Empty cart"); err != nil {
+		t.Fatal(err)
+	}
+	offers := strings.Join(window.Offers(), ", ")
+	if strings.Contains(offers, OfferCopy) || !strings.Contains(offers, OfferCreateScript) {
+		t.Errorf("offers %s, want Create script and no Copy", offers)
+	}
+}
+
+// TestLeaveDropIn clears a When mark, then leaves the Drop in by selecting something else:
+// asked first while marks aren't recorded, closed once "Leave" is chosen.
+func TestLeaveDropIn(t *testing.T) {
+	shop := copyShop(t)
+	// The fixture ships without the kit; projects get it from "Create capabilities folder".
+	kitPath := filepath.Join(shop, "capabilities", "_shared", "givens.sh")
+	if err := os.WriteFile(kitPath, []byte(kit.Script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	core := newApp(t)
+	window, err := core.Open(shop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := core.MarkTrusted(window.Path()); err != nil {
+		t.Fatal(err)
+	}
+	session, err := window.DropIn("Card declined")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status := session.Wait(10 * time.Second); status != SessionReady {
+		t.Fatalf("setup ended %q, want ready: %v", status, session.Output())
+	}
+	var when CheckItem
+	for _, item := range session.Checklist() {
+		if item.Kind == "when" {
+			when = item
+		}
+	}
+	for _, mark := range []string{MarkDone, MarkClear, MarkDone} {
+		if err := session.Mark(when.Text, mark); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := window.Select("Checkout"); err != nil || window.Session() == nil {
+		t.Fatalf("selecting left at once (%v); marks would be lost unasked", err)
+	}
+	if err := window.Choose(OfferLeave); err != nil || window.Session() != nil {
+		t.Errorf("after Leave the Drop in is %v (%v), want closed", window.Session(), err)
+	}
+}
+
+// TestHistoryOf lists one scenario's runs, rows included, newest first, in words.
+func TestHistoryOf(t *testing.T) {
+	now := time.Date(2026, time.October, 10, 9, 0, 0, 0, time.UTC)
+	recorded := []runs.Run{
+		{Time: now.AddDate(0, 0, -3), Key: "checkout/card-declined", Result: runs.ResultPass},
+		{Time: now.Add(-time.Hour), Key: "checkout/card-declined", Result: runs.ResultFail,
+			Author: "Sam", Note: "banner overlaps"},
+		{Time: now.AddDate(0, 0, -1), Key: "checkout/card-declined/cards",
+			Result: runs.ResultPass, Values: []runs.Pair{{Name: "card", Value: "expired"}}},
+		{Time: now, Key: "checkout/empty-cart", Result: runs.ResultPass},
+	}
+	got := historyOf(recorded, "checkout/card-declined", now)
+	want := []string{
+		"Failed today at 08:00 by Sam",
+		"Passed yesterday at 09:00 · card=expired",
+		"Passed on 2026-10-07 at 09:00",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for index, line := range got {
+		if line.Text != want[index] {
+			t.Errorf("run %d is %q, want %q", index, line.Text, want[index])
+		}
+	}
+	if got[0].Note != "banner overlaps" || got[0].Result != runs.ResultFail {
+		t.Errorf("the newest run is %+v, want the failed one with its note", got[0])
+	}
+}
+
+// TestCloseEditor closes a clean editor at once, asks before losing changes, and closes it
+// when choosing something else.
+func TestCloseEditor(t *testing.T) {
+	window, err := newApp(t).Open(copyShop(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	editor, err := window.Edit("checkout/about.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(window.Offers(), OfferPreview) {
+		t.Errorf("about.md offers %v, want Preview", window.Offers())
+	}
+	editor.text += "\nMore notes."
+	if err := window.Select("Sign in"); err != nil || window.Editor() == nil {
+		t.Fatalf("selecting closed an editor with unsaved changes unasked (%v)", err)
+	}
+	if err := window.Choose(OfferDiscardChanges); err != nil || window.Editor() != nil {
+		t.Fatalf("Discard changes left the editor %v (%v)", window.Editor(), err)
+	}
+	if window.Selected() != "Sign in" {
+		t.Errorf("selected %q after closing, want Sign in", window.Selected())
+	}
+	if _, err := window.Edit("checkout/scripts/card-declined.sh"); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(window.Offers(), OfferPreview) {
+		t.Errorf("a script offers %v; Preview has nothing to show for it", window.Offers())
+	}
+	if err := window.Choose(OfferCloseEditor); err != nil || window.Editor() != nil {
+		t.Errorf("Close left a clean editor open (%v)", err)
+	}
+}
+
+// TestScriptsReadableAndEditable shows each helper's code, and opens a scenario's setup
+// script in the editor from its page.
+func TestScriptsReadableAndEditable(t *testing.T) {
+	window, err := newApp(t).Open(copyShop(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, helper := range window.Helpers() {
+		lines := strings.Split(helper.Code, "\n")
+		if !strings.HasPrefix(lines[0], helper.Name+"()") || lines[len(lines)-1] != "}" {
+			t.Errorf("%s's code is %q, want its whole function", helper.Name, helper.Code)
+		}
+	}
+	if err := window.Select("Card declined"); err != nil {
+		t.Fatal(err)
+	}
+	if err := window.Choose(OfferEditScript); err != nil {
+		t.Fatal(err)
+	}
+	if editor := window.Editor(); editor == nil ||
+		!strings.HasSuffix(editor.Path(), "card-declined.sh") {
+		t.Errorf("Edit script opened %v, want card-declined.sh", editor)
 	}
 }

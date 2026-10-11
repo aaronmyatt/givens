@@ -67,7 +67,7 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^checkout\.feature has scenarios named "([^"]*)" and "([^"]*)"$`,
 			s.scenariosNamed),
 		world.Def(`^both are listed with the warning "([^"]*)"$`, s.bothWarned),
-		world.Def(`^"([^"]*)" and "([^"]*)" are disabled on both until one is renamed$`,
+		world.Def(`^"([^"]*)" is disabled on both until one is renamed$`,
 			s.disabledUntilRenamed),
 		world.Def(`^the checkout folder holds checkout\.feature and ([a-z-]+\.feature)$`,
 			s.secondFeature),
@@ -460,7 +460,7 @@ func (s *state) editStep(name string) error {
 
 // disabledUntilRenamed expects neither action offered on either scenario, renames the second
 // in Givens, and then expects both actions offered on both.
-func (s *state) disabledUntilRenamed(first string, second string) error {
+func (s *state) disabledUntilRenamed(action string) error {
 	window, err := s.Front()
 	if err != nil {
 		return err
@@ -469,10 +469,8 @@ func (s *state) disabledUntilRenamed(first string, second string) error {
 		if err := window.Select(name); err != nil {
 			return err
 		}
-		for _, action := range []string{first, second} {
-			if slices.Contains(window.Offers(), action) {
-				return fmt.Errorf("%q is offered on %q while its slug clashes", action, name)
-			}
+		if slices.Contains(window.Offers(), action) {
+			return fmt.Errorf("%q is offered on %q while its slug clashes", action, name)
 		}
 	}
 	renamed := s.names[1] + " again"
@@ -483,10 +481,8 @@ func (s *state) disabledUntilRenamed(first string, second string) error {
 		if err := window.Select(name); err != nil {
 			return err
 		}
-		for _, action := range []string{first, second} {
-			if err := world.Expect(window.Offers(), action, name+"'s actions"); err != nil {
-				return fmt.Errorf("after the rename: %w", err)
-			}
+		if err := world.Expect(window.Offers(), action, name+"'s actions"); err != nil {
+			return fmt.Errorf("after the rename: %w", err)
 		}
 	}
 	return nil

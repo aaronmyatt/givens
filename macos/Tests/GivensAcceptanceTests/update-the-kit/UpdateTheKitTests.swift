@@ -100,7 +100,8 @@ func updateTheKitSteps(_ w: World) -> [StepDefinition] {
 
 @MainActor
 private func updateTheKitArrangeSteps(_ s: UpdateTheKitState) -> [StepDefinition] {
-    [
+    let w = s.w
+    return [
         def(#"^the sample shop's givens\.sh is version (\d+)$"#) { call in
             try s.writeKit(UpdateTheKitState.kitText(try updateTheKitNumber(call[0])))
         },
@@ -116,6 +117,20 @@ private func updateTheKitArrangeSteps(_ s: UpdateTheKitState) -> [StepDefinition
             s.releases = UpdateTheKitState.releases(to: version + 1)
             try await s.openShop()
         },
+        def(#"^the sample shop has no givens\.sh$"#) { _ in
+            try w.copySampleShop()
+            try w.removeFile(UpdateTheKitState.kitPath)
+        },
+        def(#"^deleting givens\.sh while the sample shop is open puts version (\d+) back$"#) {
+            call in
+            try w.removeFile(UpdateTheKitState.kitPath)
+            let want = UpdateTheKitState.kitText(try updateTheKitNumber(call[0]))
+            // Any read of the window looks at the files; ask for Checkout, then check.
+            _ = try await w.front().capability("Checkout")
+            guard (try? w.readFile(UpdateTheKitState.kitPath)) == want else {
+                throw StepFailure("givens.sh didn't come back as kit version \(call[0])")
+            }
+        },
         def(#"^the sample shop's givens\.sh has local edits$"#) { _ in
             try s.writeKit(UpdateTheKitState.kitText(1) + UpdateTheKitState.localEdit)
             s.releases = UpdateTheKitState.releases(to: 2)
@@ -128,7 +143,7 @@ private func updateTheKitArrangeSteps(_ s: UpdateTheKitState) -> [StepDefinition
 private func updateTheKitCheckSteps(_ s: UpdateTheKitState) -> [StepDefinition] {
     let w = s.w
     return [
-        def(#"^givens\.sh is replaced with version (\d+)$"#) { call in
+        def(#"^givens\.sh is (?:replaced with|written at) version (\d+)$"#) { call in
             let got = try w.readFile(UpdateTheKitState.kitPath)
             let want = UpdateTheKitState.kitText(try updateTheKitNumber(call[0]))
             guard got == want else {
