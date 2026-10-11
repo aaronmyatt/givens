@@ -15,3 +15,6 @@ macos/.swiftpm/
 
 # The sample shop's test runner, installed by scripts/runner.sh.
 /.cache/
+
+# Givens.app, built by scripts/build-app.sh.
+/build/

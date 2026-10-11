@@ -25,10 +25,15 @@ struct GivensApp: App {
 /// Owns the AppModel and takes folders dropped on the Dock icon.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Where `givens` lives inside the app bundle, or next to this binary in a dev build.
+    /// Where `givens` lives: Contents/Helpers in the app bundle, or Helpers/ beside this binary
+    /// in a dev build. Not beside the app binary itself: on a case-insensitive disk, "givens"
+    /// and "Givens" are the same file.
+    /// Ref: https://developer.apple.com/documentation/bundleresources/placing-content-in-a-bundle
     static var givensExecutable: URL {
-        Bundle.main.url(forAuxiliaryExecutable: "givens")
-            ?? Bundle.main.bundleURL.appendingPathComponent("givens")
+        let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/givens")
+        if FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled }
+        let binary = Bundle.main.executableURL ?? Bundle.main.bundleURL
+        return binary.deletingLastPathComponent().appendingPathComponent("Helpers/givens")
     }
 
     /// Givens's own data, outside every project.

@@ -1,3 +1,3 @@
-2026-10-11 Build Givens.app with the givens command inside it, as `open -a Givens`
-2026-10-11 Sign and notarize the app
-2026-10-11 Install command: write `givens` into a PATH folder and say where
+2026-10-11 Sign and notarize the app @human needs your Developer ID identity and a notarytool keychain profile: run scripts/sign-app.sh (see tasks/release/notes.md)
+x 2026-10-11 2026-10-11 Build Givens.app with the givens command inside it, as `open -a Givens` — scripts/build-app.sh builds build/Givens.app with givens in Contents/Helpers; checked from the bundle without opening a window
+x 2026-10-11 2026-10-11 Install command: write `givens` into a PATH folder and say where — works from the ad-hoc-signed bundle (symlink to Contents/Helpers/givens); re-check after signing

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Givens.app's Info.plist. Folders are a document type, so dropping one on the Dock icon and
+  `open -a Givens <folder>` reach application(_:open:).
+  Ref: https://developer.apple.com/documentation/bundleresources/information-property-list
+  Ref: https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundledocumenttypes
+  scripts/build-app.sh fills in the version.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Givens</string>
+  <key>CFBundleDisplayName</key>
+  <string>Givens</string>
+  <key>CFBundleIdentifier</key>
+  <string>dev.givens.Givens</string>
+  <key>CFBundleExecutable</key>
+  <string>Givens</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>VERSION</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Folder</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.folder</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

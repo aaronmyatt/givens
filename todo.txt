@@ -19,3 +19,4 @@ x 2026-10-11 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stor
 2026-10-11 Editor UI: show step suggestions while typing in the SwiftUI text editor
 x 2026-10-11 2026-10-11 Open a project: 14 scenarios ref:open-a-project — see tasks/open-a-project/notes.md
 x 2026-10-11 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit — see tasks/update-the-kit/notes.md
+2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin
