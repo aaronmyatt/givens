@@ -64,16 +64,6 @@ type DropInRow struct {
 	Checklist []CheckItem       // the live row's checklist; nil otherwise
 }
 
-// MarkTrusted records a project's folder as trusted, as choosing "Trust" on the "Run scripts
-// from this project?" prompt does. path is a capabilities folder, or the project folder holding
-// one, as Open takes. Drop in scenarios that aren't about trust use it to start trusted.
-func (a *App) MarkTrusted(path string) error {
-	assert.That(a != nil, "mark trusted runs on an app")
-	assert.That(path != "", "a trusted folder has a path")
-	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
-	return ErrNotImplemented
-}
-
 // UseURLOpener sets what opens links, like a by_hand --url card's "Open". Needed by
 // "A step in the browser".
 func (a *App) UseURLOpener(opener URLOpener) error {

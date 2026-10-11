@@ -10,6 +10,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"givens/internal/assert"
@@ -17,6 +18,9 @@ import (
 
 // ErrNotImplemented is returned by every part of the core that isn't built yet.
 var ErrNotImplemented = errors.New("not built yet: see todo.txt")
+
+// ErrNotFound is returned for a capability or scenario name a window doesn't have.
+var ErrNotFound = errors.New("there's nothing with that name")
 
 // Limits. Tiger Style: put a limit on everything.
 // Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
@@ -58,9 +62,11 @@ type Config struct {
 	Clock      Clock
 }
 
-// App is one running Givens.
+// App is one running Givens. It isn't safe for concurrent use: `givens serve` and the steps
+// each call it one command at a time.
 type App struct {
-	config Config
+	config  Config
+	windows []*Window // front first
 }
 
 // New returns an App that hasn't launched yet.
@@ -69,7 +75,7 @@ func New(config Config) (*App, error) {
 	assert.That(config.Clipboard != nil, "the app has a clipboard")
 	assert.That(config.Trash != nil, "the app has a trash")
 	assert.That(config.Clock != nil, "the app has a clock")
-	return &App{config: config}, nil
+	return &App{config: config, windows: make([]*Window, 0, WindowsMax)}, nil
 }
 
 // Launch starts Givens: it reopens the windows open at the last quit, or shows the welcome
@@ -85,21 +91,56 @@ func (a *App) Launch() error {
 func (a *App) Open(path string) (*Window, error) {
 	assert.That(a != nil, "open runs on an app")
 	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
-	return nil, ErrNotImplemented
+	folder, found, err := findCapabilities(path)
+	if err != nil {
+		return nil, err
+	}
+	for _, window := range a.windows {
+		if window.kind == WindowProject && window.path == folder {
+			a.toFront(window)
+			return window, window.reload()
+		}
+	}
+	if len(a.windows) >= WindowsMax {
+		return nil, fmt.Errorf("%d windows are open, the most Givens keeps", WindowsMax)
+	}
+	window := &Window{app: a, kind: WindowProject, path: folder, found: found}
+	if err := window.reload(); err != nil {
+		return nil, err
+	}
+	a.windows = append([]*Window{window}, a.windows...)
+	assert.That(a.windows[0] == window, "an opened window is in front")
+	return window, nil
+}
+
+// toFront moves an open window to the front.
+func (a *App) toFront(window *Window) {
+	assert.That(window != nil, "a window is given")
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
+	others := make([]*Window, 0, len(a.windows))
+	for _, other := range a.windows {
+		if other != window {
+			others = append(others, other)
+		}
+	}
+	a.windows = append([]*Window{window}, others...)
 }
 
 // Windows lists the open windows, front first.
 func (a *App) Windows() []*Window {
 	assert.That(a != nil, "windows runs on an app")
-	assert.That(a.config.Clock != nil, "the app is configured")
-	return nil
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
+	return append([]*Window{}, a.windows...)
 }
 
 // Front returns the front window, or nil when none is open.
 func (a *App) Front() *Window {
 	assert.That(a != nil, "front runs on an app")
-	assert.That(a.config.Clock != nil, "the app is configured")
-	return nil
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
+	if len(a.windows) == 0 {
+		return nil
+	}
+	return a.windows[0]
 }
 
 // Quit closes every window, remembering which projects were open.

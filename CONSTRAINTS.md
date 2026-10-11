@@ -25,6 +25,7 @@ adapted to Go. Every rule a tool can check is checked, on every edit and every c
 | Zero warnings from the compiler's checks | Power of Ten 10 | `go vet` |
 | Direct dependencies are on an allowlist | Tiger Style ("zero dependencies") | `scripts/check.sh deps` |
 | Shell scripts pass shellcheck | Power of Ten 10 | `scripts/check.sh shell` |
+| The kit's bats tests pass under bash 3.2 | this project | `scripts/check.sh kit` |
 | Feature files follow `capabilities/GIVENS.md` | this project | `go test ./acceptance` |
 | Tests pass, scenarios without `@wip` included | this project | `go test ./...` |
 | Swift is swift-format-clean: 100 columns, doc comments on public names, no force unwraps | Tiger Style, adapted | `scripts/check.sh swift` |

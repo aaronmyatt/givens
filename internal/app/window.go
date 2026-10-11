@@ -1,16 +1,20 @@
 package app
 
 import (
+	"fmt"
 	"unicode/utf8"
 
 	"givens/internal/assert"
+	"givens/internal/project"
 )
 
 // Window is one Givens window: the welcome window, or one project.
 type Window struct {
-	app  *App
-	kind string
-	path string
+	app     *App
+	kind    string
+	path    string           // the capabilities folder, or the folder opened when found is false
+	found   bool             // path is a capabilities folder
+	project *project.Project // nil when found is false
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -55,7 +59,10 @@ func (w *Window) Kind() string {
 func (w *Window) Title() string {
 	assert.That(w != nil, "title runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	return ""
+	if w.kind == WindowWelcome {
+		return "Welcome to Givens"
+	}
+	return w.path
 }
 
 // Path is the capabilities folder a project window shows, or "" for the welcome window.
@@ -127,7 +134,11 @@ func (w *Window) Press(keys string) error {
 func (w *Window) Capability(name string) (Capability, error) {
 	assert.That(w != nil, "capability runs on a window")
 	assert.That(len(name) <= NameLengthMax, "the name fits NameLengthMax")
-	return Capability{}, ErrNotImplemented
+	loaded, ok := w.findCapability(name)
+	if !ok {
+		return Capability{}, fmt.Errorf("%s: %w", name, ErrNotFound)
+	}
+	return capabilityOf(loaded), nil
 }
 
 // Scenario returns a scenario by its name. Names are unique within the project's sample data;
@@ -135,7 +146,12 @@ func (w *Window) Capability(name string) (Capability, error) {
 func (w *Window) Scenario(name string) (Scenario, error) {
 	assert.That(w != nil, "scenario runs on a window")
 	assert.That(len(name) <= NameLengthMax, "the name fits NameLengthMax")
-	return Scenario{}, ErrNotImplemented
+	loaded, ok := w.findScenario(name)
+	if !ok {
+		return Scenario{}, fmt.Errorf("%s: %w", name, ErrNotFound)
+	}
+	capability, _ := w.findCapability(loaded.Capability)
+	return scenarioOf(capability.Name, loaded), nil
 }
 
 // DropIn drops in to a scenario: it runs the setup and opens the Drop in page.

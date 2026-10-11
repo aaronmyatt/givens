@@ -5,7 +5,7 @@
 #   scripts/check.sh             # every check
 #   scripts/check.sh deps lint   # only the named checks
 #
-# Checks: fmt deps vet lint shell test swift
+# Checks: fmt deps vet lint shell kit test swift
 # Strict mode: stop on any failing command, unset variable or failed pipe.
 # Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 set -euo pipefail
@@ -45,8 +45,16 @@ check_lint() { go run ./tools/tigerlint ./...; }
 
 check_shell() {
   # Ref: https://www.shellcheck.net/wiki/
-  shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh
+  shellcheck scripts/*.sh .githooks/* .claude/hooks/*.sh internal/kit/givens.sh \
+    internal/kit/*.bats
+  # Setup scripts and helpers: the starter project's and the sample shop's. Their folders'
+  # .shellcheckrc says they're bash.
+  find internal/starter testdata/sample-shop -name '*.sh' -print0 | xargs -0 shellcheck
 }
+
+# The kit's bats tests, one per The kit scenario as they're built.
+# Ref: https://bats-core.readthedocs.io/en/stable/usage.html
+check_kit() { bats internal/kit; }
 
 check_test() { go test ./...; }
 
@@ -61,7 +69,7 @@ check_swift() {
 
 checks=("$@")
 if [ ${#checks[@]} -eq 0 ]; then
-  checks=(fmt deps vet lint shell test swift)
+  checks=(fmt deps vet lint shell kit test swift)
 fi
 for name in "${checks[@]}"; do
   echo "== $name"

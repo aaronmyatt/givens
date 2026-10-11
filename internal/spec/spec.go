@@ -130,9 +130,26 @@ func CheckFeature(path string) ([]Problem, error) {
 // ScenariosIn parses one .feature file and lists its scenarios, Rules included.
 func ScenariosIn(path string) ([]*messages.Scenario, error) {
 	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	feature, err := ParseFeature(path)
+	if err != nil {
+		return nil, err
+	}
+	scenarios := Scenarios(feature)
+	assert.That(len(scenarios) <= ScenariosPerFeatureMax, "scenarios per feature stay bounded")
+	return scenarios, nil
+}
+
+// ParseFeature parses one .feature file and returns its Feature. A file too large, not valid
+// Gherkin, or with no Feature is an error.
+// Ref: https://pkg.go.dev/github.com/cucumber/gherkin/go/v42#ParseGherkinDocument
+func ParseFeature(path string) (*messages.Feature, error) {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if len(source) > FeatureFileSizeBytesMax {
+		return nil, fmt.Errorf("%s is larger than 4 MiB", path)
 	}
 	ids := &messages.Incrementing{}
 	document, err := gherkin.ParseGherkinDocument(strings.NewReader(string(source)), ids.NewId)
@@ -142,9 +159,8 @@ func ScenariosIn(path string) ([]*messages.Scenario, error) {
 	if document.Feature == nil {
 		return nil, fmt.Errorf("%s has no Feature", path)
 	}
-	scenarios := Scenarios(document.Feature)
-	assert.That(len(scenarios) <= ScenariosPerFeatureMax, "scenarios per feature stay bounded")
-	return scenarios, nil
+	assert.That(document.Feature.Location != nil, "a parsed Feature has a location")
+	return document.Feature, nil
 }
 
 // checkStory requires the As a, I want and So that lines in the Feature's description.

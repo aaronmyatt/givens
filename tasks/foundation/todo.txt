@@ -1,11 +1,11 @@
-2026-10-11 internal/project: load a capabilities folder
-2026-10-11 internal/runs: run keys and the append-only run log
-2026-10-11 internal/setup: run a setup script within limits
-2026-10-11 internal/app: the facade the UI and step definitions share
-2026-10-11 acceptance: a World per scenario on a temp copy of the sample shop
-2026-10-11 internal/kit: givens.sh skeleton (bash 3.2) with a version line, embedded in the binary
-2026-10-11 scripts/check.sh: add a bats step for the kit tests
-2026-10-11 App.MarkTrusted: the world trusts the sample shop by default through it
-2026-10-11 testdata/sample-shop: its 7 helpers and setup scripts, after internal/kit
-2026-10-11 internal/watch: poll a capabilities folder, bounded interval, changes seen within 2 seconds
-2026-10-11 scripts/check.sh: shellcheck internal/kit, internal/starter and testdata/sample-shop scripts
+x 2026-10-11 2026-10-11 internal/project: load a capabilities folder — Load and Find over spec.ParseFeature; broken files load with ParseError
+x 2026-10-11 2026-10-11 internal/runs: run keys and the append-only run log — Append/Read/Latest over tab-separated day files; fingerprint parts stored, not computed yet
+x 2026-10-11 2026-10-11 internal/setup: run a setup script within limits — Start/Wait/Answer/Stop over a process group; still-running timing left to internal/app
+x 2026-10-11 2026-10-11 internal/app: the facade the UI and step definitions share — Open/Windows/Front/Capability/Scenario over internal/project; Status left to Drop in
+x 2026-10-11 2026-10-11 acceptance: a World per scenario on a temp copy of the sample shop — already in acceptance/world from the scaffold; checked a @wip suite runs on it, failing first at MarkTrusted
+x 2026-10-11 2026-10-11 internal/kit: givens.sh skeleton (bash 3.2) with a version line, embedded in the binary — skeleton with strict mode, GIVENS_ROOT, helper loading, ok/warn/fail; embedded with kit.Version
+x 2026-10-11 2026-10-11 scripts/check.sh: add a bats step for the kit tests — check_kit runs bats internal/kit; 4 skeleton tests under /bin/bash
+x 2026-10-11 2026-10-11 App.MarkTrusted: the world trusts the sample shop by default through it — trusted.txt in app data; the world now gets past trust in every suite
+x 2026-10-11 2026-10-11 testdata/sample-shop: its 7 helpers and setup scripts, after internal/kit — already in the scaffold; runs under the kit skeleton up to when_you/need/from, which The kit adds
+x 2026-10-11 2026-10-11 internal/watch: poll a capabilities folder, bounded interval, changes seen within 2 seconds — polling Watcher, 500 ms interval, skips hidden folders; not wired into windows yet
+x 2026-10-11 2026-10-11 scripts/check.sh: shellcheck internal/kit, internal/starter and testdata/sample-shop scripts — check_shell covers the kit, its bats file, starter and sample-shop scripts

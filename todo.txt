@@ -1,4 +1,3 @@
-2026-10-11 Foundation: core packages and the acceptance world ref:foundation
 2026-10-11 macOS UI shell: SwiftUI over givens serve ref:ui-shell
 2026-10-11 Gherkin files: 7 scenarios ref:gherkin-files
 2026-10-11 The kit: 12 scenarios ref:the-kit
@@ -16,3 +15,4 @@
 2026-10-11 Update the kit: 4 scenarios ref:update-the-kit
 2026-10-11 Release: package Givens.app and the givens command ref:release
 2026-10-11 Finish: no @wip tags left and scripts/check.sh passes
+x 2026-10-11 2026-10-11 Foundation: core packages and the acceptance world ref:foundation — see tasks/foundation/notes.md
