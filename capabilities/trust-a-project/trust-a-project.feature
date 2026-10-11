@@ -8,7 +8,6 @@ Feature: Trust a project
   itself as trusted, and a re-clone or moved folder asks again. Reading, searching and copying
   work without trust. Only running scripts needs it.
 
-  @wip
   Scenario: Asked before the first run
     Given a developer has never run anything from the sample shop
     When they drop in to "Card declined"
@@ -16,13 +15,12 @@ Feature: Trust a project
     And they're offered "Trust" and "Don't trust"
     And nothing runs until they choose
 
-  @wip
   Scenario: Trust is remembered
     Given a developer chose "Trust" for the sample shop before
     When they drop in to "Card declined"
     Then setup starts without asking
 
-  @wip @error
+  @error
   Scenario: Choose not to trust
     Given a developer chose "Don't trust" for the sample shop
     When they drop in to "Card declined"
@@ -30,7 +28,7 @@ Feature: Trust a project
     And they see "Scripts are off for this project", and "Copy" still works
     And they're offered "Trust this project"
 
-  @wip @error
+  @error
   Scenario: Moved or re-cloned project
     Given a developer trusted the sample shop at ~/code/shop
     When they open a fresh clone of it at ~/code/shop-2 and drop in

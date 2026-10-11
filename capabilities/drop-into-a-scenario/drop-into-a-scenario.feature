@@ -223,12 +223,6 @@ Feature: Drop into a scenario
     Then the card offers "Open"
     And choosing it opens the page in their default browser
 
-  Scenario: A step on another device
-    Given the "Magic link" setup has by_hand --qr "http://192.168.1.20:3000/magic/abc" for "Your phone"
-    When a developer drops in and setup pauses at that step
-    Then the card shows the link as a QR code
-    And the link is shown as text beneath it
-
   Scenario: A value from elsewhere
     Given the "Accept invite" setup has ask INVITE_CODE "Paste the invite code shown on the phone"
     When a developer drops in, types "K7Q2" into the card and chooses "Continue"

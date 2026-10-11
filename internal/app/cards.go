@@ -73,21 +73,21 @@ func (s *Session) readOutput() {
 	}
 }
 
-// addScriptCard adds a by_hand or ask card from the kit's fields: kind, where, link, qr, and
-// how many lines of text follow.
+// addScriptCard adds a by_hand or ask card from the kit's fields: kind, where, link, and how
+// many lines of text follow.
 func (s *Session) addScriptCard(fields []string) {
 	assert.That(s != nil, "add card runs on a session")
 	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
-	if len(fields) != 5 || len(s.cards) >= SetupCardsMax {
+	if len(fields) != 4 || len(s.cards) >= SetupCardsMax {
 		return
 	}
-	lines, err := strconv.Atoi(fields[4])
+	lines, err := strconv.Atoi(fields[3])
 	if err != nil || lines < 0 {
 		lines = 0
 	}
 	card := SetupCard{
-		Kind: fields[0], Link: fields[2], QRCode: fields[3] == "1",
-		Links: []string{}, Images: []string{}, Blocks: []CodeBlock{},
+		Kind: fields[0], Link: fields[2], Links: []string{}, Images: []string{},
+		Blocks: []CodeBlock{},
 	}
 	if card.Kind == CardAsk {
 		card.Offers = []string{OfferContinue}
@@ -97,7 +97,7 @@ func (s *Session) addScriptCard(fields []string) {
 		if lines > 0 {
 			card.Offers = append(card.Offers, OfferCopy)
 		}
-		if card.Link != "" && !card.QRCode {
+		if card.Link != "" {
 			card.Offers = append(card.Offers, OfferOpen)
 		}
 	}
@@ -115,8 +115,7 @@ func (s *Session) answering() bool {
 	return last.Kind != CardMarkdown && last.Mark == ""
 }
 
-// finishCardText finishes a script card once its text is read: an ask card's prompt, a QR
-// card's link under its text.
+// finishCardText finishes a script card once its text is read: an ask card's prompt.
 func (s *Session) finishCardText() {
 	assert.That(s != nil, "finish card runs on a session")
 	assert.That(s.reading == 0, "the card's text is all read")
@@ -126,9 +125,6 @@ func (s *Session) finishCardText() {
 	last := &s.cards[len(s.cards)-1]
 	if last.Kind == CardAsk && last.Prompt == "" {
 		last.Prompt = last.Text
-	}
-	if last.QRCode && !strings.Contains(last.Text, last.Link) {
-		last.Text = strings.TrimPrefix(last.Text+"\n\n"+last.Link, "\n\n")
 	}
 }
 

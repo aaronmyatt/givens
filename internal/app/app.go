@@ -150,5 +150,23 @@ func (a *App) Front() *Window {
 func (a *App) Quit() error {
 	assert.That(a != nil, "quit runs on an app")
 	assert.That(a.config.AppDataDir != "", "the app knows where to remember windows")
-	return ErrNotImplemented
+	open := make([]string, 0, len(a.windows))
+	for _, window := range a.windows {
+		if window.kind == WindowProject {
+			open = append(open, window.path)
+		}
+	}
+	if err := a.writeFolders(openWindowsFileName, open); err != nil {
+		return err
+	}
+	for _, window := range a.windows {
+		if window.session != nil {
+			window.session.removeArguments()
+		}
+	}
+	a.windows = a.windows[:0]
+	return nil
 }
+
+// openWindowsFileName remembers which projects were open at the last quit, front first.
+const openWindowsFileName = "open-windows.txt"

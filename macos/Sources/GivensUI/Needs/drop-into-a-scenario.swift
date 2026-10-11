@@ -25,10 +25,8 @@ public struct SetupCardRecord: Decodable, Sendable, Equatable {
     public let prompt: String
     /// The card's text as shown, code included.
     public let text: String
-    /// The --url or --qr link, or "".
+    /// The --url link, or "".
     public let link: String
-    /// True when the link is shown as a QR code, with the link as text beneath it.
-    public let qrCode: Bool
     /// Link targets in a markdown card's text.
     public let links: [String]
     /// Image paths shown in a markdown card.

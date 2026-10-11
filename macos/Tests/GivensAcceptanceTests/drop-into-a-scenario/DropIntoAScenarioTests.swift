@@ -36,7 +36,7 @@ final class DropIntoAScenarioState {
     /// The note added before "Record run", and the run key recorded against.
     var note = ""
     var runKey = ""
-    /// The by_hand card's snippet and its --url or --qr link.
+    /// The by_hand card's snippet and its --url link.
     var snippet = ""
     var link = ""
     /// The card a step picked, by its index in setupCards().

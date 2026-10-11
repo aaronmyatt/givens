@@ -63,10 +63,15 @@ func (w *Window) shownCapability() *Capability {
 func (w *Window) shownScenario() *Scenario {
 	assert.That(w != nil, "shown scenario runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	if w.selectedScenario == "" {
+	name := w.selectedScenario
+	if w.session != nil {
+		// The Drop in page shows the scenario dropped in to, steps and setup script.
+		name = w.session.scenario.Capability + "/" + w.session.scenario.Name
+	}
+	if name == "" {
 		return nil
 	}
-	loaded, ok := w.findScenario(w.selectedScenario)
+	loaded, ok := w.findScenario(name)
 	if !ok {
 		return nil
 	}

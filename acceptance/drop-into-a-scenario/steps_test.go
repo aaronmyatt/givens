@@ -31,7 +31,7 @@ type state struct {
 	note          string              // the note added before "Record run"
 	runKey        string              // the run key the scenario recorded against
 	snippet       string              // the by_hand card's snippet
-	link          string              // the by_hand card's --url or --qr link
+	link          string              // the by_hand card's --url link
 	fromSetupLine string              // what the setup a from line names prints
 	cardIndex     int                 // the card a step picked, by its index in Cards
 	opener        *urlOpener          // records links "Open" sends to the default browser

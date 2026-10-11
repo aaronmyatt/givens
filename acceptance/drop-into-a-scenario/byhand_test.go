@@ -192,10 +192,10 @@ func (s *state) setupStopsWith(text string) error {
 	return world.ExpectNot(session.Output(), afterCard, "the output")
 }
 
-// byHandLink gives the scenario a by_hand step with --url or --qr, and a fake default browser.
-func (s *state) byHandLink(name string, flag string, link string, where string) error {
+// byHandLink gives the scenario a by_hand step with --url, and a fake default browser.
+func (s *state) byHandLink(name string, link string, where string) error {
 	s.scenario, s.link, s.snippet = name, link, byHandText
-	err := s.writeSetup(name, byHandScript(where, "--"+flag, quote(link)))
+	err := s.writeSetup(name, byHandScript(where, "--url", quote(link)))
 	if err != nil {
 		return err
 	}
@@ -249,25 +249,6 @@ func (s *state) opensInBrowser() error {
 			s.link)
 	}
 	return nil
-}
-
-func (s *state) showsQRCode() error {
-	_, card, err := s.linkCard()
-	if err != nil {
-		return err
-	}
-	if !card.QRCode {
-		return fmt.Errorf("the card doesn't show %q as a QR code: %+v", s.link, card)
-	}
-	return nil
-}
-
-func (s *state) linkAsText() error {
-	_, card, err := s.linkCard()
-	if err != nil {
-		return err
-	}
-	return world.Expect([]string{card.Text}, s.link, "the card's text")
 }
 
 // setupAsks gives the scenario a setup that asks for a value, then saves it in shop-data.

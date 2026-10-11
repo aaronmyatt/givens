@@ -62,7 +62,7 @@ func (s *Session) offers() []string {
 	case SessionFailed, SessionStopped:
 		offers = append(offers, s.failedOffers()...)
 	}
-	if len(s.hints) > 0 {
+	if len(s.hints) > 0 || s.untrusted {
 		offers = append(offers, OfferCopy)
 	}
 	return offers
@@ -100,7 +100,15 @@ func (s *Session) choose(action string) error {
 	case OfferRecordRun:
 		return s.RecordRun(s.note)
 	case OfferCopy:
+		if len(s.hints) == 0 {
+			return window.copySetup(s.scenario)
+		}
 		return window.app.config.Clipboard.WriteText(s.hints[0])
+	case OfferTrustThisProject:
+		if err := window.app.MarkTrusted(window.path); err != nil {
+			return err
+		}
+		return s.restart(false)
 	}
 	return ErrNotImplemented
 }
@@ -114,6 +122,9 @@ func (s *Session) failedOffers() []string {
 	}
 	if s.markdownFailed {
 		return []string{OfferEditSetup, OfferTryAgain}
+	}
+	if s.untrusted {
+		return []string{OfferTrustThisProject}
 	}
 	offers := make([]string, 0, 2)
 	if s.scenario.Setup != "" {

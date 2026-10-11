@@ -18,7 +18,7 @@ func (w *Window) Offers() []string {
 	assert.That(w != nil, "offers runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if w.prompt != nil {
-		return []string{w.prompt.confirm, OfferCancel}
+		return []string{w.prompt.confirm, w.prompt.cancel}
 	}
 	if w.session != nil {
 		return w.session.offers()

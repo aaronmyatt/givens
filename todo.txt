@@ -1,4 +1,3 @@
-2026-10-11 Trust a project: 4 scenarios ref:trust-a-project
 2026-10-11 Read a capability: 4 scenarios ref:read-a-capability
 2026-10-11 Views: 4 scenarios ref:views
 2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios
@@ -16,5 +15,6 @@ x 2026-10-11 2026-10-11 Tags: 8 scenarios ref:tags — see tasks/tags/notes.md
 x 2026-10-11 2026-10-11 Search everything: 6 scenarios ref:search-everything — built with Tags; see tasks/search-everything/notes.md
 2026-10-11 Cache scenario statuses between snapshots: the Unverified count fingerprints every scenario each time
 x 2026-10-11 2026-10-11 Copy a setup script: 5 scenarios ref:copy-a-setup-script — see tasks/copy-a-setup-script/notes.md
-x 2026-10-11 2026-10-11 Drop into a scenario: 44 scenarios ref:drop-into-a-scenario — see tasks/drop-into-a-scenario/notes.md
-2026-10-11 Drop in UI: draw outline rows (dropInRows) and QR code cards
+x 2026-10-11 2026-10-11 Drop into a scenario: 43 scenarios ref:drop-into-a-scenario — see tasks/drop-into-a-scenario/notes.md
+2026-10-11 Drop in UI: draw outline rows (dropInRows)
+x 2026-10-11 2026-10-11 Trust a project: 4 scenarios ref:trust-a-project — see tasks/trust-a-project/notes.md

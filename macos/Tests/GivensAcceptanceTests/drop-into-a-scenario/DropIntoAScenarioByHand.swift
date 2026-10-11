@@ -56,12 +56,12 @@ func dropInByHandSteps(_ s: DropIntoAScenarioState) -> [StepDefinition] {
     ]
 }
 
-/// by_hand cards with a --url or --qr link.
+/// by_hand cards with a --url link.
 @MainActor
 func dropInLinkSteps(_ s: DropIntoAScenarioState) -> [StepDefinition] {
     [
-        def(#"^the "([^"]*)" setup has by_hand --(url|qr) "([^"]*)" for "([^"]*)"$"#) { call in
-            try await s.byHandLink(call[0], call[1], call[2], call[3])
+        def(#"^the "([^"]*)" setup has by_hand --url "([^"]*)" for "([^"]*)"$"#) { call in
+            try await s.byHandLink(call[0], call[1], call[2])
         },
         def(#"^a developer drops in and setup pauses at that step$"#) { _ in
             try await s.w.dropIn(s.scenario)
@@ -76,13 +76,6 @@ func dropInLinkSteps(_ s: DropIntoAScenarioState) -> [StepDefinition] {
             guard opened == [s.link] else {
                 throw StepFailure("the default browser was asked to open \(opened), not \(s.link)")
             }
-        },
-        def(#"^the card shows the link as a QR code$"#) { _ in
-            let card = try await s.linkCard()
-            guard card.qrCode else { throw StepFailure("the card shows no QR code: \(card)") }
-        },
-        def(#"^the link is shown as text beneath it$"#) { _ in
-            try expect([try await s.linkCard().text], s.link, "the card's text")
         },
     ]
 }
@@ -152,12 +145,12 @@ extension DropIntoAScenarioState {
         _ = try await byHandCard(Self.byHandWhere)
     }
 
-    /// Gives the scenario a by_hand step with --url or --qr.
-    func byHandLink(_ name: String, _ flag: String, _ url: String, _ place: String) async throws {
+    /// Gives the scenario a by_hand step with --url.
+    func byHandLink(_ name: String, _ url: String, _ place: String) async throws {
         scenario = name
         link = url
         snippet = Self.byHandText
-        try writeSetup(name, Self.byHandScript(place, ["--" + flag, Shell.quote(url)]))
+        try writeSetup(name, Self.byHandScript(place, ["--url", Shell.quote(url)]))
         try await prepare()
     }
 

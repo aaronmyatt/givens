@@ -56,6 +56,7 @@ type Session struct {
 
 	skipTeardown bool   // "Run setup anyway" leaves a failing teardown out
 	argumentsDir string // where GIVENS_ARG_<n> files are, or ""
+	untrusted    bool   // the developer chose "Don't trust", so scripts are off
 
 	// Cards: by_hand and ask cards the script printed, then the markdown setup's steps.
 	cards          []SetupCard
@@ -111,7 +112,8 @@ func (s *Session) Wait(limit time.Duration) string {
 	assert.That(limit > 0, "a wait has a limit")
 	deadline := time.Now().Add(limit)
 	for polls := int64(0); polls <= int64(limit/pollInterval); polls++ {
-		if s.Status() != SessionRunning || time.Now().After(deadline) {
+		// A session with no script running is waiting on a question, like the trust prompt.
+		if s.Status() != SessionRunning || s.process == nil || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(pollInterval)

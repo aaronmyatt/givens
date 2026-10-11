@@ -34,8 +34,7 @@ type SetupCard struct {
 	Where  string `json:"where"`  // by_hand's <where>, like "DigitalOcean console"
 	Prompt string `json:"prompt"` // ask's prompt; "" otherwise
 	Text   string `json:"text"`   // the card's text as shown, code included
-	Link   string `json:"link"`   // the --url or --qr link, or ""
-	QRCode bool   `json:"qrCode"` // the link is a QR code, with the link as text beneath it
+	Link   string `json:"link"`   // the --url link, or ""
 	// Link targets and image paths in a markdown card's text.
 	Links  []string    `json:"links"`
 	Images []string    `json:"images"`

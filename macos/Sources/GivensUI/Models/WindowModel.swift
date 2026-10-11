@@ -78,7 +78,7 @@ public final class WindowModel: Identifiable {
     static func lines(_ scenario: ScenarioRecord) -> [String] {
         // Tags sit above the steps, as the scenario view lays them out.
         [scenario.name, scenario.status, scenario.warning, scenario.tags.joined(separator: " ")]
-            + scenario.steps
+            + scenario.steps + [scenario.setup]
     }
 
     /// Selects a sidebar item, scenario, search result or helper by its name.

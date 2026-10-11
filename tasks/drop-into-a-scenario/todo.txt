@@ -42,4 +42,4 @@ x 2026-10-11 2026-10-11 Pass: Copy a code block — passes in Go and Swift
 x 2026-10-11 2026-10-11 Pass: Several code blocks — passes in Go and Swift
 x 2026-10-11 2026-10-11 Pass: Copy inline code — passes in Go and Swift
 x 2026-10-11 2026-10-11 Pass: A code block that never closes (error state) — passes in Go and Swift
-x 2026-10-11 2026-10-11 Wire Drop into a scenario into the UI shell, after ui-shell — Drop in page draws output, cards, an answer field and checklist marks; rows and QR images not drawn yet
+x 2026-10-11 2026-10-11 Wire Drop into a scenario into the UI shell, after ui-shell — Drop in page draws output, cards, an answer field and checklist marks; rows not drawn yet

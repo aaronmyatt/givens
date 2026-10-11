@@ -183,7 +183,8 @@ func capabilityLines(capability Capability) []string {
 	return lines
 }
 
-// scenarioLines is a scenario's text: name, status, warning, tags on one line, then steps.
+// scenarioLines is a scenario's text: name, status, warning, tags on one line, steps, then
+// the setup script beside them.
 func scenarioLines(scenario Scenario) []string {
 	assert.That(scenario.Name != "", "a shown scenario has a name")
 	tags := ""
@@ -195,6 +196,7 @@ func scenarioLines(scenario Scenario) []string {
 	}
 	lines := append([]string{scenario.Name, scenario.Status, scenario.Warning, tags},
 		scenario.Steps...)
+	lines = append(lines, scenario.Setup)
 	assert.That(len(lines) >= 4, "a scenario shows its name, status, warning and tags")
 	return lines
 }

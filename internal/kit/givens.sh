@@ -94,25 +94,24 @@ when_command() { printf 'bash %s --when' "$GIVENS_SCRIPT"; }
 # Ref: https://man7.org/linux/man-pages/man4/tty.4.html
 _givens_keyboard() { { : </dev/tty; } 2>/dev/null; }
 
-# _givens_card <kind> <where> <link> <qr> <text>: shows a card in Givens (GIVENS_UI=1). One
+# _givens_card <kind> <where> <link> <text>: shows a card in Givens (GIVENS_UI=1). One
 # line starts with the record separator and "givens-card", then tab-separated fields, the last
 # being how many lines of text follow. Givens answers on stdin.
 _givens_card() {
   local _g_lines=0
-  if [ -n "$5" ]; then _g_lines="$(printf '%s\n' "$5" | wc -l | tr -d ' ')"; fi
-  printf '\036givens-card\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$_g_lines"
-  if [ -n "$5" ]; then printf '%s\n' "$5"; fi
+  if [ -n "$4" ]; then _g_lines="$(printf '%s\n' "$4" | wc -l | tr -d ' ')"; fi
+  printf '\036givens-card\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$_g_lines"
+  if [ -n "$4" ]; then printf '%s\n' "$4"; fi
 }
 
-# by_hand [--url <url>] [--qr <url>] <where> [text]: a step done somewhere setup can't reach.
+# by_hand [--url <url>] <where> [text]: a step done somewhere setup can't reach.
 # The text comes from the second argument or from stdin, like a heredoc. Setup waits until
 # it's marked done; "f" marks it failed and stops setup. In Givens it's a card instead.
 by_hand() {
-  local _g_link='' _g_qr=0 _g_where _g_text='' _g_answer
+  local _g_link='' _g_where _g_text='' _g_answer
   while [ $# -gt 0 ]; do # bound: each pass shifts the options away
     case "$1" in
-      --url) _g_link="$2"; _g_qr=0; shift 2 ;;
-      --qr) _g_link="$2"; _g_qr=1; shift 2 ;;
+      --url) _g_link="$2"; shift 2 ;;
       *) break ;;
     esac
   done
@@ -121,7 +120,7 @@ by_hand() {
     _g_text="$(cat)"
   fi
   if [ "${GIVENS_UI:-}" = "1" ]; then
-    _givens_card by_hand "$_g_where" "$_g_link" "$_g_qr" "$_g_text"
+    _givens_card by_hand "$_g_where" "$_g_link" "$_g_text"
     IFS= read -r _g_answer || _g_answer=''
     if [ "$_g_answer" != "done" ]; then fail "Stopped at a step done by hand"; fi
     return 0
@@ -143,7 +142,7 @@ ask() {
     '' | [0-9]* | *[!A-Za-z0-9_]*) fail "ask: $_g_name isn't a variable name" ;;
   esac
   if [ "${GIVENS_UI:-}" = "1" ]; then
-    _givens_card ask "$_g_name" "" 0 "$_g_prompt"
+    _givens_card ask "$_g_name" "" "$_g_prompt"
     IFS= read -r _g_value || _g_value=''
     printf -v "$_g_name" '%s' "$_g_value"
     return 0

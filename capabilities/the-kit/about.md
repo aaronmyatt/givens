@@ -29,7 +29,7 @@ Sourcing it:
 | `then_check <text>` | Prints "Then check that …" for each Then step | `then_check 'you see "Saved"'` |
 | `need <command> [hint]` | Stops setup with the install hint if the command is missing | `need bb "brew install borkdude/brew/babashka"` |
 | `from <capability>/<slug> [column=value]` | Runs that scenario's setup first, "your turn" lines hidden | `from checkout/pay-with-saved-card` |
-| `by_hand [--url <url>] [--qr <url>] <where> [text]` | Stops setup until a step done elsewhere is marked done | `by_hand "DigitalOcean console" <<'EOF' … EOF` |
+| `by_hand [--url <url>] <where> [text]` | Stops setup until a step done elsewhere is marked done | `by_hand "DigitalOcean console" <<'EOF' … EOF` |
 | `ask <name> <prompt>` | Stops setup until the user types a value, then sets that variable | `ask INVITE_CODE "Paste the invite code"` |
 | `when_mode` | Is true when the script was run with `--when` | `if when_mode; then …; exit 0; fi` |
 | `when_command` | Prints the command that runs this script with `--when` | `when_you "run this: $(when_command)"` |
