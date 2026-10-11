@@ -9,6 +9,8 @@ import GivensUI
 final class World {
     /// How long a step waits for a Drop in's setup.
     static let setupWaitSeconds = 10
+    /// How much longer than setupWaitSeconds a call may take before serve counts as hung.
+    static let callMarginSeconds = 30
 
     let dir: URL
     let appData: URL
@@ -93,9 +95,12 @@ final class World {
         let platform = Platform(
             clipboard: clipboard, trash: trash, folderPicker: folderPicker, urlOpener: urlOpener)
         // A call may be a session.wait of setupWaitSeconds, so calls get a margin over it.
+        // The margin is wide: 15 suites each run their own serve at once, and a busy machine
+        // (load in the hundreds) slowed replies past a 5 s margin. It bounds a hung serve,
+        // not how fast setup must be; the steps time setup themselves.
         let serve = ServeClient.Configuration(
             executable: try Toolchain.givens(), appDataDirectory: appData, testSeams: true,
-            callTimeout: .seconds(Self.setupWaitSeconds + 5))
+            callTimeout: .seconds(Self.setupWaitSeconds + Self.callMarginSeconds))
         app = AppModel(serve: serve, platform: platform)
     }
 
