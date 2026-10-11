@@ -1,0 +1,9 @@
+2026-10-11 Pass: A test runner reads the same files
+2026-10-11 Pass: Rules group scenarios
+2026-10-11 Pass: Comments are kept
+2026-10-11 Pass: Step definitions are left alone
+2026-10-11 Pass: A file that isn't valid Gherkin (error state)
+2026-10-11 Pass: Two scenario names with the same slug (error state)
+2026-10-11 Pass: Two .feature files in one capability (error state)
+2026-10-11 Wire Gherkin files into the UI shell, after ui-shell
+2026-10-11 Sample shop: pin @cucumber/cucumber and install it offline for runner scenarios

@@ -1,0 +1,5 @@
+2026-10-11 Pass: Asked before the first run
+2026-10-11 Pass: Trust is remembered
+2026-10-11 Pass: Choose not to trust (error state)
+2026-10-11 Pass: Moved or re-cloned project (error state)
+2026-10-11 Wire Trust a project into the UI shell, after ui-shell

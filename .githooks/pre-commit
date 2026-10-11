@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Blocks a commit that breaks any constraint in CONSTRAINTS.md.
+# Turned on per clone with: git config core.hooksPath .githooks
+# Ref: https://git-scm.com/docs/githooks#_pre_commit
+set -euo pipefail
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh"

@@ -1,0 +1,11 @@
+2026-10-11 internal/project: load a capabilities folder
+2026-10-11 internal/runs: run keys and the append-only run log
+2026-10-11 internal/setup: run a setup script within limits
+2026-10-11 internal/app: the facade the UI and step definitions share
+2026-10-11 acceptance: a World per scenario on a temp copy of the sample shop
+2026-10-11 internal/kit: givens.sh skeleton (bash 3.2) with a version line, embedded in the binary
+2026-10-11 scripts/check.sh: add a bats step for the kit tests
+2026-10-11 App.MarkTrusted: the world trusts the sample shop by default through it
+2026-10-11 testdata/sample-shop: its 7 helpers and setup scripts, after internal/kit
+2026-10-11 internal/watch: poll a capabilities folder, bounded interval, changes seen within 2 seconds
+2026-10-11 scripts/check.sh: shellcheck internal/kit, internal/starter and testdata/sample-shop scripts

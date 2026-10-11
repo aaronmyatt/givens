@@ -1,0 +1,9 @@
+2026-10-11 Pass: List scenarios
+2026-10-11 Pass: Run a setup by name
+2026-10-11 Pass: Check passes
+2026-10-11 Pass: Check finds a problem (error state)
+2026-10-11 Pass: Run a scenario that doesn't exist (error state)
+2026-10-11 Pass: List by tag
+2026-10-11 Pass: Steps done by hand in a terminal
+2026-10-11 Pass: Code blocks in a terminal
+

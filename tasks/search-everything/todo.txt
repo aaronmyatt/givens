@@ -1,0 +1,7 @@
+2026-10-11 Pass: Search for a phrase
+2026-10-11 Pass: Find a capability by its story
+2026-10-11 Pass: Find every use of a step
+2026-10-11 Pass: Show only one kind of result
+2026-10-11 Pass: Find a helper
+2026-10-11 Pass: Nothing matches (error state)
+2026-10-11 Wire Search everything into the UI shell, after ui-shell

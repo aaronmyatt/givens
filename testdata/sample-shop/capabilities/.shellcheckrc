@@ -1,0 +1,5 @@
+# Setup scripts start with the kit's source line, so they have no shebang: they run with bash.
+# The kit's path is worked out at run time, so shellcheck can't follow it.
+# Ref: https://github.com/koalaman/shellcheck/wiki/Directive#shellcheckrc-file
+shell=bash
+disable=SC1091

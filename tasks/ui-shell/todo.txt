@@ -1,0 +1,5 @@
+2026-10-11 Compare the two shells against the Open a project scenarios, then pick one @human
+2026-10-11 Spike: one window listing capabilities from internal/app
+2026-10-11 Build `givens serve`: the JSON-lines protocol in macos/Sources/GivensUI/Core/ServeProtocol.swift, over internal/app
+2026-10-11 Add json tags to internal/app's types to match macos/Sources/GivensUI/Models/Records.swift
+2026-10-11 Take @wip off a scenario only when both the Go suite and the Swift suite (swift test --package-path macos) pass it

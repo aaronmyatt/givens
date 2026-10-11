@@ -1,0 +1,14 @@
+# Go build output and test caches stay out of git.
+/givens
+*.test
+*.out
+.claude/settings.local.json
+
+# SwiftPM build output for the macOS app.
+macos/.build/
+macos/.swiftpm/
+
+# txtodo's local daemon state (op log, device keys, token hashes); todo.txt and tasks/ are the backlog.
+.txtodo/
+# Claude Code's per-machine lock files.
+.claude/*.lock

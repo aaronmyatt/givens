@@ -1,0 +1,5 @@
+2026-10-11 Pass: An update is available
+2026-10-11 Pass: Update the kit
+2026-10-11 Pass: The kit was edited by hand (error state)
+2026-10-11 Pass: The project's kit is newer than Givens (error state)
+2026-10-11 Wire Update the kit into the UI shell, after ui-shell

@@ -1,0 +1,13 @@
+2026-10-11 Pass: Strict mode stops at the first failure (error state)
+2026-10-11 Pass: "Your turn" heading prints once
+2026-10-11 Pass: Quiet mode
+2026-10-11 Pass: No colour when not in a terminal
+2026-10-11 Pass: A missing command (error state)
+2026-10-11 Pass: fail stops setup (error state)
+2026-10-11 Pass: warn carries on
+2026-10-11 Pass: When mode
+2026-10-11 Pass: A step by hand in a terminal
+2026-10-11 Pass: A step by hand fails in a terminal (error state)
+2026-10-11 Pass: Ask in a terminal
+2026-10-11 Pass: Nobody at the keyboard (error state)
+

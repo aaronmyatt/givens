@@ -1,0 +1,13 @@
+2026-10-11 Pass: Calling another capability's helper (error state)
+2026-10-11 Pass: Two helpers with the same name
+2026-10-11 Pass: Two shared files define the same helper (error state)
+2026-10-11 Pass: Changing a helper unverifies the scenarios that call it
+2026-10-11 Pass: Changing a step unverifies the scenario
+2026-10-11 Pass: Changing a setup unverifies the scenarios built on it
+2026-10-11 Pass: Changing a nested helper unverifies its callers
+2026-10-11 Pass: Updating the kit keeps scenarios verified
+2026-10-11 Pass: See what a scenario needs installed
+2026-10-11 Pass: Edit a helper
+2026-10-11 Pass: Add a helper
+2026-10-11 Pass: Save a helper with a syntax error (error state)
+2026-10-11 Wire Share setup between scenarios into the UI shell, after ui-shell

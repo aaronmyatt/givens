@@ -1,0 +1,45 @@
+2026-10-11 Pass: Drop in
+2026-10-11 Pass: The setup script fails (error state)
+2026-10-11 Pass: A command the setup needs isn't installed (error state)
+2026-10-11 Pass: Setup is still running after two minutes (error state)
+2026-10-11 Pass: A longer timeout
+2026-10-11 Pass: A timeout Givens can't read (error state)
+2026-10-11 Pass: Record a run
+2026-10-11 Pass: Record a run before marking every check (error state)
+2026-10-11 Pass: A run records who ran it
+2026-10-11 Pass: Runs on two branches merge cleanly
+2026-10-11 Pass: Reset state part way through
+2026-10-11 Pass: Running setup twice gives the same state
+2026-10-11 Pass: Teardown runs before setup
+2026-10-11 Pass: Add a teardown
+2026-10-11 Pass: The teardown fails (error state)
+2026-10-11 Pass: A scenario that builds on another
+2026-10-11 Pass: Each level tears down its own state
+2026-10-11 Pass: Builds on a scenario that doesn't exist (error state)
+2026-10-11 Pass: Setups that build on each other in a loop (error state)
+2026-10-11 Pass: A loop run from the terminal (error state)
+2026-10-11 Pass: Steps done by hand come first
+2026-10-11 Pass: A step done by hand
+2026-10-11 Pass: A step done by hand fails (error state)
+2026-10-11 Pass: A step in the browser
+2026-10-11 Pass: A step on another device
+2026-10-11 Pass: A value from elsewhere
+2026-10-11 Pass: Continue with nothing typed (error state)
+2026-10-11 Pass: A step by hand in a scenario it builds on
+2026-10-11 Pass: Waiting doesn't count as slow
+2026-10-11 Pass: See every row on one page
+2026-10-11 Pass: Drop in to one row
+2026-10-11 Pass: Switch to another row
+2026-10-11 Pass: Record a run for one row
+2026-10-11 Pass: Step data reaches the script
+2026-10-11 Pass: Build on one row of an outline
+2026-10-11 Pass: Build on an outline without a row (error state)
+2026-10-11 Pass: Several unnamed Examples blocks (error state)
+2026-10-11 Pass: Setup steps shown as cards
+2026-10-11 Pass: Cards after a script
+2026-10-11 Pass: A card marked failed (error state)
+2026-10-11 Pass: Copy a code block
+2026-10-11 Pass: Several code blocks
+2026-10-11 Pass: Copy inline code
+2026-10-11 Pass: A code block that never closes (error state)
+2026-10-11 Wire Drop into a scenario into the UI shell, after ui-shell

@@ -1,0 +1,21 @@
+2026-10-11 Pass: Write a new story
+2026-10-11 Pass: Add a scenario to a capability
+2026-10-11 Pass: Reuse an existing step
+2026-10-11 Pass: Saving changes only what was changed
+2026-10-11 Pass: The file changes on disk while it's being edited (error state)
+2026-10-11 Pass: A line that isn't a step (error state)
+2026-10-11 Pass: Rename a scenario
+2026-10-11 Pass: Rename a capability
+2026-10-11 Pass: Renaming a capability updates from lines
+2026-10-11 Pass: Warned before a rename
+2026-10-11 Pass: A renamed scenario starts at Never run
+2026-10-11 Pass: Scenarios built on it are unverified too
+2026-10-11 Pass: Delete a scenario
+2026-10-11 Pass: Delete a scenario another builds on (error state)
+2026-10-11 Pass: Delete a capability
+2026-10-11 Pass: Delete a capability another builds on (error state)
+2026-10-11 Pass: Preview a scenario while editing
+2026-10-11 Pass: Preview a story with an image
+2026-10-11 Pass: Preview a line that isn't a step (error state)
+2026-10-11 Pass: Write setup steps
+2026-10-11 Wire Write stories and scenarios into the UI shell, after ui-shell

@@ -1,0 +1,18 @@
+2026-10-11 Foundation: core packages and the acceptance world ref:foundation
+2026-10-11 Decide the macOS UI shell @human ref:ui-shell
+2026-10-11 Gherkin files: 7 scenarios ref:gherkin-files
+2026-10-11 The kit: 12 scenarios ref:the-kit
+2026-10-11 Share setup between scenarios: 12 scenarios ref:share-setup-between-scenarios
+2026-10-11 Use Givens from the terminal: 8 scenarios ref:use-givens-from-the-terminal
+2026-10-11 Tags: 8 scenarios ref:tags
+2026-10-11 Copy a setup script: 5 scenarios ref:copy-a-setup-script
+2026-10-11 Drop into a scenario: 44 scenarios ref:drop-into-a-scenario
+2026-10-11 Trust a project: 4 scenarios ref:trust-a-project
+2026-10-11 Read a capability: 4 scenarios ref:read-a-capability
+2026-10-11 Views: 4 scenarios ref:views
+2026-10-11 Search everything: 6 scenarios ref:search-everything
+2026-10-11 Write stories and scenarios: 20 scenarios ref:write-stories-and-scenarios
+2026-10-11 Open a project: 14 scenarios ref:open-a-project
+2026-10-11 Update the kit: 4 scenarios ref:update-the-kit
+2026-10-11 Release: package Givens.app and the givens command ref:release
+2026-10-11 Finish: no @wip tags left and scripts/check.sh passes

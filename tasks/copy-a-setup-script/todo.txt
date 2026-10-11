@@ -1,0 +1,6 @@
+2026-10-11 Pass: Copy
+2026-10-11 Pass: Copy from search
+2026-10-11 Pass: Capabilities folder isn't at the root
+2026-10-11 Pass: Run from a subfolder
+2026-10-11 Pass: Copy steps done by hand
+2026-10-11 Wire Copy a setup script into the UI shell, after ui-shell
