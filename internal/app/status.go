@@ -17,11 +17,24 @@ const (
 	statusUnverified    = "Unverified: "
 )
 
-// statusOf says where a scenario stands, by the app's clock.
+// statusOf says where a scenario stands, by the app's clock. Answers are kept until a file in
+// the capabilities folder changes (runs/ included) or the day turns over, since the sidebar,
+// the capability page and the views all ask, and each answer reads every run file and
+// fingerprints the setup.
 func (w *Window) statusOf(scenario project.Scenario) string {
 	assert.That(w.project != nil, "status is read in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
-	return StatusOf(w.project, scenario, w.app.config.Clock.Now())
+	now := w.app.config.Clock.Now()
+	if day := now.Format(time.DateOnly); day != w.statusDay || w.statuses == nil {
+		w.statuses, w.statusDay = make(map[string]string, 16), day
+	}
+	key := scenario.Capability + "/" + scenario.Name
+	if status, kept := w.statuses[key]; kept {
+		return status
+	}
+	status := StatusOf(w.project, scenario, now)
+	w.statuses[key] = status
+	return status
 }
 
 // StatusOf says where a scenario stands: verified while its latest run passed and nothing its

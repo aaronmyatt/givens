@@ -25,6 +25,10 @@ func (w *Window) Helpers() []Helper {
 	if w.project == nil {
 		return []Helper{}
 	}
+	// Kept until a file changes: finding callers reads every script once per helper.
+	if w.helpers != nil {
+		return append([]Helper{}, w.helpers...)
+	}
 	shared, err := helpers.InFolder(w.path, "", "")
 	if err != nil {
 		return []Helper{}
@@ -37,7 +41,8 @@ func (w *Window) Helpers() []Helper {
 		}
 		listed = append(listed, w.listHelpers(own, capability.Name, shared)...)
 	}
-	return listed
+	w.helpers = listed
+	return append([]Helper{}, listed...)
 }
 
 // listHelpers turns one folder's documented helpers into Shared list entries.

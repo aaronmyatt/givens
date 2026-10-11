@@ -10,6 +10,11 @@ import (
 
 // Window is one Givens window: the welcome window, or one project.
 type Window struct {
+	// statuses are scenario statuses kept until files change or the day turns; see statusOf.
+	statuses  map[string]string
+	statusDay string
+	helpers   []Helper // the Shared list, kept until files change; see Helpers
+
 	app     *App
 	id      int // numbered from 1 in opening order; see ID
 	kind    string

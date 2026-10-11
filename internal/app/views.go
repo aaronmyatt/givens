@@ -168,7 +168,7 @@ func (w *Window) viewItems() []SidebarItem {
 			if scenario.Error {
 				errorStates++
 			}
-			status := StatusOf(w.project, scenario, w.app.config.Clock.Now())
+			status := w.statusOf(scenario)
 			if !strings.HasPrefix(status, statusVerified) {
 				unverified++
 			}
