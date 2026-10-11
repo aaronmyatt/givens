@@ -9,7 +9,7 @@ Feature: The kit
   bash). None need the app. `--when` doesn't run setup again: it assumes the developer is
   mid-flow, with setup already done.
 
-  @wip @error
+  @error
   Scenario: Strict mode stops at the first failure
     Given a setup script's second command fails
     When a developer runs the script in a terminal
@@ -17,26 +17,23 @@ Feature: The kit
     And the lines after it don't run
     And the script exits with a non-zero code
 
-  @wip
   Scenario: "Your turn" heading prints once
     Given a setup script calls first_you, then when_you twice, then then_check
     When a developer runs it in a terminal
     Then "Your turn" is printed once, just before the first_you line
 
-  @wip
   Scenario: Quiet mode
     Given the same script as kit-your-turn
     When it runs with GIVENS_QUIET=1
     Then no "Your turn" heading or first_you, when_you or then_check lines are printed
     And ok, warn and fail lines are still printed
 
-  @wip
   Scenario: No colour when not in a terminal
     Given a setup script calls ok "seeded shopper"
     When its output is sent to a file
     Then the file holds "✓ seeded shopper" with no colour codes
 
-  @wip @error
+  @error
   Scenario: A missing command
     Given a setup script has need shopctl "brew install shop/tap/shopctl"
     And shopctl isn't installed
@@ -44,21 +41,19 @@ Feature: The kit
     Then it prints "✗ needs shopctl: brew install shop/tap/shopctl"
     And nothing after the need line runs
 
-  @wip @error
+  @error
   Scenario: fail stops setup
     Given a setup script calls fail "No database found"
     When it runs
     Then it prints "✗ No database found"
     And the script exits with a non-zero code
 
-  @wip
   Scenario: warn carries on
     Given a setup script calls warn "Mailpit isn't running", then ok "seeded shopper"
     When it runs
     Then both lines are printed
     And the script exits with 0
 
-  @wip
   Scenario: When mode
     Given a setup script ends with when_you "run this: $(when_command)"
     And it has if when_mode; then …; exit 0; fi near the top
@@ -66,7 +61,6 @@ Feature: The kit
     Then the first run prints "When you run this: bash capabilities/…/<slug>.sh --when"
     And the second run does only the When part, without rerunning setup, then exits
 
-  @wip
   Scenario: A step by hand in a terminal
     Given a setup script has a by_hand step for "DigitalOcean console" with a snippet
     When a developer runs it in a terminal
@@ -74,20 +68,19 @@ Feature: The kit
     And it waits with "Press Enter when done, or type f if it failed"
     And pressing Enter carries on with the rest of setup
 
-  @wip @error
+  @error
   Scenario: A step by hand fails in a terminal
     Given a setup script is waiting at a by_hand step in a terminal
     When the developer types f and presses Enter
     Then it prints "✗ Stopped at a step done by hand"
     And the script exits with a non-zero code
 
-  @wip
   Scenario: Ask in a terminal
     Given a setup script has ask INVITE_CODE "Paste the invite code"
     When a developer runs it in a terminal and types "K7Q2"
     Then the rest of the script sees INVITE_CODE as "K7Q2"
 
-  @wip @error
+  @error
   Scenario: Nobody at the keyboard
     Given a setup script has a by_hand step
     When it runs with no terminal and not from Givens, as in CI
