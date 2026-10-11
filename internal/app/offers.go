@@ -31,6 +31,9 @@ func (w *Window) Offers() []string {
 	if w.selectedHelper != "" {
 		return []string{OfferEdit}
 	}
+	if w.emptyView() != "" {
+		return []string{OfferNewScenario}
+	}
 	if scenario := w.shownScenario(); scenario != nil {
 		loaded, _ := w.findScenario(w.selectedScenario)
 		offers = append(offers, scenarioOffers(*scenario)...)

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -108,6 +109,15 @@ func (w *Window) Snapshot() WindowSnapshot {
 		}
 	} else if w.selectedHelper != "" {
 		labels = append(labels, w.helperLabels()...)
+	}
+	if empty := w.emptyView(); empty != "" {
+		messages = append(messages, empty)
+	}
+	if w.selectedView == ViewShared {
+		for _, helper := range w.ViewHelpers() {
+			labels = append(labels, helper.Signature, helper.Description,
+				fmt.Sprintf("%s, called by %d scripts", helper.File, helper.Callers))
+		}
 	}
 	searching := w.searchSnapshot()
 	if searching != nil {

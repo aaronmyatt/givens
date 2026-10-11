@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -255,9 +256,11 @@ func (s *state) othersListedWith(count string, status string) error {
 	if err != nil {
 		return err
 	}
+	// listedWith adds each name it checks to s.named, so keep the names earlier steps gave.
+	named := slices.Clone(s.named)
 	others := 0
 	for _, scenario := range onDisk {
-		if contains(s.named, scenario.Name) {
+		if contains(named, scenario.Name) {
 			continue
 		}
 		others++
@@ -270,7 +273,7 @@ func (s *state) othersListedWith(count string, status string) error {
 	}
 	namedListed := 0
 	for name := range listed {
-		if contains(s.named, name) {
+		if contains(named, name) {
 			namedListed++
 		}
 	}

@@ -42,6 +42,8 @@ func (s *Server) needs() map[string]handler {
 		"session.setRunNote":      s.onSession(setRunNote),
 		"window.dropInRows":       s.onWindow(dropInRows),
 		"window.chooseOnRow":      s.onWindow(chooseOnRow),
+		// capabilities/views: Needs/views.swift.
+		"window.viewHelpers": s.onWindow(viewHelpers),
 	}
 }
 
@@ -238,4 +240,10 @@ func indexOf(raw json.RawMessage, max int) (int, error) {
 		return 0, fmt.Errorf("%w: %s isn't an index below %d", ErrBadRequest, raw, max)
 	}
 	return index, nil
+}
+
+func viewHelpers(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "view helpers runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	return window.ViewHelpers(), nil
 }

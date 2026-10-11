@@ -107,11 +107,11 @@ func (w *Window) inView(scenario Scenario) bool {
 
 // ViewHelper is one helper listed in the sidebar's "Shared" view.
 type ViewHelper struct {
-	Name        string // "seed_shopper"
-	Signature   string // the text after "# @helper": "seed_shopper [email]"
-	Description string // the comment lines under it, joined with spaces
-	File        string // where it's defined, relative to the capabilities folder
-	Callers     int    // how many setup scripts call it
+	Name        string `json:"name"`        // "seed_shopper"
+	Signature   string `json:"signature"`   // the text after "# @helper"
+	Description string `json:"description"` // the comment lines under it, joined with spaces
+	File        string `json:"file"`        // where it's defined, in the capabilities folder
+	Callers     int    `json:"callers"`     // how many setup scripts call it
 }
 
 // ViewHelpers lists the helpers the "Shared" view shows, when it's selected: every helper
@@ -121,7 +121,34 @@ type ViewHelper struct {
 func (w *Window) ViewHelpers() []ViewHelper {
 	assert.That(w != nil, "view helpers run on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
+	listed := make([]ViewHelper, 0, 8)
+	if w.selectedView != ViewShared {
+		return listed
+	}
+	for _, helper := range w.Helpers() {
+		listed = append(listed, ViewHelper{
+			Name: helper.Name, Signature: helper.Signature, Description: helper.Description,
+			File: helper.DefinedIn, Callers: len(helper.Callers),
+		})
+	}
+	return listed
+}
+
+// emptyView says a selected view lists nothing: "No error states yet", or "" when it lists
+// something or no view is selected.
+func (w *Window) emptyView() string {
+	assert.That(w != nil, "empty view runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.selectedView == "" || w.selectedView == ViewShared || len(w.ListedScenarios()) > 0 {
+		return ""
+	}
+	switch w.selectedView {
+	case ViewErrorStates:
+		return "No error states yet"
+	case ViewUnverified:
+		return "Every scenario is verified"
+	}
+	return "No scenarios are tagged @" + w.selectedView
 }
 
 // Sidebar kinds below the capabilities.
