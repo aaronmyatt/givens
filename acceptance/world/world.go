@@ -81,6 +81,9 @@ func (w *World) CopySampleShop() error {
 		return err
 	}
 	w.Project = project
+	if err := w.linkRunner(); err != nil {
+		return err
+	}
 	kit, err := os.ReadFile(filepath.Join(w.Root, "internal", "kit", "givens.sh"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -89,6 +92,20 @@ func (w *World) CopySampleShop() error {
 		return err
 	}
 	return w.WriteFile("capabilities/_shared/givens.sh", string(kit))
+}
+
+// linkRunner links the sample shop's cucumber-js, installed by scripts/runner.sh, into the
+// copy as node_modules, so npx finds it without the network. Without an install there's no
+// link, and runner scenarios say cucumber-js is missing.
+// Ref: https://docs.npmjs.com/cli/commands/npx
+func (w *World) linkRunner() error {
+	assert.That(w != nil, "link runs on a world")
+	assert.That(w.Project != "", "the sample shop was copied")
+	modules := filepath.Join(w.Root, ".cache", "runner", "node_modules")
+	if _, err := os.Stat(modules); err != nil {
+		return nil
+	}
+	return os.Symlink(modules, filepath.Join(w.Project, "node_modules"))
 }
 
 // StartApp builds the app on fakes. It doesn't launch it.

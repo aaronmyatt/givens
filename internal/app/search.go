@@ -1,8 +1,6 @@
 package app
 
 import (
-	"unicode/utf8"
-
 	"givens/internal/assert"
 )
 
@@ -38,12 +36,6 @@ type SearchResults struct {
 	Groups []SearchGroup // only kinds with results, in Search* order
 }
 
-// RuleGroup is one Rule: block of a capability, as the capability page groups it.
-type RuleGroup struct {
-	Name      string   // the text after "Rule:"
-	Scenarios []string // the names of the scenarios under it, in file order
-}
-
 // SearchResults is the ⌘K panel's query, filter and grouped results, or the zero value while
 // search is closed or the query matches nothing (including a tag expression that doesn't
 // parse). Needed by every scenario in capabilities/search-everything and the search scenarios
@@ -70,12 +62,4 @@ func (w *Window) ListedScenarios() []Scenario {
 	assert.That(w != nil, "listed scenarios run on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	return nil
-}
-
-// RuleGroups lists a capability's Rule: blocks with the scenarios under each, in file order.
-// Needed by "Rules group scenarios" in capabilities/gherkin-files.
-func (w *Window) RuleGroups(capability string) ([]RuleGroup, error) {
-	assert.That(w != nil, "rule groups run on a window")
-	assert.That(utf8.ValidString(capability), "the capability's name is text")
-	return nil, ErrNotImplemented
 }

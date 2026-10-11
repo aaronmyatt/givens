@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -55,8 +54,11 @@ type PreviewLine struct {
 // Editor is the window's editor, holding one file: a .feature file, an about.md, a setup
 // script or a helper. Its text is unsaved until Save.
 type Editor struct {
-	window *Window
-	path   string
+	window   *Window
+	path     string
+	text     string // what the editor shows, unsaved changes included
+	opened   string // the file's text when it was opened or last saved
+	problems []string
 }
 
 // NewStory creates a capability from the New story dialog: <slug>/<slug>.feature with
@@ -81,35 +83,6 @@ func (w *Window) NewScenario(draft ScenarioDraft) error {
 	return ErrNotImplemented
 }
 
-// Edit opens a scenario, by name, at its block in its .feature file, or a file, by its path
-// relative to the capabilities folder ("checkout/about.md"), in the editor. Needed by the
-// editing, saving and preview scenarios in capabilities/write-stories-and-scenarios.
-func (w *Window) Edit(target string) (*Editor, error) {
-	assert.That(w != nil, "edit runs on a window")
-	assert.That(target != "", "edit names a scenario or a file")
-	assert.That(!filepath.IsAbs(target), "a file is named relative to the capabilities folder")
-	return nil, ErrNotImplemented
-}
-
-// Editor is the editor open in the window, or nil when nothing is being edited.
-func (w *Window) Editor() *Editor {
-	assert.That(w != nil, "editor runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
-}
-
-// Rename renames a scenario or a capability by its name. When the rename would start runs
-// over, it asks first, offering "Rename" and "Cancel"; otherwise it renames at once: the
-// Scenario: or Feature: line, the setup files or folder, and every from line that names it.
-// Needed by the rename scenarios in capabilities/write-stories-and-scenarios.
-func (w *Window) Rename(name string, newName string) error {
-	assert.That(w != nil, "rename runs on a window")
-	assert.That(name != "", "rename names what to rename")
-	assert.That(newName != "", "rename names the new name")
-	assert.That(len(newName) <= NameLengthMax, "the new name fits NameLengthMax")
-	return ErrNotImplemented
-}
-
 // Delete asks to delete a scenario or a capability by its name, offering "Delete" and
 // "Cancel", or "Delete anyway" when another setup builds on it. Choosing it removes the
 // scenario's block and moves its setup files, or the capability's folder, to the Trash.
@@ -118,38 +91,6 @@ func (w *Window) Delete(name string) error {
 	assert.That(w != nil, "delete runs on a window")
 	assert.That(name != "", "delete names what to delete")
 	assert.That(len(name) <= NameLengthMax, "the name fits NameLengthMax")
-	return ErrNotImplemented
-}
-
-// Path is the absolute path of the file the editor holds.
-func (e *Editor) Path() string {
-	assert.That(e != nil, "path runs on an editor")
-	assert.That(e.path == "" || filepath.IsAbs(e.path), "an editor's path is absolute")
-	return e.path
-}
-
-// Text is the editor's text, unsaved changes included.
-func (e *Editor) Text() string {
-	assert.That(e != nil, "text runs on an editor")
-	assert.That(e.window != nil, "an editor belongs to a window")
-	return ""
-}
-
-// SetText replaces the editor's text without saving, as typing would.
-func (e *Editor) SetText(text string) error {
-	assert.That(e != nil, "set text runs on an editor")
-	assert.That(utf8.ValidString(text), "the editor holds text")
-	assert.That(len(text) <= EditorTextBytesMax, "the text fits EditorTextBytesMax")
-	return ErrNotImplemented
-}
-
-// Save writes the editor's text to its file, changing only the lines that changed. A line
-// that doesn't parse is marked, and the file is saved anyway. When the file changed on disk
-// since it was opened, it shows "This file changed on disk" instead. Needed by "Saving changes
-// only what was changed" and "A line that isn't a step".
-func (e *Editor) Save() error {
-	assert.That(e != nil, "save runs on an editor")
-	assert.That(e.window != nil, "an editor belongs to a window")
 	return ErrNotImplemented
 }
 

@@ -5,7 +5,7 @@
 #   scripts/check.sh             # every check
 #   scripts/check.sh deps lint   # only the named checks
 #
-# Checks: fmt deps vet lint shell kit test swift
+# Checks: fmt deps vet lint shell kit runner test swift
 # Strict mode: stop on any failing command, unset variable or failed pipe.
 # Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 set -euo pipefail
@@ -56,6 +56,9 @@ check_shell() {
 # Ref: https://bats-core.readthedocs.io/en/stable/usage.html
 check_kit() { bats internal/kit; }
 
+# The sample shop's cucumber-js, for scenarios that run a test runner over the same files.
+check_runner() { scripts/runner.sh; }
+
 check_test() { go test ./...; }
 
 check_swift() {
@@ -69,7 +72,7 @@ check_swift() {
 
 checks=("$@")
 if [ ${#checks[@]} -eq 0 ]; then
-  checks=(fmt deps vet lint shell kit test swift)
+  checks=(fmt deps vet lint shell kit runner test swift)
 fi
 for name in "${checks[@]}"; do
   echo "== $name"

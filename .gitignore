@@ -12,3 +12,6 @@ macos/.swiftpm/
 .txtodo/
 # Claude Code's per-machine lock files.
 .claude/*.lock
+
+# The sample shop's test runner, installed by scripts/runner.sh.
+/.cache/

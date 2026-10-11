@@ -1,9 +1,9 @@
-2026-10-11 Pass: A test runner reads the same files
-2026-10-11 Pass: Rules group scenarios
-2026-10-11 Pass: Comments are kept
-2026-10-11 Pass: Step definitions are left alone
-2026-10-11 Pass: A file that isn't valid Gherkin (error state)
-2026-10-11 Pass: Two scenario names with the same slug (error state)
-2026-10-11 Pass: Two .feature files in one capability (error state)
-2026-10-11 Wire Gherkin files into the UI shell, after ui-shell
-2026-10-11 Sample shop: pin @cucumber/cucumber and install it offline for runner scenarios
+x 2026-10-11 2026-10-11 Pass: A test runner reads the same files — passes in Go and Swift on the linked cucumber-js 13.2.1
+x 2026-10-11 2026-10-11 Pass: Step definitions are left alone — passes in Go and Swift; internal/project only reads <name>/<name>.feature
+x 2026-10-11 2026-10-11 Sample shop: pin @cucumber/cucumber and install it offline for runner scenarios — 13.2.1 pinned; scripts/runner.sh installs into .cache/runner, linked into each copy
+x 2026-10-11 2026-10-11 Pass: Rules group scenarios — Window.Select and RuleGroups over a Rule field in internal/project; window.ruleGroups in serve
+x 2026-10-11 2026-10-11 Pass: Comments are kept — editor holds the whole file and saves it as typed; changed-on-disk check included; window.edit/setEditorText/saveEditor in serve
+x 2026-10-11 2026-10-11 Pass: A file that isn't valid Gherkin (error state) — spec.Explain words parse errors; broken capability keeps its Feature: name, warns, offers Edit <file>
+x 2026-10-11 2026-10-11 Pass: Two scenario names with the same slug (error state) — slug-clash warning; exact names win lookups; scenario Rename (asks first when runs exist) and window.rename
+x 2026-10-11 2026-10-11 Pass: Two .feature files in one capability (error state) — extra .feature files listed as Ignored; warning in sidebar and page; Move to its own capability works
+x 2026-10-11 2026-10-11 Wire Gherkin files into the UI shell, after ui-shell — rule headings, warnings and an editor pane in RootView; serve has ruleGroups/edit/setEditorText/saveEditor/rename; not eyeballed yet

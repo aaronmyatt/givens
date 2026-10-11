@@ -54,7 +54,8 @@ type Capability struct {
 	About       string   // about.md's path, or "" when there is none
 	Helpers     []string // <slug>/_shared/*.sh, sorted
 	Scenarios   []Scenario
-	ParseError  string // why the .feature file couldn't be read, or ""
+	ParseError  string   // why the .feature file couldn't be read, or ""
+	Ignored     []string // other .feature files in the folder, which aren't read; sorted
 }
 
 // Load reads root, a capabilities folder. An error means root couldn't be read; a broken
@@ -124,9 +125,11 @@ func loadCapability(dir string) Capability {
 		return capability
 	}
 	capability.Helpers = helpers
+	capability.Ignored = otherFeatures(dir, capability.FeaturePath)
 	feature, err := spec.ParseFeature(capability.FeaturePath)
 	if err != nil {
-		capability.ParseError = err.Error()
+		capability.ParseError = parseErrorOf(capability.FeaturePath, err)
+		capability.Name = featureNameIn(capability.FeaturePath, name)
 		return capability
 	}
 	capability.Name = feature.Name
@@ -136,6 +139,53 @@ func loadCapability(dir string) Capability {
 	capability.Scenarios = scenariosOf(capability, feature)
 	assert.That(capability.Slug == name, "a capability's slug is its folder's name")
 	return capability
+}
+
+// otherFeatures lists the .feature files in dir besides the capability's own.
+func otherFeatures(dir string, own string) []string {
+	assert.That(filepath.IsAbs(dir), "dir is absolute")
+	assert.That(filepath.Dir(own) == dir, "the capability's file is in its folder")
+	// Glob only fails on a bad pattern, and this one is fixed.
+	// Ref: https://pkg.go.dev/path/filepath#Glob
+	paths, _ := filepath.Glob(filepath.Join(dir, "*.feature"))
+	others := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path != own {
+			others = append(others, path)
+		}
+	}
+	return others
+}
+
+// parseErrorOf says why a .feature file can't be read, naming the file and its line:
+// "checkout.feature line 17: expected a step, a tag, a comment or a new scenario".
+func parseErrorOf(path string, err error) string {
+	assert.That(err != nil, "only an error is described")
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	line, message := spec.Explain(err)
+	if line > 0 {
+		return fmt.Sprintf("%s line %d: %s", filepath.Base(path), line, message)
+	}
+	return filepath.Base(path) + ": " + message
+}
+
+// featureNameIn reads the name on a file's "Feature:" line without parsing the rest, so a
+// capability whose file doesn't parse keeps its name. fallback is used when there's none.
+func featureNameIn(path string, fallback string) string {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	assert.That(fallback != "", "there's a name to fall back on")
+	text, err := os.ReadFile(path)
+	if err != nil || len(text) > spec.FeatureFileSizeBytesMax {
+		return fallback
+	}
+	for _, line := range strings.Split(string(text), "\n") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "Feature:"); ok {
+			if name = strings.TrimSpace(name); name != "" {
+				return name
+			}
+		}
+	}
+	return fallback
 }
 
 // storyLines picks the As a, I want and So that lines out of a Feature's description.

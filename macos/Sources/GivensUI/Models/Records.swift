@@ -73,6 +73,8 @@ public struct ScenarioRecord: Decodable, Sendable, Equatable {
     public let slug: String
     /// The capability's name.
     public let capability: String
+    /// The Rule: block it's under, or "".
+    public let rule: String
     /// Tagged @error.
     public let error: Bool
     /// Every tag, Feature tags included.

@@ -87,8 +87,7 @@ func checkCapability(dir string) ([]Problem, error) {
 	for _, path := range features {
 		assert.That(strings.HasSuffix(path, ".feature"), "the glob only returns .feature files")
 		if path != want {
-			message := fmt.Sprintf("isn't read: a capability has one .feature file, named %s",
-				filepath.Base(want))
+			message := "isn't read: a capability has one .feature file, named after its folder"
 			problems = append(problems, Problem{Path: path, Line: 1, Message: message})
 			continue
 		}

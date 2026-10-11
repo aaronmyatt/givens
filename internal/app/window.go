@@ -18,6 +18,12 @@ type Window struct {
 	found   bool             // path is a capabilities folder
 	project *project.Project // nil when found is false
 	watcher *watch.Watcher   // nil when found is false
+
+	selected           string  // the name Select was given, or ""
+	selectedCapability string  // the slug of the capability on show, or ""
+	selectedScenario   string  // the run key of the scenario on show, or ""
+	editor             *Editor // the file open in the editor, or nil
+	prompt             *prompt // the question on show, or nil
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -43,6 +49,7 @@ type Scenario struct {
 	Name       string   `json:"name"`
 	Slug       string   `json:"slug"`
 	Capability string   `json:"capability"` // the capability's name
+	Rule       string   `json:"rule"`       // the Rule: block it's under, or ""
 	Error      bool     `json:"error"`      // tagged @error
 	Tags       []string `json:"tags"`       // every tag, Feature tags included
 	Steps      []string `json:"steps"`      // "Given …", "When …", "Then …", Background first
@@ -87,24 +94,10 @@ func (w *Window) Sidebar() []SidebarItem {
 	for _, capability := range w.project.Capabilities {
 		items = append(items, SidebarItem{
 			Name: capability.Name, Kind: "capability", Count: len(capability.Scenarios),
-			Warning: capability.ParseError,
+			Warning: capabilityWarning(capability),
 		})
 	}
 	return items
-}
-
-// Select selects a sidebar item, scenario, search result or helper by its name.
-func (w *Window) Select(name string) error {
-	assert.That(w != nil, "select runs on a window")
-	assert.That(utf8.ValidString(name), "the name is text")
-	return ErrNotImplemented
-}
-
-// Selected is the name of what's selected, or "".
-func (w *Window) Selected() string {
-	assert.That(w != nil, "selected runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return ""
 }
 
 // Visible is every piece of text the window shows right now: messages, warnings, labels,
@@ -113,21 +106,6 @@ func (w *Window) Visible() []string {
 	assert.That(w != nil, "visible runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	return visibleLines(w.Snapshot())
-}
-
-// Offers is every action the window offers right now, by its label: "Drop in", "Copy",
-// "Trust", "Create script". It's what "they're offered" checks.
-func (w *Window) Offers() []string {
-	assert.That(w != nil, "offers runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return nil
-}
-
-// Choose takes an offered action by its label.
-func (w *Window) Choose(action string) error {
-	assert.That(w != nil, "choose runs on a window")
-	assert.That(action != "", "an action has a label")
-	return ErrNotImplemented
 }
 
 // Type types text into whatever has focus: the search box, the editor, an ask card.
@@ -165,7 +143,7 @@ func (w *Window) Scenario(name string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("%s: %w", name, ErrNotFound)
 	}
 	capability, _ := w.findCapability(loaded.Capability)
-	return scenarioOf(capability.Name, loaded), nil
+	return scenarioOf(capability, loaded), nil
 }
 
 // DropIn drops in to a scenario: it runs the setup and opens the Drop in page.
@@ -173,13 +151,6 @@ func (w *Window) DropIn(scenario string) (*Session, error) {
 	assert.That(w != nil, "drop in runs on a window")
 	assert.That(len(scenario) <= NameLengthMax, "the name fits NameLengthMax")
 	return nil, ErrNotImplemented
-}
-
-// Editing is the path of the file open in the window's editor, or "".
-func (w *Window) Editing() string {
-	assert.That(w != nil, "editing runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	return ""
 }
 
 // Session is the current Drop in, or nil.

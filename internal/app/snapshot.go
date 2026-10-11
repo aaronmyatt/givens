@@ -83,13 +83,24 @@ func (w *Window) ID() string {
 func (w *Window) Snapshot() WindowSnapshot {
 	assert.That(w != nil, "snapshot runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	var editor *EditorSnapshot
+	if w.editor != nil {
+		editor = w.editor.snapshot()
+	}
+	messages := make([]string, 0, 4)
+	if w.prompt != nil {
+		messages = append(messages, w.prompt.message)
+	}
 	return WindowSnapshot{
 		ID: w.ID(), Kind: w.kind, Title: w.Title(), Path: w.Path(),
-		Messages: make([]string, 0, 4),
-		Sidebar:  append(make([]SidebarItem, 0, 16), w.Sidebar()...),
-		Selected: w.Selected(),
-		Offers:   append(make([]string, 0, 8), w.Offers()...),
-		Labels:   make([]string, 0, 4),
+		Messages:   make([]string, 0, 4),
+		Sidebar:    append(make([]SidebarItem, 0, 16), w.Sidebar()...),
+		Selected:   w.Selected(),
+		Capability: w.shownCapability(),
+		Scenario:   w.shownScenario(),
+		Editor:     editor,
+		Offers:     append(make([]string, 0, 8), w.Offers()...),
+		Labels:     make([]string, 0, 4),
 	}
 }
 
@@ -129,12 +140,18 @@ func visibleLines(snapshot WindowSnapshot) []string {
 	return shown
 }
 
-// capabilityLines is a capability's text: name, warning, story, about.md, then scenarios.
+// capabilityLines is a capability's text: name, warning, story, about.md, then scenarios,
+// each Rule: block's name before its first scenario.
 func capabilityLines(capability Capability) []string {
 	assert.That(capability.Name != "", "a shown capability has a name")
 	lines := append([]string{capability.Name, capability.Warning}, capability.Story...)
 	lines = append(lines, capability.About)
+	rule := ""
 	for _, scenario := range capability.Scenarios {
+		// A Rule: block's name heads its scenarios, as the capability page groups them.
+		if scenario.Rule != rule {
+			lines, rule = append(lines, scenario.Rule), scenario.Rule
+		}
 		lines = append(lines, scenario.Name, scenario.Status, scenario.Warning)
 	}
 	assert.That(len(lines) >= 3, "a capability shows its name, warning and about")

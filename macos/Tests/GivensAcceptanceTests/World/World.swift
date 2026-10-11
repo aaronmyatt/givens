@@ -69,6 +69,14 @@ final class World {
         let fixture = Toolchain.root.appendingPathComponent("testdata/sample-shop")
         try FileManager.default.copyItem(at: fixture, to: copy)
         project = copy
+        // The sample shop's cucumber-js, installed by scripts/runner.sh, linked in so npx
+        // finds it without the network. acceptance/world does the same.
+        // Ref: https://developer.apple.com/documentation/foundation/filemanager/createsymboliclink(at:withdestinationurl:)
+        let modules = Toolchain.root.appendingPathComponent(".cache/runner/node_modules")
+        if FileManager.default.fileExists(atPath: modules.path) {
+            try FileManager.default.createSymbolicLink(
+                at: copy.appendingPathComponent("node_modules"), withDestinationURL: modules)
+        }
         let kit = Toolchain.root.appendingPathComponent("internal/kit/givens.sh")
         if let text = try? String(contentsOf: kit, encoding: .utf8) {
             try writeFile("capabilities/_shared/givens.sh", text)

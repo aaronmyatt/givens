@@ -10,6 +10,7 @@ import (
 	"givens/internal/assert"
 	"givens/internal/project"
 	"givens/internal/slug"
+	"givens/internal/spec"
 	"givens/internal/watch"
 )
 
@@ -104,7 +105,8 @@ func (w *Window) findCapability(name string) (project.Capability, bool) {
 	return project.Capability{}, false
 }
 
-// findScenario finds a scenario by its name, "Capability/Scenario", or its run key.
+// findScenario finds a scenario by its name, "Capability/Scenario", or its run key. An exact
+// name wins over a slug, so two names with the same slug can still each be found.
 func (w *Window) findScenario(name string) (project.Scenario, bool) {
 	assert.That(w != nil, "find runs on a window")
 	assert.That(name != "", "a scenario has a name")
@@ -112,22 +114,60 @@ func (w *Window) findScenario(name string) (project.Scenario, bool) {
 	if w.project == nil {
 		return project.Scenario{}, false
 	}
-	capabilityName, scenarioName, qualified := strings.Cut(name, "/")
-	for _, capability := range w.project.Capabilities {
-		if qualified && capability.Name != capabilityName && capability.Slug != capabilityName {
-			continue
+	if capabilityName, scenarioName, ok := strings.Cut(name, "/"); ok && scenarioName != "" {
+		if found, ok := w.findIn(capabilityName, scenarioName); ok {
+			return found, true
 		}
-		want := name
-		if qualified {
-			want = scenarioName
-		}
-		for _, scenario := range capability.Scenarios {
-			if scenario.Name == want || scenario.Slug == slug.Of(want) {
-				return scenario, true
+	}
+	return w.findIn("", name)
+}
+
+// findIn finds a scenario by exact name, then by slug, in one capability or, for "", in any.
+func (w *Window) findIn(capabilityName string, name string) (project.Scenario, bool) {
+	assert.That(w.project != nil, "find in runs on a loaded project")
+	assert.That(name != "", "a scenario has a name")
+	want := slug.Of(name)
+	for _, bySlug := range []bool{false, true} {
+		for _, capability := range w.project.Capabilities {
+			if capabilityName != "" && capability.Name != capabilityName &&
+				capability.Slug != capabilityName {
+				continue
+			}
+			for _, scenario := range capability.Scenarios {
+				if (!bySlug && scenario.Name == name) || (bySlug && scenario.Slug == want) {
+					return scenario, true
+				}
 			}
 		}
 	}
 	return project.Scenario{}, false
+}
+
+// slugClash is the warning on a scenario whose slug another scenario in its capability
+// makes too, or "". Runs and setup files are named by slug, so neither scenario can use them.
+func slugClash(capability project.Capability, scenario project.Scenario) string {
+	assert.That(scenario.Capability == capability.Slug, "the scenario is in the capability")
+	assert.That(len(capability.Scenarios) <= spec.ScenariosPerFeatureMax, "scenarios bounded")
+	for _, other := range capability.Scenarios {
+		if other.Slug == scenario.Slug && other.Line != scenario.Line {
+			return "Both names make the slug " + scenario.Slug
+		}
+	}
+	return ""
+}
+
+// capabilityWarning says what's wrong with a capability's folder, or "".
+func capabilityWarning(loaded project.Capability) string {
+	assert.That(loaded.Slug != "", "a capability has a slug")
+	assert.That(loaded.Ignored != nil || loaded.ParseError != "", "ignored files were listed")
+	if loaded.ParseError != "" {
+		return loaded.ParseError
+	}
+	if len(loaded.Ignored) > 0 {
+		return filepath.Base(loaded.Ignored[0]) +
+			" isn't read: a capability has one .feature file, named after its folder"
+	}
+	return ""
 }
 
 // capabilityOf is a loaded capability as a window shows it.
@@ -137,7 +177,7 @@ func capabilityOf(loaded project.Capability) Capability {
 	shown := Capability{
 		Name: loaded.Name, Slug: loaded.Slug, Story: append([]string{}, loaded.Story...),
 		Scenarios: make([]Scenario, 0, len(loaded.Scenarios)),
-		Warning:   loaded.ParseError,
+		Warning:   capabilityWarning(loaded),
 	}
 	if loaded.About != "" {
 		if about, err := os.ReadFile(loaded.About); err == nil {
@@ -145,13 +185,13 @@ func capabilityOf(loaded project.Capability) Capability {
 		}
 	}
 	for _, scenario := range loaded.Scenarios {
-		shown.Scenarios = append(shown.Scenarios, scenarioOf(loaded.Name, scenario))
+		shown.Scenarios = append(shown.Scenarios, scenarioOf(loaded, scenario))
 	}
 	return shown
 }
 
 // scenarioOf is a loaded scenario as a window shows it.
-func scenarioOf(capability string, loaded project.Scenario) Scenario {
+func scenarioOf(capability project.Capability, loaded project.Scenario) Scenario {
 	assert.That(loaded.Capability != "", "a scenario belongs to a capability")
 	assert.That(len(loaded.Steps) <= project.HelperFilesMax, "steps stay bounded")
 	steps := make([]string, 0, len(loaded.Background)+len(loaded.Steps))
@@ -160,8 +200,9 @@ func scenarioOf(capability string, loaded project.Scenario) Scenario {
 		steps = append(steps, step.Keyword+" "+step.Text)
 	}
 	shown := Scenario{
-		Name: loaded.Name, Slug: loaded.Slug, Capability: capability,
-		Error: loaded.Error, Tags: append([]string{}, loaded.Tags...), Steps: steps,
+		Name: loaded.Name, Slug: loaded.Slug, Capability: capability.Name, Rule: loaded.Rule,
+		Warning: slugClash(capability, loaded),
+		Error:   loaded.Error, Tags: append([]string{}, loaded.Tags...), Steps: steps,
 	}
 	if loaded.Setup != "" {
 		if setup, err := os.ReadFile(loaded.Setup); err == nil {

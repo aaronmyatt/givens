@@ -61,8 +61,17 @@ public final class WindowModel: Identifiable {
 
     static func lines(_ capability: CapabilityRecord) -> [String] {
         // The views show the story first and about.md below it, so visible keeps that order.
-        [capability.name, capability.warning] + capability.story + [capability.about]
-            + capability.scenarios.flatMap { [$0.name, $0.status, $0.warning] }
+        // A Rule: block's name heads its scenarios, as CapabilityView groups them.
+        var lines = [capability.name, capability.warning] + capability.story + [capability.about]
+        var rule = ""
+        for scenario in capability.scenarios {
+            if scenario.rule != rule {
+                lines.append(scenario.rule)
+                rule = scenario.rule
+            }
+            lines += [scenario.name, scenario.status, scenario.warning]
+        }
+        return lines
     }
 
     static func lines(_ scenario: ScenarioRecord) -> [String] {

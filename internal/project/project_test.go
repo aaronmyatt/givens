@@ -107,6 +107,9 @@ func TestLoadRulesBackgroundsAndOutlines(t *testing.T) {
 	if len(plain.Background) != 1 || plain.SetupCards == "" || plain.Setup != "" {
 		t.Errorf("plain = %+v", plain)
 	}
+	if plain.Rule != "" || twice.Rule != "Refunds" {
+		t.Errorf("rules: plain %q, refund twice %q", plain.Rule, twice.Rule)
+	}
 	if len(twice.Background) != 2 || !twice.Error || twice.StillRunning != 90*time.Second {
 		t.Errorf("refund twice = %+v", twice)
 	}

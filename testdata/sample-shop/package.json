@@ -1,0 +1,8 @@
+{
+  "name": "sample-shop",
+  "private": true,
+  "description": "The pretend project Givens's scenarios start from. cucumber-js reads its capabilities/ to show a test runner sees the same scenarios.",
+  "devDependencies": {
+    "@cucumber/cucumber": "13.2.1"
+  }
+}

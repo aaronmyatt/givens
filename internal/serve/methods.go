@@ -36,13 +36,16 @@ type params struct {
 	Note     string           `json:"note"`
 	Seconds  json.RawMessage  `json:"seconds"` // a number, or a number in a string
 	Releases []app.KitRelease `json:"releases"`
+	Target   string           `json:"target"`
+	NewName  string           `json:"newName"`
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.
+// Methods from macos/Sources/GivensUI/Needs/*.swift are added by needs.
 func (s *Server) table() map[string]handler {
 	assert.That(s != nil, "table runs on a server")
 	assert.That(s.core != nil, "the server has an app")
-	return map[string]handler{
+	methods := map[string]handler{
 		"launch":                    s.launch,
 		"open":                      s.open,
 		"quit":                      s.quit,
@@ -63,6 +66,11 @@ func (s *Server) table() map[string]handler {
 		seamPrefix + "shipKits":     s.shipKits,
 		seamPrefix + "advanceClock": s.advanceClock,
 	}
+	for name, method := range s.needs() {
+		assert.That(methods[name] == nil, "a Needs method doesn't replace a core one")
+		methods[name] = method
+	}
+	return methods
 }
 
 // onWindow finds the window a request names, then runs call on it.

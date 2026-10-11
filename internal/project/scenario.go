@@ -18,6 +18,7 @@ type Scenario struct {
 	Name       string
 	Slug       string
 	Capability string // the capability's slug
+	Rule       string // the name of the Rule: block it's under, or ""
 	Line       int64
 	Outline    bool
 	Tags       []string // the scenario's tags, then its Rule's and Feature's, without repeats
@@ -70,7 +71,7 @@ func scenariosOf(capability Capability, feature *messages.Feature) []Scenario {
 		}
 		if child.Scenario != nil {
 			scenarios = append(scenarios,
-				scenarioOf(capability, child.Scenario, featureSteps, feature.Tags))
+				scenarioOf(capability, child.Scenario, featureSteps, feature.Tags, ""))
 		}
 		if child.Rule == nil {
 			continue
@@ -83,8 +84,8 @@ func scenariosOf(capability Capability, feature *messages.Feature) []Scenario {
 					stepsOf(ruleChild.Background.Steps)...)
 			}
 			if ruleChild.Scenario != nil {
-				scenarios = append(scenarios,
-					scenarioOf(capability, ruleChild.Scenario, ruleSteps, inherited))
+				scenarios = append(scenarios, scenarioOf(capability, ruleChild.Scenario,
+					ruleSteps, inherited, child.Rule.Name))
 			}
 		}
 	}
@@ -95,14 +96,14 @@ func scenariosOf(capability Capability, feature *messages.Feature) []Scenario {
 // scenarioOf builds one Scenario and finds its setup files.
 func scenarioOf(
 	capability Capability, scenario *messages.Scenario, background []Step,
-	inherited []*messages.Tag,
+	inherited []*messages.Tag, rule string,
 ) Scenario {
 	assert.That(scenario != nil, "the scenario is parsed")
 	assert.That(scenario.Location != nil, "a parsed scenario has a location")
 	key := slug.Of(scenario.Name)
 	tags := tagNames(append(append([]*messages.Tag{}, scenario.Tags...), inherited...))
 	built := Scenario{
-		Name: scenario.Name, Slug: key, Capability: capability.Slug,
+		Name: scenario.Name, Slug: key, Capability: capability.Slug, Rule: rule,
 		Line:       scenario.Location.Line,
 		Outline:    len(scenario.Examples) > 0,
 		Tags:       tags,
