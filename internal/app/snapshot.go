@@ -50,6 +50,7 @@ type EditorSnapshot struct {
 	Path     string   `json:"path"`
 	Text     string   `json:"text"`
 	Problems []string `json:"problems"`
+	Preview  []string `json:"preview"` // what "Preview" shows, when it's chosen
 }
 
 // SessionSnapshot is the Drop in page. Records.swift's SessionRecord.
@@ -161,7 +162,7 @@ func visibleLines(snapshot WindowSnapshot) []string {
 		lines = append(lines, snapshot.Search.Results...)
 	}
 	if snapshot.Editor != nil {
-		lines = append(lines, snapshot.Editor.Problems...)
+		lines = append(append(lines, snapshot.Editor.Problems...), snapshot.Editor.Preview...)
 	}
 	if session := snapshot.Session; session != nil {
 		lines = append(append(lines, session.Output...), session.Cards...)

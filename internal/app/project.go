@@ -67,6 +67,7 @@ func (w *Window) reload() error {
 	if err != nil {
 		return err
 	}
+	w.app.withoutTrashed(loaded)
 	w.project, w.watcher = loaded, watcher
 	return nil
 }
@@ -87,6 +88,7 @@ func (w *Window) refresh() {
 		return
 	}
 	if loaded, err := project.Load(w.path); err == nil {
+		w.app.withoutTrashed(loaded)
 		w.project = loaded
 	}
 }

@@ -51,7 +51,7 @@ public final class WindowModel: Identifiable {
         if let scenario = snapshot.scenario { lines += Self.lines(scenario) }
         lines += snapshot.listed.flatMap { ["\($0.name) — \($0.status)", $0.capability] }
         if let search = snapshot.search { lines += search.results }
-        if let editor = snapshot.editor { lines += editor.problems }
+        if let editor = snapshot.editor { lines += editor.problems + editor.preview }
         if let session = snapshot.session {
             lines += session.output + session.cards + session.checklist.map(\.text)
         }

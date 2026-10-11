@@ -24,6 +24,15 @@ func (w *Window) Offers() []string {
 		return w.session.offers()
 	}
 	offers := make([]string, 0, 8)
+	if w.editor != nil {
+		offers = append(offers, w.editor.editorOffers()...)
+	}
+	if w.project != nil {
+		offers = append(offers, OfferNewStory)
+		if w.selectedCapability != "" {
+			offers = append(offers, OfferNewScenario)
+		}
+	}
 	if w.search != nil && len(w.searchMessages()) > 0 &&
 		strings.HasPrefix(w.searchMessages()[0], "Nothing matches") {
 		return []string{OfferNewScenario}
@@ -115,6 +124,12 @@ func (w *Window) Choose(action string) error {
 	}
 	if w.session != nil {
 		return w.session.choose(action)
+	}
+	if w.editor != nil && slices.Contains(w.editor.editorOffers(), action) {
+		return w.editor.chooseInEditor(action)
+	}
+	if action == OfferNewStory || action == OfferNewScenario {
+		return nil // the dialog opens; NewStory and NewScenario take what's filled in
 	}
 	if action == OfferEdit && w.selectedHelper != "" {
 		return w.editHelper()

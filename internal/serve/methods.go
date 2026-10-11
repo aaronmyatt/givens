@@ -44,6 +44,10 @@ type params struct {
 	Block      json.RawMessage  `json:"block"` // a number, or a number in a string
 	Row        string           `json:"row"`
 	Code       string           `json:"code"`
+	AsA        string           `json:"asA"`
+	IWant      string           `json:"iWant"`
+	SoThat     string           `json:"soThat"`
+	Error      string           `json:"error"` // "true" or "false"
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.

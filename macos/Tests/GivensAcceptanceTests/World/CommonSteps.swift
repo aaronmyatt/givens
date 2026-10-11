@@ -37,9 +37,7 @@ func commonSteps(_ w: World) -> [StepDefinition] {
         },
         def(#"^a developer opens the sample shop in Givens$"#) { _ in try await w.openSampleShop()
         },
-        def(#"^they see "([^"]*)"$"#) {
-            try expect(try await w.front().visible, $0[0], "the window")
-        },
+        def(#"^they see "([^"]*)"$"#) { try await w.seesEventually($0[0]) },
         def(#"^they're offered "([^"]*)"(?: and "([^"]*)")?$"#) {
             try await w.offered($0[0], $0[1])
         },

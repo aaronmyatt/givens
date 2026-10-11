@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -37,7 +38,13 @@ func (w *Window) Edit(target string) (*Editor, error) {
 	if err != nil {
 		return nil, err
 	}
-	w.editor = &Editor{window: w, path: path, text: text, opened: text, problems: []string{}}
+	w.editor = &Editor{window: w, path: path, text: text, opened: text, problems: []string{},
+		typing: -1, marks: []EditorMark{}}
+	if scenario, ok := w.findScenario(target); ok {
+		w.editor.scenario = scenario.Name
+		w.editor.line = int(scenario.Line)
+		w.editor.cursor = blockEnd(strings.Split(text, "\n"), int(scenario.Line)-1)
+	}
 	return w.editor, nil
 }
 
@@ -117,6 +124,7 @@ func (e *Editor) Save() error {
 		return err
 	}
 	e.opened, e.problems = e.text, []string{}
+	e.markParseErrors()
 	return e.window.reload()
 }
 
@@ -125,8 +133,20 @@ func (e *Editor) snapshot() *EditorSnapshot {
 	assert.That(e != nil, "snapshot runs on an editor")
 	assert.That(e.problems != nil, "problems is a list")
 	problems := append([]string{}, e.problems...)
+	if e.conflict() && !slices.Contains(problems, MessageChangedOnDisk) {
+		problems = append(problems, MessageChangedOnDisk)
+	}
 	for _, problem := range e.helperProblems {
 		problems = append(problems, fmt.Sprintf("line %d: %s", problem.Line, problem.Message))
 	}
-	return &EditorSnapshot{Path: e.path, Text: e.text, Problems: problems}
+	for _, mark := range e.marks {
+		problems = append(problems, fmt.Sprintf("line %d: %s", mark.Line, mark.Message))
+	}
+	preview := make([]string, 0, 16)
+	if e.previewing {
+		for _, line := range e.Preview() {
+			preview = append(preview, strings.TrimSpace(line.Text+" "+line.Mark))
+		}
+	}
+	return &EditorSnapshot{Path: e.path, Text: e.text, Problems: problems, Preview: preview}
 }

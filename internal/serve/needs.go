@@ -44,7 +44,27 @@ func (s *Server) needs() map[string]handler {
 		"window.chooseOnRow":      s.onWindow(chooseOnRow),
 		// capabilities/views: Needs/views.swift.
 		"window.viewHelpers": s.onWindow(viewHelpers),
+		// capabilities/write-stories-and-scenarios: Needs/write-stories-and-scenarios.swift.
+		"window.newStory":             s.onWindow(newStory),
+		"window.newScenario":          s.onWindow(newScenario),
+		"window.editorMarks":          s.onEditor(editorMarks),
+		"window.stepSuggestions":      s.onEditor(stepSuggestions),
+		"window.chooseStepSuggestion": s.onEditor(chooseStepSuggestion),
+		"window.editorPreview":        s.onEditor(editorPreview),
+		"window.delete":               s.onWindow(deleteItem),
 	}
+}
+
+// onEditor finds the editor open in the window a request names, then runs call on it.
+func (s *Server) onEditor(call func(*app.Editor, params) (any, error)) handler {
+	assert.That(s != nil, "on editor runs on a server")
+	assert.That(call != nil, "an editor method has a call")
+	return s.onWindow(func(window *app.Window, given params) (any, error) {
+		if window.Editor() == nil {
+			return nil, fmt.Errorf("%w: no file is open in the editor", ErrBadRequest)
+		}
+		return call(window.Editor(), given)
+	})
 }
 
 func ruleGroups(window *app.Window, given params) (any, error) {
@@ -246,4 +266,64 @@ func viewHelpers(window *app.Window, _ params) (any, error) {
 	assert.That(window != nil, "view helpers runs on a window")
 	assert.That(window.ID() != "", "a window has an id")
 	return window.ViewHelpers(), nil
+}
+
+func newStory(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "new story runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	for _, field := range []string{given.Name, given.AsA, given.IWant, given.SoThat} {
+		if len(field) > app.StorySentenceLengthMax {
+			return nil, fmt.Errorf("%w: a story line is at most %d bytes", ErrBadRequest,
+				app.StorySentenceLengthMax)
+		}
+	}
+	return nil, window.NewStory(app.StoryDraft{
+		Name: given.Name, AsA: given.AsA, IWant: given.IWant, SoThat: given.SoThat,
+	})
+}
+
+func newScenario(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "new scenario runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if given.Name == "" || len(given.Name) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: a scenario needs a name", ErrBadRequest)
+	}
+	draft := app.ScenarioDraft{Name: given.Name, Error: given.Error == "true"}
+	return nil, window.NewScenario(draft)
+}
+
+func editorMarks(editor *app.Editor, _ params) (any, error) {
+	assert.That(editor != nil, "marks runs on an editor")
+	assert.That(editor.Path() != "", "an editor holds a file")
+	return editor.Marks(), nil
+}
+
+func stepSuggestions(editor *app.Editor, _ params) (any, error) {
+	assert.That(editor != nil, "suggestions runs on an editor")
+	assert.That(editor.Path() != "", "an editor holds a file")
+	return editor.Suggestions(), nil
+}
+
+func chooseStepSuggestion(editor *app.Editor, given params) (any, error) {
+	assert.That(editor != nil, "choose suggestion runs on an editor")
+	assert.That(editor.Path() != "", "an editor holds a file")
+	if given.Text == "" || strings.Contains(given.Text, "\n") {
+		return nil, fmt.Errorf("%w: a suggestion is one step", ErrBadRequest)
+	}
+	return nil, editor.ChooseSuggestion(given.Text)
+}
+
+func editorPreview(editor *app.Editor, _ params) (any, error) {
+	assert.That(editor != nil, "preview runs on an editor")
+	assert.That(editor.Path() != "", "an editor holds a file")
+	return editor.Preview(), nil
+}
+
+func deleteItem(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "delete runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if given.Name == "" || len(given.Name) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: delete names what to delete", ErrBadRequest)
+	}
+	return nil, window.Delete(given.Name)
 }

@@ -92,8 +92,10 @@ final class World {
         if app != nil { return }
         let platform = Platform(
             clipboard: clipboard, trash: trash, folderPicker: folderPicker, urlOpener: urlOpener)
+        // A call may be a session.wait of setupWaitSeconds, so calls get a margin over it.
         let serve = ServeClient.Configuration(
-            executable: try Toolchain.givens(), appDataDirectory: appData, testSeams: true)
+            executable: try Toolchain.givens(), appDataDirectory: appData, testSeams: true,
+            callTimeout: .seconds(Self.setupWaitSeconds + 5))
         app = AppModel(serve: serve, platform: platform)
     }
 
@@ -115,6 +117,17 @@ final class World {
         }
         guard let window else { throw StepFailure("no Givens window is open") }
         return window
+    }
+
+    /// Expects `text` in the front window, waiting up to two seconds for it. The app learns
+    /// about a change another tool made on disk only from the snapshot serve pushes, which
+    /// capabilities/open-a-project allows two seconds for; Go's steps read the core directly.
+    func seesEventually(_ text: String) async throws {
+        for _ in 0..<40 {
+            if try await front().visible.contains(where: { $0.contains(text) }) { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        try expect(try await front().visible, text, "the window")
     }
 
     /// Writes `content` to `relative`, inside the sample shop, making folders as needed.

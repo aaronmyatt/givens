@@ -26,8 +26,8 @@ func (w *Window) Rename(name string, newName string) error {
 	if slug.Of(newName) == "" {
 		return errors.New("a name needs letters or digits")
 	}
-	if _, ok := w.findCapability(name); ok {
-		return ErrNotImplemented
+	if capability, ok := w.findCapability(name); ok {
+		return w.renameCapability(capability, newName)
 	}
 	scenario, ok := w.findScenario(name)
 	if !ok {
@@ -118,29 +118,85 @@ func moveSetup(dir string, from string, to string) error {
 }
 
 // updateFromLines changes every `from <old>` line in the project's setup scripts to name
-// replacement, keeping any row values after it. Both are run keys.
+// replacement, keeping any row values after it. Both are run keys. It reads the scripts on
+// disk, so a script renamed a moment ago is found under its new name.
 func (w *Window) updateFromLines(old string, replacement string) error {
-	assert.That(w.project != nil, "from lines live in a loaded project")
 	assert.That(strings.Count(old, "/") == 1, "old is a run key")
 	assert.That(strings.Count(replacement, "/") == 1, "replacement is a run key")
 	pattern := regexp.MustCompile(`(?m)^(\s*from\s+)` + regexp.QuoteMeta(old) + `(\s|$)`)
-	for _, capability := range w.project.Capabilities {
-		for _, scenario := range capability.Scenarios {
-			if scenario.Setup == "" {
-				continue
-			}
-			text, err := readEditable(scenario.Setup)
-			if err != nil {
-				return err
-			}
-			updated := pattern.ReplaceAllString(text, "${1}"+replacement+"${2}")
-			if updated == text {
-				continue
-			}
-			if err := os.WriteFile(scenario.Setup, []byte(updated), 0o755); err != nil {
-				return err
-			}
+	// Glob returns every setup script, in name order. Ref: https://pkg.go.dev/path/filepath#Glob
+	scripts, err := filepath.Glob(filepath.Join(w.path, "*", "scripts", "*.sh"))
+	if err != nil {
+		return err
+	}
+	for _, script := range scripts {
+		text, err := readEditable(script)
+		if err != nil {
+			return err
+		}
+		updated := pattern.ReplaceAllString(text, "${1}"+replacement+"${2}")
+		if updated == text {
+			continue
+		}
+		if err := os.WriteFile(script, []byte(updated), 0o644); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// renameCapability renames a capability's Feature: line, its folder and .feature file, and
+// every from line naming one of its scenarios. Its runs stay under the old name, so its
+// scenarios start at Never run.
+func (w *Window) renameCapability(capability project.Capability, newName string) error {
+	assert.That(capability.Slug != "", "a capability has a slug")
+	assert.That(slug.Of(newName) != "", "the new name makes a slug")
+	newSlug := slug.Of(newName)
+	if newSlug != capability.Slug {
+		if _, err := os.Stat(filepath.Join(w.path, newSlug)); err == nil {
+			return fmt.Errorf("there's already a %s folder", newSlug)
+		}
+	}
+	if err := renameFeatureLine(capability.FeaturePath, newName); err != nil {
+		return err
+	}
+	if newSlug == capability.Slug {
+		return w.reload()
+	}
+	newDir := filepath.Join(w.path, newSlug)
+	if err := os.Rename(capability.Dir, newDir); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(newDir, capability.Slug+".feature"),
+		filepath.Join(newDir, newSlug+".feature")); err != nil {
+		return err
+	}
+	for _, scenario := range capability.Scenarios {
+		if err := w.updateFromLines(capability.Slug+"/"+scenario.Slug,
+			newSlug+"/"+scenario.Slug); err != nil {
+			return err
+		}
+	}
+	if w.selectedCapability == capability.Slug {
+		w.selected, w.selectedCapability = newName, newSlug
+	}
+	return w.reload()
+}
+
+// renameFeatureLine replaces the name on a .feature file's Feature: line.
+func renameFeatureLine(path string, newName string) error {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	assert.That(!strings.Contains(newName, "\n"), "a name is one line")
+	text, err := readEditable(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(text, "\n")
+	for index, line := range lines {
+		if keyword, _, ok := strings.Cut(line, "Feature:"); ok && strings.TrimSpace(keyword) == "" {
+			lines[index] = keyword + "Feature: " + newName
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+		}
+	}
+	return fmt.Errorf("%s has no Feature: line", filepath.Base(path))
 }

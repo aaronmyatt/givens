@@ -28,6 +28,9 @@ func (w *Window) Type(text string) error {
 		w.session.cardInput += text
 		return nil
 	}
+	if w.editor != nil {
+		return w.editor.typeText(text)
+	}
 	return ErrNotImplemented
 }
 

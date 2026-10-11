@@ -107,6 +107,8 @@ public struct EditorRecord: Decodable, Sendable, Equatable {
     public let text: String
     /// Problems shown under the editor, like a Gherkin parse error.
     public let problems: [String]
+    /// What "Preview" shows beside the text, once it's chosen.
+    public let preview: [String]
 }
 
 /// The Drop in page.

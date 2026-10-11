@@ -65,10 +65,12 @@ type Config struct {
 // App is one running Givens. It isn't safe for concurrent use: `givens serve` and the steps
 // each call it one command at a time.
 type App struct {
-	config      Config
-	windows     []*Window // front first
-	opener      URLOpener // opens links; nil until UseURLOpener
-	windowsEver int       // windows opened so far; numbers the next one
+	config  Config
+	windows []*Window // front first
+	opener  URLOpener // opens links; nil until UseURLOpener
+	// pendingTrash holds paths sent to the Trash that are still on disk; see trash.
+	pendingTrash map[string]bool
+	windowsEver  int // windows opened so far; numbers the next one
 }
 
 // New returns an App that hasn't launched yet.

@@ -107,6 +107,7 @@ struct SidebarSection: View {
 /// actions. Each piece of text drawn here is one WindowModel.visible lists, in the same order.
 struct DetailView: View {
     let window: WindowModel
+    @State private var dialog: AuthoringDialog?
 
     var body: some View {
         ScrollView {
@@ -144,12 +145,68 @@ struct DetailView: View {
                 }
                 HStack {
                     ForEach(window.offers, id: \.self) { offer in
-                        Button(offer) { window.app.run { _ in try await window.choose(offer) } }
+                        Button(offer) {
+                            switch offer {
+                            case "New story": dialog = .story
+                            case "New scenario": dialog = .scenario
+                            default: window.app.run { _ in try await window.choose(offer) }
+                            }
+                        }
                     }
                 }
             }
             .padding()
         }
+        .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
+    }
+}
+
+/// Which authoring dialog is up.
+enum AuthoringDialog: String, Identifiable {
+    case story, scenario
+    var id: String { rawValue }
+}
+
+/// The New story and New scenario dialogs: their fields, then one call into the core.
+/// Ref: https://developer.apple.com/documentation/swiftui/view/sheet(item:ondismiss:content:)
+struct AuthoringSheet: View {
+    let window: WindowModel
+    let kind: AuthoringDialog
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var asA = ""
+    @State private var iWant = ""
+    @State private var soThat = ""
+    @State private var errorState = false
+
+    var body: some View {
+        Form {
+            TextField("Name", text: $name)
+            if kind == .story {
+                TextField("As a", text: $asA)
+                TextField("I want", text: $iWant)
+                TextField("So that", text: $soThat)
+            } else {
+                Toggle("Error state", isOn: $errorState)
+            }
+            HStack {
+                Button("Cancel") { dismiss() }
+                Button("Create") {
+                    window.app.run { _ in
+                        if kind == .story {
+                            try await window.newStory(
+                                name: name, asA: asA, iWant: iWant, soThat: soThat)
+                        } else {
+                            try await window.newScenario(name, error: errorState)
+                        }
+                    }
+                    dismiss()
+                }
+                .disabled(name.isEmpty)
+            }
+        }
+        .padding()
+        .frame(minWidth: 360)
     }
 }
 
@@ -218,6 +275,9 @@ struct EditorView: View {
             .onAppear { text = editor.text }
             .onChange(of: editor.text) { _, saved in text = saved }
         ForEach(editor.problems, id: \.self) { WarningText(warning: $0) }
+        ForEach(Array(editor.preview.enumerated()), id: \.offset) { _, line in
+            Text(line).monospaced().foregroundStyle(.secondary)
+        }
         Button("Save") {
             window.app.run { _ in
                 try await window.setEditorText(text)
