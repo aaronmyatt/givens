@@ -109,6 +109,13 @@ func (w *Window) Choose(action string) error {
 	if action == OfferEdit && w.selectedHelper != "" {
 		return w.editHelper()
 	}
+	if action == OfferCopy && w.selectedScenario != "" {
+		scenario, ok := w.findScenario(w.selectedScenario)
+		if !ok {
+			return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
+		}
+		return w.copySetup(scenario)
+	}
 	if action == OfferDropIn && w.selectedScenario != "" {
 		_, err := w.DropIn(w.selectedScenario)
 		return err

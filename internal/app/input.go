@@ -38,6 +38,11 @@ func (w *Window) Press(keys string) error {
 	case KeyEscape:
 		w.search = nil
 		return nil
+	case KeyCopySetup:
+		if w.search == nil {
+			return errors.New("search isn't open")
+		}
+		return w.copyFromSearch()
 	}
 	return ErrNotImplemented
 }

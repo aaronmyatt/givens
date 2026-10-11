@@ -194,7 +194,12 @@ _givens_load() {
 }
 
 # Shared helpers first, then the calling script's capability's own, which may override them.
+_g_own=''
+if [ -n "$GIVENS_SCRIPT" ]; then _g_own="$(cd "$(dirname "$GIVENS_SCRIPT")/.." && pwd)"; fi
 _givens_load "$GIVENS_ROOT/_shared"
-if [ -n "$GIVENS_SCRIPT" ]; then
-  _givens_load "$(cd "$(dirname "$GIVENS_SCRIPT")/.." && pwd)/_shared"
-fi
+if [ -n "$_g_own" ]; then _givens_load "$_g_own/_shared"; fi
+
+# Setup runs from the git repo's root, or the folder holding capabilities outside one, so a
+# script copied as `bash capabilities/…` works from any folder inside the project.
+# Ref: https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-toplevel
+cd "$(git -C "$GIVENS_ROOT" rev-parse --show-toplevel 2>/dev/null || dirname "$GIVENS_ROOT")"
