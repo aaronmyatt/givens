@@ -58,6 +58,8 @@ type EditorSnapshot struct {
 	Problems []string `json:"problems"`
 	Preview  []string `json:"preview"` // what "Preview" shows, when it's chosen
 	Dirty    bool     `json:"dirty"`   // the text has changes that aren't saved
+	// Scenario is the scenario the editor opened at, its block, or "" for a whole file.
+	Scenario string `json:"scenario"`
 }
 
 // SessionSnapshot is the Drop in page. Records.swift's SessionRecord.
@@ -214,7 +216,6 @@ func visibleLines(snapshot WindowSnapshot) []string {
 func capabilityLines(capability Capability) []string {
 	assert.That(capability.Name != "", "a shown capability has a name")
 	lines := append([]string{capability.Name, capability.Warning}, capability.Story...)
-	lines = append(lines, capability.About)
 	rule := ""
 	for _, scenario := range capability.Scenarios {
 		// A Rule: block's name heads its scenarios, as the capability page groups them.
@@ -223,6 +224,8 @@ func capabilityLines(capability Capability) []string {
 		}
 		lines = append(lines, scenario.Name, scenario.Status, scenario.Warning)
 	}
+	// about.md comes after the scenarios, so a long one doesn't push them off the screen.
+	lines = append(lines, capability.About)
 	assert.That(len(lines) >= 3, "a capability shows its name, warning and about")
 	return lines
 }

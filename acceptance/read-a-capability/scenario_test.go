@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"givens/acceptance/world"
+	"givens/internal/app"
 	"givens/internal/slug"
 )
 
@@ -168,7 +169,24 @@ func (s *state) aboutBelowStory() error {
 			return fmt.Errorf("the about.md shown doesn't show %s: %q", image[1], capability.About)
 		}
 	}
-	return storyThenText(visibleLines(window), capability.Story, plainLine(about))
+	return scenariosThenText(visibleLines(window), capability, plainLine(about))
+}
+
+// scenariosThenText expects text below the capability's last scenario, so a long about.md
+// doesn't push the scenarios off the screen.
+func scenariosThenText(lines []string, capability app.Capability, text string) error {
+	if len(capability.Scenarios) == 0 {
+		return fmt.Errorf("%s lists no scenarios", capability.Name)
+	}
+	last := capability.Scenarios[len(capability.Scenarios)-1].Name
+	at := indexContaining(lines, last, 0)
+	if at < 0 {
+		return fmt.Errorf("the window doesn't show %q: %q", last, lines)
+	}
+	if text != "" && indexContaining(lines, text, at+1) < 0 {
+		return fmt.Errorf("the window doesn't show %q below the scenarios: %q", text, lines)
+	}
+	return nil
 }
 
 // plainLine is about.md's first line of text without markdown marks, which reads the same

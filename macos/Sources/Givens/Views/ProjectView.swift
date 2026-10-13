@@ -20,6 +20,8 @@ enum Placement {
     ]
     /// The editor's header.
     static let editor = ["Preview", "Close", "Keep mine", "Use theirs", "Compare"]
+    /// A capability's story, in the middle column.
+    static let story = ["Edit about.md", "Add about.md"]
 }
 
 /// A project: capabilities and views on the left, the chosen capability's story and
@@ -82,6 +84,25 @@ struct ProjectView: View {
             ToolbarItem(placement: .primaryAction) { BranchMenu(window: window) }
         }
         .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
+        .background {
+            // A bare e opens the editor on the scenario or story on show. Only while nothing
+            // that takes typing is on show, or the key would be taken from the text.
+            if takesBareKeys {
+                Button("Edit what's on show") {
+                    window.app.run { _ in try await window.press("e") }
+                }
+                .keyboardShortcut("e", modifiers: [])
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// True while no text field is on show: no Drop in, editor, search or dialog.
+    private var takesBareKeys: Bool {
+        window.session == nil && window.snapshot?.editor == nil
+            && window.snapshot?.search == nil && dialog == nil
     }
 }
 
@@ -240,7 +261,7 @@ struct DetailColumn: View {
 
     /// The offers a page on show draws itself; the banner draws the rest.
     private var placed: Set<String> {
-        var labels = Set(Placement.toolbar)
+        var labels = Set(Placement.toolbar).union(Placement.story)
         if window.session != nil {
             labels.formUnion(Placement.dropIn)
         } else if window.snapshot?.editor != nil {

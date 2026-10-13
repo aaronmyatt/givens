@@ -74,7 +74,7 @@ func (w *Window) allOffers() []string {
 			}
 		}
 	}
-	return offers
+	return append(offers, w.aboutOffers()...)
 }
 
 // problemCapabilities lists capabilities with something to fix, the selected one first.
@@ -140,6 +140,9 @@ func (w *Window) Choose(action string) error {
 	}
 	if action == OfferMoveToOwnCapability {
 		return w.moveToOwnCapability()
+	}
+	if action == OfferEditAbout || action == OfferAddAbout {
+		return w.editAbout()
 	}
 	if w.session != nil {
 		return w.session.choose(action)

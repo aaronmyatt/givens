@@ -128,6 +128,35 @@ Feature: Write stories and scenarios
     Then the scenario is shown as it reads in the library, with its keywords lined up
     And their unsaved changes are included
 
+  # e opens the editor on what's on show: a scenario at its block, or a story at the top of its
+  # .feature file. It does nothing while something else has the keyboard, like the editor.
+  Scenario: Press e to edit a scenario
+    Given a developer has the sample shop project open in Givens
+    And "Card declined" is selected
+    When they press e
+    Then checkout/checkout.feature opens in the editor at the "Card declined" block
+
+  Scenario: Press e to edit a story
+    Given a developer has the sample shop project open in Givens
+    And "Checkout" is selected
+    When they press e
+    Then checkout/checkout.feature opens in the editor
+
+  # A capability's about.md holds diagrams and context below its story. The story offers a
+  # way to edit it, or to start one when there's none.
+  Scenario: Edit a capability's about.md
+    Given a developer has the sample shop project open in Givens
+    And "Checkout" is selected
+    When they choose "Edit about.md"
+    Then checkout/about.md opens in the editor
+
+  Scenario: Add an about.md
+    Given Invites has no about.md
+    And "Invites" is selected
+    When they choose "Add about.md"
+    Then invites/about.md is created, starting with the line "# Invites"
+    And it opens in the editor
+
   Scenario: Preview a story with an image
     Given a developer is editing Checkout's about.md
     When they choose "Preview"

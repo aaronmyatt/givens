@@ -12,8 +12,8 @@ Feature: Read a capability
     Given a developer has the sample shop project open in Givens
     When they select "Checkout"
     Then they see "As a returning shopper", "I want to pay with my saved card" and "So that checkout takes seconds"
-    And below the story, about.md is shown with the checkout flow diagram
     And its 5 scenarios are listed, with happy paths and error states marked differently
+    And below the scenarios, about.md is shown with the checkout flow diagram
 
   Scenario: Read a scenario
     Given a developer has the sample shop project open in Givens

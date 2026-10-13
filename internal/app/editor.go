@@ -89,6 +89,13 @@ func (e *Editor) Path() string {
 	return e.path
 }
 
+// Scenario is the scenario the editor opened at, its block, or "" for a whole file.
+func (e *Editor) Scenario() string {
+	assert.That(e != nil, "scenario runs on an editor")
+	assert.That(e.scenario == "" || e.line > 0, "a scenario's block has a line")
+	return e.scenario
+}
+
 // Text is the editor's text, unsaved changes included.
 func (e *Editor) Text() string {
 	assert.That(e != nil, "text runs on an editor")
@@ -150,5 +157,6 @@ func (e *Editor) snapshot() *EditorSnapshot {
 	}
 	return &EditorSnapshot{
 		Path: e.path, Text: e.text, Problems: problems, Preview: preview, Dirty: e.dirty(),
+		Scenario: e.scenario,
 	}
 }

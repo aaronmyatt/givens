@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"path/filepath"
 	"unicode/utf8"
 
 	"givens/internal/assert"
@@ -11,6 +12,8 @@ import (
 const (
 	KeySearch = "⌘K"
 	KeyEscape = "⎋"
+	// KeyEdit opens the .feature file on show in the editor; see editShown.
+	KeyEdit = "e"
 )
 
 // Type types text into whatever has focus: the search box, the editor, an ask card.
@@ -50,6 +53,30 @@ func (w *Window) Press(keys string) error {
 			return errors.New("search isn't open")
 		}
 		return w.copyFromSearch()
+	case KeyEdit:
+		return w.editShown()
 	}
 	return ErrNotImplemented
+}
+
+// editShown opens the editor at the scenario on show, at its block, or else at the top of the
+// .feature file of the story on show. With the editor, a Drop in or search already open, the
+// key is typed there instead, so it does nothing here. Needed by "Press e to edit a scenario"
+// and "Press e to edit a story".
+func (w *Window) editShown() error {
+	assert.That(w != nil, "edit shown runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.editor != nil || w.session != nil || w.search != nil || w.prompt != nil {
+		return nil
+	}
+	if w.selectedScenario != "" {
+		_, err := w.Edit(w.selectedScenario)
+		return err
+	}
+	capability, ok := w.storyCapability()
+	if !ok {
+		return nil
+	}
+	_, err := w.Edit(filepath.Join(capability.Slug, filepath.Base(capability.FeaturePath)))
+	return err
 }

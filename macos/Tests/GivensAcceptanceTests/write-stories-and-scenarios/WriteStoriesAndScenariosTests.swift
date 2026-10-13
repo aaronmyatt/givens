@@ -211,7 +211,7 @@ func writeStoriesAndScenariosSteps(_ w: World) -> [StepDefinition] {
     let s = WriteStoriesAndScenariosState(w)
     return writeStoriesStorySteps(s) + writeStoriesEditorSteps(s) + writeStoriesSaveSteps(s)
         + writeStoriesPreviewSteps(s) + writeStoriesRenameSteps(s) + writeStoriesRunSteps(s)
-        + writeStoriesDeleteSteps(s)
+        + writeStoriesDeleteSteps(s) + writeStoriesAboutSteps(s)
 }
 
 @MainActor

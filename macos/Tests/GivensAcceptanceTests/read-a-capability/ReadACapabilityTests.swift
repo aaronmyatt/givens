@@ -206,7 +206,7 @@ private func readACapabilityStorySteps(_ s: ReadACapabilityState) -> [StepDefini
                 try expect(readACapabilityLines(window), line, "the window")
             }
         },
-        def(#"^below the story, about\.md is shown with the checkout flow diagram$"#) { _ in
+        def(#"^below the scenarios, about\.md is shown with the checkout flow diagram$"#) { _ in
             let about = try s.w.readFile("capabilities/checkout/about.md")
             let images = try readACapabilityImages(about)
             guard !images.isEmpty else {
@@ -220,8 +220,15 @@ private func readACapabilityStorySteps(_ s: ReadACapabilityState) -> [StepDefini
                 }
                 try expect([capability.about], image, "the about.md shown")
             }
-            try readACapabilityStoryThenText(
-                readACapabilityLines(window), capability.story, readACapabilityPlainLine(about))
+            // Below the last scenario, so a long about.md doesn't push the list off screen.
+            let lines = readACapabilityLines(window)
+            let last = capability.scenarios.last?.name ?? ""
+            let text = readACapabilityPlainLine(about)
+            guard let at = readACapabilityIndex(lines, last),
+                text.isEmpty || readACapabilityIndex(lines, text, from: at + 1) != nil
+            else {
+                throw StepFailure("the window doesn't show \"\(text)\" below \(last): \(lines)")
+            }
         },
         def(
             #"^its (\d+) scenarios are listed, with happy paths and error states marked differently$"#

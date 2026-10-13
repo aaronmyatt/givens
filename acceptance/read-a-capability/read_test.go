@@ -36,7 +36,7 @@ func steps(w *world.World) []world.Step {
 	s := &state{World: w}
 	return []world.Step{
 		world.Def(`^they see "([^"]*)", "([^"]*)" and "([^"]*)"$`, s.seeStory),
-		world.Def(`^below the story, about\.md is shown with the checkout flow diagram$`,
+		world.Def(`^below the scenarios, about\.md is shown with the checkout flow diagram$`,
 			s.aboutBelowStory),
 		world.Def(`^its (\d+) scenarios are listed, with happy paths and error states marked `+
 			`differently$`, s.scenariosListed),

@@ -54,7 +54,8 @@ type state struct {
 
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
-	return slices.Concat(s.storySteps(), s.editorSteps(), s.renameSteps(), s.deleteSteps())
+	return slices.Concat(s.storySteps(), s.editorSteps(), s.renameSteps(), s.deleteSteps(),
+		s.aboutSteps())
 }
 
 func (s *state) storySteps() []world.Step {

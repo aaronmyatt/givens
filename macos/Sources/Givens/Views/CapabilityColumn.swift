@@ -1,8 +1,9 @@
 import GivensUI
 import SwiftUI
 
-/// The middle column for a capability: its story and about.md above its scenarios, grouped
-/// under their Rule: blocks. Each scenario shows a happy or error dot and its status as an
+/// The middle column for a capability: its story above its scenarios, grouped under their
+/// Rule: blocks, then its about.md, rendered, so a long one doesn't push the scenarios off the
+/// screen. Each scenario shows a happy or error dot and its status as an
 /// icon; the status's words are in its tooltip, so the list stays short and calm.
 /// Ref: https://cucumber.io/docs/gherkin/reference/#rule
 struct CapabilityColumn: View {
@@ -12,7 +13,7 @@ struct CapabilityColumn: View {
     var body: some View {
         List(selection: selection) {
             Section {
-                StoryHeader(capability: capability)
+                StoryHeader(window: window, capability: capability)
                     .listRowSeparator(.hidden)
                     .selectionDisabled()
             }
@@ -28,6 +29,22 @@ struct CapabilityColumn: View {
                     } else {
                         Text(group.rule)
                     }
+                }
+            }
+            if !capability.about.isEmpty {
+                Section {
+                    // Images are read from the capability's own folder, as about.md links them.
+                    MarkdownView(
+                        text: capability.about,
+                        resolve: MarkdownView.relative(
+                            to: URL(fileURLWithPath: window.path)
+                                .appendingPathComponent(capability.slug).path)
+                    )
+                    .padding(.vertical, 8)
+                    .listRowSeparator(.hidden)
+                    .selectionDisabled()
+                } header: {
+                    Text("About")
                 }
             }
             Section {
@@ -61,25 +78,30 @@ struct CapabilityColumn: View {
     }
 }
 
-/// A capability's name, its story with the As a, I want and So that words greyed, and its
-/// about.md.
+/// A capability's name, with "Edit about.md" beside it, and its story with the As a, I want
+/// and So that words greyed.
 struct StoryHeader: View {
+    let window: WindowModel
     let capability: CapabilityRecord
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(capability.name).font(.title2).bold()
+            HStack {
+                Text(capability.name).font(.title2).bold()
+                Spacer()
+                // "Edit about.md", or "Add about.md" when there's none: opens the editor.
+                ForEach(window.offers.filter(Placement.story.contains), id: \.self) { offer in
+                    Button(offer, systemImage: "doc.richtext") {
+                        window.app.run { _ in try await window.choose(offer) }
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
             WarningText(warning: capability.warning)
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(capability.story, id: \.self) { line in
                     Self.storyLine(line).font(.title3)
                 }
-            }
-            if !capability.about.isEmpty {
-                Text(capability.about)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .padding(.top, 4)
             }
         }
         .padding(.vertical, 8)

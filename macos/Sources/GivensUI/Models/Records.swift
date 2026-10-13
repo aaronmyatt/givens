@@ -133,6 +133,8 @@ public struct EditorRecord: Decodable, Sendable, Equatable {
     public let preview: [String]
     /// The text has changes that aren't saved.
     public let dirty: Bool
+    /// The scenario the editor opened at, its block, or "" for a whole file.
+    public let scenario: String
 }
 
 /// The Drop in page.
