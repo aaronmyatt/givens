@@ -1,0 +1,6 @@
+x 2026-10-12 2026-10-12 Spec: "Record a run with a note in Markdown" in drop-into-a-scenario.feature, @wip — added after Attach proof to a run, @wip
+x 2026-10-12 2026-10-12 Core: a note of many lines is kept as note.md in the run's folder; the run line keeps its first line; history reads it back — runs.Summary/WriteNote/ReadNote; RecordRun writes note.md; RunLine.noteMarkdown and folder; setRunNote takes line breaks, 64 KB
+x 2026-10-12 2026-10-12 Go steps for the scenario — note_test.go; passes with GIVENS_TAGS=@wip
+x 2026-10-12 2026-10-12 Swift: a Markdown block parser in GivensUI and a MarkdownView, with unit tests — GivensUI/Markdown/MarkdownBlocks.swift with a new GivensUITests target; Views/MarkdownView.swift
+x 2026-10-12 2026-10-12 Swift: Write and Preview tabs for the note; an image dropped on it is attached and linked; run history renders the note — segmented Write/Preview; TextEditor takes dropped files, images get a link; history draws noteMarkdown against the run's folder; not eyeballed yet
+x 2026-10-12 2026-10-12 Swift steps, remove @wip, scripts/check.sh passes — DropIntoAScenarioNote.swift; 46 of 46 in Go and Swift; check.sh passes

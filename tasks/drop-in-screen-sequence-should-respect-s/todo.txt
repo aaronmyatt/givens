@@ -1,0 +1,5 @@
+x 2026-10-12 2026-10-12 Spec: "Steps stay in the order they're written" in drop-into-a-scenario.feature, @wip — added before Record a run, @wip
+x 2026-10-12 2026-10-12 Core: checklist parts (runs of When or Then steps, in file order) in the Drop in snapshot — Session.Parts and SessionSnapshot.parts in dropin_page.go
+x 2026-10-12 2026-10-12 Go steps for the scenario — sequence_test.go; passes with GIVENS_TAGS=@wip
+x 2026-10-12 2026-10-12 Swift: SessionRecord parts; Drop in page draws one numbered part per run, note and Record run at the foot — one numbered part per run; a part's circle ticks once its items are marked; note, files and Record run at the foot; not eyeballed yet
+x 2026-10-12 2026-10-12 Swift steps, remove @wip, scripts/check.sh passes — DropIntoAScenarioSequence.swift; 45 of 45 in Go and Swift; check.sh passes

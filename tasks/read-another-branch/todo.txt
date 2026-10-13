@@ -1,0 +1,7 @@
+x 2026-10-12 2026-10-12 Spec: "Read capabilities from another branch" and "Open a branch that doesn't exist" in open-a-project.feature, @wip — both added at the end, @wip
+x 2026-10-12 2026-10-12 Core: internal/branch: List and Extract (git archive into Givens's data folder), unit-tested — List, Extract (streams git archive into a tar reader), unit-tested with a real repo; refuses option-like names and paths outside
+x 2026-10-12 2026-10-12 Core: Window.Branches and Window.OpenBranch; branch windows are read only and aren't reopened after quitting — app/branch.go: Branches, OpenBranch, read-only offers, Drop in refused, title '<path> @ <branch>', left out of open-windows.txt
+x 2026-10-12 2026-10-12 Serve: window.branches and window.openBranch in needs.go — in needs.go
+x 2026-10-12 2026-10-12 Go steps in acceptance/open-a-project — branch_test.go; both pass with GIVENS_TAGS=@wip
+x 2026-10-12 2026-10-12 Swift: Needs/open-a-project.swift, a Branch menu in the project window's toolbar — Needs/open-a-project.swift; toolbar Branch menu; a branch window shows 'Back to the working tree', which closes it; snapshot has branch; not eyeballed yet
+x 2026-10-12 2026-10-12 Swift steps, remove @wip, scripts/check.sh passes — OpenAProjectBranch.swift; 16 of 16 in Go and Swift; check.sh passes

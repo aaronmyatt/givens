@@ -1,3 +1,6 @@
+2026-10-12 Flag (tag) TODOs with a warning/red flag to emphasise they are failing or not testable/need work
+2026-10-12 Toggle TODO flag on scenarios to tag them in a view so the developer knows they need attention
+2026-10-12 Flag newly added scenarios as TODO, assuming they have not been implemented yet
 2026-10-11 Release: package Givens.app and the givens command ref:release
 x 2026-10-11 2026-10-11 Foundation: core packages and the acceptance world ref:foundation — see tasks/foundation/notes.md
 x 2026-10-11 2026-10-11 macOS UI shell: SwiftUI over givens serve ref:ui-shell — see tasks/ui-shell/notes.md
@@ -20,4 +23,14 @@ x 2026-10-11 2026-10-11 Cache scenario statuses between snapshots: the Unverifie
 x 2026-10-11 2026-10-11 Drop in UI: draw outline rows (dropInRows) — rows are in the snapshot and drawn with their buttons, greyed while another row is live; QR left out, as the QR scenario was removed
 x 2026-10-11 2026-10-11 Editor UI: show step suggestions while typing in the SwiftUI text editor — the Mac editor offers steps for the line just typed on, with "used in N"; clicking one fills in the line
 x 2026-10-11 2026-10-11 Install command UI: let the developer pick a writable PATH folder, like ~/.local/bin, instead of /usr/local/bin — the menu item opens a folder picker at the first PATH folder the developer can write to, ~/.local/bin first; known gap: no warning when the picked folder isn't on PATH
-2026-10-11 Spec the scenario page's run history and Copy steps in read-a-capability, with Go and Swift steps (built from a UI request, unit-tested only)
+x 2026-10-12 2026-10-12 A user/tester should be able to add "test proof" ref:a-user-tester-should-be-able-to-add-test — see tasks/a-user-tester-should-be-able-to-add-test/notes.md
+x 2026-10-12 2026-10-12 Drop In screen sequence should respect subsequent When/Then steps ref:drop-in-screen-sequence-should-respect-s — see tasks/drop-in-screen-sequence-should-respect-s/notes.md
+x 2026-10-12 2026-10-12 enable reading capabilities from another git branch ref:read-another-branch — see tasks/read-another-branch/notes.md
+x 2026-10-12 2026-10-12 The story panel should offer an "edit about.md" button that opens the markdown file for editing — "Edit about.md", or "Add about.md" (writes '# <Name>') when there's none, beside the capability's name; 2 scenarios in write-stories-and-scenarios, Go and Swift; not eyeballed yet
+x 2026-10-12 2026-10-12 The scenario "Record run" note should be a rich markdown text editor ref:the-scenario-record-run-note-should-be-a — see tasks/the-scenario-record-run-note-should-be-a/notes.md
+x 2026-10-12 2026-10-12 pressing 'e' on a story or scenario screen should open an editor at the .feature file — core KeyEdit: the scenario's block, or the story's .feature from the top; Mac sends a bare e only while no text field is on show; 2 scenarios, Go and Swift; known gap: not tried by hand, a bare-key shortcut on macOS may need focus
+x 2026-10-12 2026-10-12 about.md content should be rendered _below_ the list of scenarios so that thye are not pushed off the screen — an About section after the scenarios; "Read a story" now checks about.md comes below them, in Go and Swift, and visible lines keep that order; not eyeballed yet
+x 2026-10-12 2026-10-12 about.md content should be richly formatted and rendered — drawn with MarkdownView (built for the run note): headings, lists, quotes, code, images from the capability's folder; parser unit-tested, no scenario, as it's how it looks; not eyeballed yet
+x 2026-10-11 2026-10-12 Spec the scenario page's run history and Copy steps in read-a-capability, with Go and Swift steps (built from a UI request, unit-tested only) — "See a scenario's runs" and "Copy a scenario's steps"; Copy steps moved into the core (gherkinOf, OfferCopySteps, also in branch windows), the Swift-only copy and its test removed
+2026-10-12 Branch windows: clean up old copies under <app data>/branches/, and refuse the Needs calls that write (edit, newStory, rename, delete) there — see tasks/read-another-branch/notes.md
+2026-10-12 Run files: two runs of one scenario in the same second share a folder; give the folder a tiebreak — see tasks/a-user-tester-should-be-able-to-add-test/notes.md

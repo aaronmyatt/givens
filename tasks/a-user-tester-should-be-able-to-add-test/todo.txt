@@ -1,0 +1,7 @@
+x 2026-10-12 2026-10-12 Spec: "Attach proof to a run" in drop-into-a-scenario.feature, @wip — scenario added, @wip
+x 2026-10-12 2026-10-12 Core: runs.FilesDir and CopyFiles with limits in internal/runs — runs.FilesDir, CheckFile, CopyFiles, Files; unit-tested, the size limit too
+x 2026-10-12 2026-10-12 Core: Session.Attach/Detach, RecordRun copies files, snapshot lists them, History lists a run's files — Session.Attach/Detach/Attachments; RecordRun copies before appending; snapshot attachments; RunLine.Files
+x 2026-10-12 2026-10-12 Serve: session.attach and session.detach methods — in needs.go, next to session.setRunNote
+x 2026-10-12 2026-10-12 Go steps for the scenario in acceptance/drop-into-a-scenario — 3 steps in record_test.go; passes with GIVENS_TAGS=@wip
+x 2026-10-12 2026-10-12 Swift: SessionModel attach/detach, Drop in page "Add attachment…" and file drop, run history shows files — Add attachment… (fileImporter), drop on the Then part, chips with remove; run history links open each file; not eyeballed yet
+x 2026-10-12 2026-10-12 Swift steps, remove @wip, scripts/check.sh passes — Go and Swift pass, 44 of 44 in drop-into-a-scenario; check.sh passes
