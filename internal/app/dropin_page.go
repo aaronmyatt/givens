@@ -16,8 +16,34 @@ func (s *Session) snapshot() *SessionSnapshot {
 	assert.That(s.window != nil, "a session belongs to a window")
 	return &SessionSnapshot{
 		Scenario: s.scenario.Name, Status: s.Status(), Output: s.Output(),
-		Cards: s.cardLines(), Checklist: s.Checklist(),
+		Cards: s.cardLines(), Checklist: s.Checklist(), Parts: s.Parts(),
+		Attachments: s.Attachments(),
 	}
+}
+
+// ChecklistPart is one numbered part of the Drop in page: a run of checklist items of one kind.
+// Records.swift's ChecklistPart.
+type ChecklistPart struct {
+	Kind  string      `json:"kind"` // "given" (done by hand), "when" or "then"
+	Items []CheckItem `json:"items"`
+}
+
+// Parts cuts the checklist into runs of one kind, keeping its order, so a scenario that goes
+// When, Then, When, Then shows four parts, each Then right after the When it checks. Needed
+// by "Steps stay in the order they're written".
+func (s *Session) Parts() []ChecklistPart {
+	assert.That(s != nil, "parts runs on a session")
+	checklist := s.Checklist()
+	parts := make([]ChecklistPart, 0, len(checklist))
+	for _, item := range checklist {
+		if last := len(parts) - 1; last >= 0 && parts[last].Kind == item.Kind {
+			parts[last].Items = append(parts[last].Items, item)
+			continue
+		}
+		parts = append(parts, ChecklistPart{Kind: item.Kind, Items: []CheckItem{item}})
+	}
+	assert.That(len(parts) <= len(checklist), "each part holds at least one item")
+	return parts
 }
 
 // messages are the lines across the top of the Drop in page.

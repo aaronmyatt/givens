@@ -105,6 +105,12 @@ public struct RunRecord: Decodable, Sendable, Equatable {
     public let text: String
     /// What was written with the run, or "".
     public let note: String
+    /// The paths of the files kept with the run, like a screenshot.
+    public let files: [String]
+    /// The whole note when it ran to more than one line, as Markdown, or "".
+    public let noteMarkdown: String
+    /// The run's own folder, which the note's image links are relative to.
+    public let folder: String
 }
 
 /// The ⌘K search.
@@ -141,6 +147,10 @@ public struct SessionRecord: Decodable, Sendable, Equatable {
     public let cards: [String]
     /// The checklist, once setup is done.
     public let checklist: [CheckItem]
+    /// The checklist cut into runs of one kind, in the order the steps are written.
+    public let parts: [ChecklistPart]
+    /// The paths of the files "Record run" will keep with the run.
+    public let attachments: [String]
 }
 
 /// One checklist line.
@@ -151,6 +161,15 @@ public struct CheckItem: Decodable, Sendable, Equatable {
     public let kind: String
     /// "", "done", "pass" or "fail".
     public let mark: String
+}
+
+/// One numbered part of the Drop in page: a run of checklist lines of one kind. Mirrors
+/// internal/app's ChecklistPart.
+public struct ChecklistPart: Decodable, Sendable, Equatable {
+    /// "given" (done by hand), "when" or "then".
+    public let kind: String
+    /// The part's lines, in the order they're written.
+    public let items: [CheckItem]
 }
 
 /// One kit version, for the `test.shipKits` seam.

@@ -28,6 +28,11 @@ public struct SessionModel {
     public var cards: [String] { current.cards }
     /// The checklist: manual Givens, then Whens, then Thens.
     public var checklist: [CheckItem] { current.checklist }
+    /// The checklist cut into runs of one kind, as the page numbers them: When, Then, When,
+    /// Then stays four parts.
+    public var parts: [ChecklistPart] { current.parts }
+    /// The paths of the files "Record run" will keep with the run.
+    public var attachments: [String] { current.attachments }
 
     /// The window's latest session, or the one this was made from if it has closed.
     var current: SessionRecord { window.snapshot?.session ?? record }

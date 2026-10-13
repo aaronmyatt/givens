@@ -10,6 +10,7 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
+	"givens/internal/runs"
 )
 
 // needs maps the methods in macos/Sources/GivensUI/Needs/*.swift, one capability's calls at a
@@ -40,6 +41,8 @@ func (s *Server) needs() map[string]handler {
 		"session.copyCodeBlock":   s.onSession(copyCodeBlock),
 		"session.clickInlineCode": s.onSession(clickInlineCode),
 		"session.setRunNote":      s.onSession(setRunNote),
+		"session.attach":          s.onSession(attach),
+		"session.detach":          s.onSession(detach),
 		"window.dropInRows":       s.onWindow(dropInRows),
 		"window.chooseOnRow":      s.onWindow(chooseOnRow),
 		// capabilities/open-a-project: Needs/open-a-project.swift.
@@ -228,9 +231,9 @@ func clickInlineCode(session *app.Session, given params) (any, error) {
 func setRunNote(session *app.Session, given params) (any, error) {
 	assert.That(session != nil, "set run note runs on a session")
 	assert.That(utf8.ValidString(given.Note), "JSON strings are text")
-	if len(given.Note) > app.NameLengthMax || strings.Contains(given.Note, "\n") {
-		return nil, fmt.Errorf("%w: a note is one line of %d bytes at most", ErrBadRequest,
-			app.NameLengthMax)
+	if len(given.Note) > runs.NoteBytesMax {
+		return nil, fmt.Errorf("%w: a note is %d bytes at most", ErrBadRequest,
+			runs.NoteBytesMax)
 	}
 	return nil, session.SetRunNote(given.Note)
 }

@@ -63,6 +63,14 @@ Feature: Drop into a scenario
     Then setup runs with the usual 2-minute timeout
     And "Card declined" is marked "@timeout must look like @timeout:90s or @timeout:5m"
 
+  # A scenario can go back and forth, like When, Then, When, Then. The Drop in page keeps its
+  # steps in the order they're written, so each Then comes right after the When it checks.
+  Scenario: Steps stay in the order they're written
+    Given "Card declined" goes When, Then, When, Then
+    When a developer drops in to "Card declined"
+    Then the checklist is in the order the steps are written
+    And the Drop in page shows a When part, a Then part, a When part and a Then part
+
   Scenario: Record a run
     Given a developer has dropped in to "Card declined" and marked every Then step "Pass"
     When they add the note "Retry button is below the fold on small screens"
@@ -76,6 +84,26 @@ Feature: Drop into a scenario
     When they choose "Record run"
     Then they see "Mark each check first"
     And nothing is added to runs/
+
+  # Files that show what happened, like a screenshot, are copied into the run's own folder,
+  # runs/files/<capability>/<slug>/<time>/. The tester's own file stays where it was.
+  Scenario: Attach proof to a run
+    Given a developer has dropped in to "Card declined" and marked every Then step "Pass"
+    When they attach the file "declined.png"
+    And they choose "Record run"
+    Then "declined.png" is copied into the run's folder in runs/
+    And the run, in the scenario's run history, lists "declined.png"
+
+  # The note is Markdown and can run to many lines, with images. A note with more than one
+  # line is kept whole as note.md in the run's folder; the run line keeps its first line.
+  Scenario: Record a run with a note in Markdown
+    Given a developer has dropped in to "Card declined" and marked every Then step "Pass"
+    When they attach the file "declined.png"
+    And they write a note in Markdown, with a heading, a list and the image "declined.png"
+    And they choose "Record run"
+    Then the run line keeps the note's heading as its note
+    And the whole note is kept as note.md in the run's folder
+    And the run, in the scenario's run history, shows the whole note
 
   # Each run line records who ran it, from git's `user.name`. Runs are recorded against the
   # scenario's path, so renaming a scenario starts its runs over. New capabilities folders get a

@@ -120,11 +120,25 @@ extension SessionModel {
         try await window.call("session.clickInlineCode", ["card": String(card), "code": code])
     }
 
-    /// Sets the note "Record run" saves with the run. Mirrors Session.SetRunNote.
-    /// Needed by "Record a run".
+    /// Sets the note "Record run" saves with the run, in Markdown. A note of more than one
+    /// line is kept whole as note.md in the run's folder. Mirrors Session.SetRunNote.
+    /// Needed by "Record a run" and "Record a run with a note in Markdown".
     public func setRunNote(_ note: String) async throws {
-        precondition(!note.contains("\n"), "a note is one line, so a run stays one line")
+        precondition(note.utf8.count <= 64 << 10, "a note fits runs.NoteBytesMax")
         try await window.call("session.setRunNote", ["note": note])
+    }
+
+    /// Attaches the file at `path`; "Record run" copies it into the run's folder in runs/.
+    /// Mirrors Session.Attach. Needed by "Attach proof to a run".
+    public func attach(_ path: String) async throws {
+        precondition(path.hasPrefix("/"), "an attached file has an absolute path")
+        try await window.call("session.attach", ["path": path])
+    }
+
+    /// Takes the attached file called `name` off again. Mirrors Session.Detach.
+    public func detach(_ name: String) async throws {
+        precondition(!name.isEmpty && !name.contains("/"), "a file name is one name")
+        try await window.call("session.detach", ["name": name])
     }
 }
 

@@ -19,6 +19,7 @@ capabilities/
     scripts/<slug>.md          # setup done only by hand, shown as cards
     _shared/*.sh               # helpers only this capability's scripts can call
   runs/YYYY-MM-DD.log          # one line per recorded Drop in
+  runs/files/<run key>/<time>/ # files kept with a run, like a screenshot
 ```
 
 ## Rules

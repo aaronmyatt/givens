@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -284,7 +285,7 @@ func TestHistoryOf(t *testing.T) {
 			Result: runs.ResultPass, Values: []runs.Pair{{Name: "card", Value: "expired"}}},
 		{Time: now, Key: "checkout/empty-cart", Result: runs.ResultPass},
 	}
-	got := historyOf(recorded, "checkout/card-declined", now)
+	got := historyOf(t.TempDir(), recorded, "checkout/card-declined", now)
 	want := []string{
 		"Failed today at 08:00 by Sam",
 		"Passed yesterday at 09:00 · card=expired",
@@ -296,6 +297,9 @@ func TestHistoryOf(t *testing.T) {
 	for index, line := range got {
 		if line.Text != want[index] {
 			t.Errorf("run %d is %q, want %q", index, line.Text, want[index])
+		}
+		if len(line.Files) != 0 {
+			t.Errorf("run %d lists files with no folder: %q", index, line.Files)
 		}
 	}
 	if got[0].Note != "banner overlaps" || got[0].Result != runs.ResultFail {
@@ -360,5 +364,50 @@ func TestScriptsReadableAndEditable(t *testing.T) {
 	if editor := window.Editor(); editor == nil ||
 		!strings.HasSuffix(editor.Path(), "card-declined.sh") {
 		t.Errorf("Edit script opened %v, want card-declined.sh", editor)
+	}
+}
+
+// TestAttachDetach attaches two files, replaces one by name, and takes one off again.
+func TestAttachDetach(t *testing.T) {
+	session, folder := &Session{}, t.TempDir()
+	first, again := filepath.Join(folder, "a.png"), filepath.Join(folder, "b", "a.png")
+	other := filepath.Join(folder, "c.log")
+	for _, path := range []string{first, again, other} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := session.Attach(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := session.Attachments(); !slices.Equal(got, []string{again, other}) {
+		t.Errorf("Attachments = %q", got)
+	}
+	if err := session.Detach("a.png"); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Detach("a.png"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Detach of a file not attached = %v", err)
+	}
+	if err := session.Attach("relative.png"); err == nil {
+		t.Error("Attach took a relative path")
+	}
+}
+
+// TestGherkinOf writes "Copy steps" text: tags, the Scenario: line, then the steps; an outline
+// as a Scenario Outline.
+func TestGherkinOf(t *testing.T) {
+	scenario := Scenario{Name: "Card declined", Tags: []string{"@error"},
+		Steps: []string{"Given a shopper", "When they pay"}}
+	if got := gherkinOf(scenario); got !=
+		"@error\nScenario: Card declined\n  Given a shopper\n  When they pay\n" {
+		t.Errorf("gherkinOf = %q", got)
+	}
+	outline := Scenario{Name: "Cards", Steps: []string{"Given a <card> card"}}
+	if got := gherkinOf(outline); got != "Scenario Outline: Cards\n  Given a <card> card\n" {
+		t.Errorf("gherkinOf of an outline = %q", got)
 	}
 }

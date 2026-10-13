@@ -36,6 +36,8 @@ final class DropIntoAScenarioState {
     /// The note added before "Record run", and the run key recorded against.
     var note = ""
     var runKey = ""
+    /// The path of the file attached before "Record run".
+    var attached = ""
     /// The by_hand card's snippet and its --url link.
     var snippet = ""
     var link = ""
@@ -94,6 +96,7 @@ final class DropIntoAScenarioState {
 func dropIntoAScenarioSteps(_ w: World) -> [StepDefinition] {
     let s = DropIntoAScenarioState(w)
     return dropInRunSteps(s) + dropInTimeoutSteps(s) + dropInRecordSteps(s)
+        + dropInSequenceSteps(s) + dropInNoteSteps(s)
         + dropInTeardownSteps(s) + dropInFromSteps(s) + dropInByHandSteps(s) + dropInLinkSteps(s)
         + dropInAskSteps(s) + dropInRowSteps(s) + dropInTableSteps(s)
         + dropInMarkdownSteps(s) + dropInCodeSteps(s)

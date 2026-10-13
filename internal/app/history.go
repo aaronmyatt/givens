@@ -19,6 +19,12 @@ type RunLine struct {
 	Result string `json:"result"` // runs.ResultPass or runs.ResultFail
 	Text   string `json:"text"`   // "Passed today at 14:05 by Sam", " · card=expired" for a row
 	Note   string `json:"note"`   // what was written with the run, or ""
+	// Files are the paths of the files kept with the run, like a screenshot.
+	Files []string `json:"files"`
+	// NoteMarkdown is the whole note when it ran to more than one line, or "".
+	NoteMarkdown string `json:"noteMarkdown"`
+	// Folder is the run's own folder, which a note's image links are relative to.
+	Folder string `json:"folder"`
 }
 
 // History lists a scenario's recorded runs, newest first, up to RunsShownMax; an outline's
@@ -37,7 +43,7 @@ func (w *Window) History(scenario project.Scenario) []RunLine {
 	}
 	lines := []RunLine{}
 	if recorded, err := runs.Read(w.project.Root); err == nil && scenario.Slug != "" {
-		lines = historyOf(recorded, scenario.Key(), now)
+		lines = historyOf(w.project.Root, recorded, scenario.Key(), now)
 	}
 	w.histories[key] = lines
 	return lines
@@ -45,7 +51,7 @@ func (w *Window) History(scenario project.Scenario) []RunLine {
 
 // historyOf picks out one scenario's runs, by its run key or a row's key under it, newest
 // first.
-func historyOf(recorded []runs.Run, key string, now time.Time) []RunLine {
+func historyOf(capabilities string, recorded []runs.Run, key string, now time.Time) []RunLine {
 	assert.That(strings.Count(key, "/") == 1, "a scenario key is capability/slug")
 	assert.That(!now.IsZero(), "now is a time")
 	mine := make([]runs.Run, 0, 8)
@@ -58,7 +64,13 @@ func historyOf(recorded []runs.Run, key string, now time.Time) []RunLine {
 	sort.SliceStable(mine, func(a, b int) bool { return mine[a].Time.After(mine[b].Time) })
 	lines := make([]RunLine, 0, min(len(mine), RunsShownMax))
 	for _, run := range mine[:min(len(mine), RunsShownMax)] {
-		lines = append(lines, RunLine{Result: run.Result, Text: runText(run, now), Note: run.Note})
+		// A note.md that can't be read leaves the run with its one-line note.
+		markdown, _ := runs.ReadNote(capabilities, run)
+		lines = append(lines, RunLine{
+			Result: run.Result, Text: runText(run, now), Note: run.Note,
+			Files: runFiles(capabilities, run), NoteMarkdown: markdown,
+			Folder: runs.FilesDir(capabilities, run.Key, run.Time),
+		})
 	}
 	return lines
 }

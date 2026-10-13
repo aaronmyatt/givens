@@ -29,6 +29,7 @@ type state struct {
 	slowFor       time.Duration       // how long the blocked setup "takes", on the fake clock
 	sawSlow       bool                // "Still running" appeared while a step watched for it
 	note          string              // the note added before "Record run"
+	attached      string              // the path of the file attached before "Record run"
 	runKey        string              // the run key the scenario recorded against
 	snippet       string              // the by_hand card's snippet
 	link          string              // the by_hand card's --url link
@@ -45,6 +46,8 @@ func steps(w *world.World) []world.Step {
 	all := make([]world.Step, 0, 128)
 	all = append(all, runSteps(s)...)
 	all = append(all, recordSteps(s)...)
+	all = append(all, sequenceSteps(s)...)
+	all = append(all, noteSteps(s)...)
 	all = append(all, teardownSteps(s)...)
 	all = append(all, fromSteps(s)...)
 	all = append(all, byHandSteps(s)...)
@@ -95,6 +98,10 @@ func recordSteps(s *state) []world.Step {
 		world.Def(`^a developer has dropped in to "([^"]*)" and marked only the first Then step$`,
 			s.droppedInFirstMarked),
 		world.Def(`^nothing is added to runs/$`, s.nothingInRuns),
+		world.Def(`^they attach the file "([^"]*)"$`, s.attachFile),
+		world.Def(`^"([^"]*)" is copied into the run's folder in runs/$`, s.copiedIntoRunFolder),
+		world.Def(`^the run, in the scenario's run history, lists "([^"]*)"$`,
+			s.historyListsFile),
 		world.Def(`^a developer whose git user\.name is "([^"]*)" has dropped in to "([^"]*)" `+
 			`and marked every Then step "Pass"$`, s.namedDeveloperAllPassed),
 		world.Def(`^the run line includes "([^"]*)"$`, s.runLineIncludes),

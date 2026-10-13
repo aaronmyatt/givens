@@ -21,6 +21,8 @@ let package = Package(
         // The app itself: windows, menus and the Dock-drop delegate.
         .executableTarget(name: "Givens", dependencies: ["GivensUI"]),
         .testTarget(name: "GherkinKitTests", dependencies: ["GherkinKit"]),
+        // The models' own logic that no step reaches, like the Markdown block reader.
+        .testTarget(name: "GivensUITests", dependencies: ["GivensUI"]),
         // One suite per capability, over the same .feature files as acceptance/ in Go.
         .testTarget(
             name: "GivensAcceptanceTests", dependencies: ["GherkinKit", "GivensUI"]),

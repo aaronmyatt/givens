@@ -165,7 +165,8 @@ func (w *Window) precheck(scenario project.Scenario) (string, []string, error) {
 }
 
 // checklistOf is what the developer does once setup is done: first_you lines from the setup
-// script, then the When steps, then the Then steps. And and But take the kind before them.
+// script, then the When and Then steps in the order they're written. And and But take the
+// kind before them.
 func checklistOf(scenario project.Scenario, row []runs.Pair) []CheckItem {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")

@@ -1,5 +1,6 @@
 import GivensUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The Drop in page, in three numbered parts as in the mockup: the Given (setup's output and
 /// any cards it's paused at), the When steps to tick off, and the Then checks to pass or
@@ -9,6 +10,8 @@ struct DropInPage: View {
     let session: SessionModel
     @State private var answer = ""
     @State private var note = ""
+    @State private var pickingFiles = false
+    @State private var previewingNote = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,12 +21,18 @@ struct DropInPage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     given
                     Divider()
-                    if !doings.isEmpty {
-                        when
+                    // One part per run of steps, in the order they're written, so a Then
+                    // comes right after the When it checks.
+                    ForEach(Array(session.parts.enumerated()), id: \.offset) { index, part in
+                        if part.kind == "then" {
+                            then(part.items, number: index + 2)
+                        } else {
+                            when(part, number: index + 2)
+                        }
                         Divider()
                     }
                     if !checks.isEmpty {
-                        then
+                        foot
                     }
                 }
                 .frame(maxWidth: 860, alignment: .leading)
@@ -31,9 +40,7 @@ struct DropInPage: View {
         }
     }
 
-    /// Given and When items, ticked off with Done.
-    private var doings: [CheckItem] { session.checklist.filter { $0.kind != "then" } }
-    /// Then items, passed or failed.
+    /// Then items, passed or failed, from every Then part.
     private var checks: [CheckItem] { session.checklist.filter { $0.kind == "then" } }
 
     private var header: some View {
@@ -129,10 +136,14 @@ struct DropInPage: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.keyword.opacity(0.3)))
     }
 
-    private var when: some View {
+    /// Manual Givens or When steps, ticked off with Done.
+    private func when(_ part: ChecklistPart, number: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            StepHeading(number: "2", title: "When", detail: "your turn", done: false)
-            ForEach(doings, id: \.text) { item in
+            StepHeading(
+                number: String(number), title: part.kind == "given" ? "Given" : "When",
+                detail: part.kind == "given" ? "by hand" : "your turn",
+                done: part.items.allSatisfy { $0.mark == "done" })
+            ForEach(part.items, id: \.text) { item in
                 Toggle(
                     isOn: Binding(
                         get: { item.mark == "done" },
@@ -149,12 +160,13 @@ struct DropInPage: View {
         .padding(24)
     }
 
-    private var then: some View {
+    /// Then steps, each passed or failed.
+    private func then(_ items: [CheckItem], number: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StepHeading(
-                number: doings.isEmpty ? "2" : "3", title: "Then",
-                detail: "what should be true", done: false)
-            ForEach(checks, id: \.text) { item in
+                number: String(number), title: "Then", detail: "what should be true",
+                done: items.allSatisfy { !$0.mark.isEmpty })
+            ForEach(items, id: \.text) { item in
                 HStack {
                     Text(item.text)
                     Spacer()
@@ -169,10 +181,15 @@ struct DropInPage: View {
                     }
                 }
             }
-            TextField("Note, like what looked off", text: $note, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(2...4)
-                .padding(.top, 6)
+        }
+        .padding(24)
+    }
+
+    /// The foot of the page, below the last part: a note, files to keep, and "Record run".
+    private var foot: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            noteEditor
+            attachments
             HStack {
                 if checks.contains(where: { $0.mark.isEmpty }) {
                     Text("Mark each check first").foregroundStyle(Theme.error)
@@ -181,8 +198,7 @@ struct DropInPage: View {
                 if window.offers.contains("Record run") {
                     Button("Record run") {
                         window.app.run { _ in
-                            let line = note.replacingOccurrences(of: "\n", with: " ")
-                            if !line.isEmpty { try await session.setRunNote(line) }
+                            if !note.isEmpty { try await session.setRunNote(note) }
                             try await window.choose("Record run")
                             // Once recorded, back to the scenario, whose status now shows the
                             // run. Still unmarked checks keep the page, with its message.
@@ -200,6 +216,115 @@ struct DropInPage: View {
             }
         }
         .padding(24)
+        // Files dropped anywhere on the foot are attached, as "Add attachment…" does.
+        // Ref: https://developer.apple.com/documentation/swiftui/view/dropdestination(for:action:istargeted:)
+        .dropDestination(for: URL.self) { urls, _ in
+            attach(urls)
+            return !urls.isEmpty
+        }
+    }
+
+    /// The note, in Markdown: written in one tab, read in the other. An image dropped on it
+    /// is attached and linked at the end of the note.
+    private var noteEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Ref: https://developer.apple.com/documentation/swiftui/segmentedpickerstyle
+            Picker("Note", selection: $previewingNote) {
+                Text("Write").tag(false)
+                Text("Preview").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            Group {
+                if previewingNote {
+                    ScrollView {
+                        if note.isEmpty {
+                            Text("Nothing to preview").foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            MarkdownView(text: note, resolve: attachedFile)
+                        }
+                    }
+                    .padding(8)
+                } else {
+                    // Ref: https://developer.apple.com/documentation/swiftui/texteditor
+                    TextEditor(text: $note)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(4)
+                        .dropDestination(for: URL.self) { urls, _ in
+                            attach(urls)
+                            return !urls.isEmpty
+                        }
+                }
+            }
+            .frame(minHeight: 120, maxHeight: 320)
+            .background(Theme.codeFill, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.hairline))
+            Text("Markdown. Drop an image here to attach it and show it in the note.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// An attached file by the name the note links it with, for the Preview tab: before
+    /// "Record run", images are still where the tester keeps them.
+    private func attachedFile(_ name: String) -> URL? {
+        session.attachments.first { URL(fileURLWithPath: $0).lastPathComponent == name }
+            .map { URL(fileURLWithPath: $0) }
+    }
+
+    /// True for a file whose extension names an image type, like .png or .heic.
+    static func isImage(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
+    }
+
+    /// Files to keep with the run, like a screenshot, each with a button to take it off.
+    /// "Record run" copies them into the run's own folder in runs/.
+    private var attachments: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(session.attachments, id: \.self) { path in
+                let name = URL(fileURLWithPath: path).lastPathComponent
+                HStack(spacing: 6) {
+                    Image(systemName: "paperclip").foregroundStyle(.secondary)
+                    Text(name).help(path)
+                    Button {
+                        window.app.run { _ in try await session.detach(name) }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Remove \(name)")
+                }
+            }
+            Button("Add attachment…", systemImage: "paperclip") { pickingFiles = true }
+                .buttonStyle(.borderless)
+        }
+        // Ref: https://developer.apple.com/documentation/swiftui/view/fileimporter(ispresented:allowedcontenttypes:allowsmultipleselection:oncompletion:)
+        .fileImporter(
+            isPresented: $pickingFiles, allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { picked in
+            if case .success(let urls) = picked { attach(urls) }
+        }
+    }
+
+    /// Attaches each file URL in turn; the core turns down a folder or a file that's too big.
+    /// Each image is also linked at the end of the note, by name, which resolves against the
+    /// run's folder once recorded.
+    /// Ref: https://developer.apple.com/documentation/uniformtypeidentifiers/uttype-swift.struct/image
+    private func attach(_ urls: [URL]) {
+        let files = urls.filter(\.isFileURL)
+        for url in files where Self.isImage(url) {
+            let alt = url.deletingPathExtension().lastPathComponent
+            let link = "![\(alt)](\(url.lastPathComponent))"
+            note += (note.isEmpty || note.hasSuffix("\n") ? "" : "\n\n") + link + "\n"
+        }
+        window.app.run { _ in
+            for url in files { try await session.attach(url.path) }
+        }
     }
 }
 

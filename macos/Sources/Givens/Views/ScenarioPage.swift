@@ -8,6 +8,7 @@ struct ScenarioPage: View {
     let scenario: ScenarioRecord
     /// Opens the Drop in page without running anything: for the scenario, or one outline row.
     let onDropIn: (_ row: String?) -> Void
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -127,13 +128,29 @@ struct ScenarioPage: View {
                         .accessibilityLabel(run.result == "pass" ? "Passed" : "Failed")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(run.text)
-                        if !run.note.isEmpty {
+                        if !run.noteMarkdown.isEmpty {
+                            MarkdownView(
+                                text: run.noteMarkdown,
+                                resolve: MarkdownView.relative(to: run.folder)
+                            )
+                            .foregroundStyle(.secondary)
+                        } else if !run.note.isEmpty {
                             Text(run.note).foregroundStyle(.secondary).textSelection(.enabled)
                         }
+                        ForEach(run.files, id: \.self) { path in fileLink(path) }
                     }
                 }
             }
         }
+    }
+
+    /// A file kept with a run, opened in its default app, like Preview, when clicked.
+    /// Ref: https://developer.apple.com/documentation/swiftui/openurlaction
+    private func fileLink(_ path: String) -> some View {
+        let url = URL(fileURLWithPath: path)
+        return Button(url.lastPathComponent, systemImage: "paperclip") { openURL(url) }
+            .buttonStyle(.link)
+            .help(path)
     }
 
     /// An SF Symbol for a scenario action. Ref: https://developer.apple.com/sf-symbols/

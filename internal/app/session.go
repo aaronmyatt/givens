@@ -81,7 +81,8 @@ type Session struct {
 	keepWaiting bool
 	checklist   []CheckItem
 	note        string
-	recorded    bool // "Record run" saved this checklist, so leaving loses nothing
+	attachments []string // paths of files "Record run" copies into the run's folder
+	recorded    bool     // "Record run" saved this checklist, so leaving loses nothing
 }
 
 // Session is the Drop in on show, or nil.
@@ -122,8 +123,8 @@ func (s *Session) Wait(limit time.Duration) string {
 	return s.Status()
 }
 
-// Checklist is the manual Givens, When steps and Then steps, in that order. It's empty until
-// setup finishes.
+// Checklist is the manual Givens, then the When and Then steps in the order they're written.
+// It's empty until setup finishes.
 func (s *Session) Checklist() []CheckItem {
 	assert.That(s != nil, "checklist runs on a session")
 	assert.That(s.window != nil, "a session belongs to a window")

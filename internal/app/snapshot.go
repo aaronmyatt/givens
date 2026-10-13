@@ -67,6 +67,10 @@ type SessionSnapshot struct {
 	Output    []string    `json:"output"`
 	Cards     []string    `json:"cards"`
 	Checklist []CheckItem `json:"checklist"`
+	// Parts are the checklist cut into runs of one kind, in order, as the page numbers them.
+	Parts []ChecklistPart `json:"parts"`
+	// Attachments are the paths of files "Record run" will keep with the run.
+	Attachments []string `json:"attachments"`
 }
 
 // Snapshot is the whole app, front window first.

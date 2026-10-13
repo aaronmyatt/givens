@@ -22,6 +22,13 @@ func dropInRecordSteps(_ s: DropIntoAScenarioState) -> [StepDefinition] {
             call in try await s.droppedInFirstMarked(call[0])
         },
         def(#"^nothing is added to runs/$"#) { _ in try s.nothingInRuns() },
+        def(#"^they attach the file "([^"]*)"$"#) { call in try await s.attachFile(call[0]) },
+        def(#"^"([^"]*)" is copied into the run's folder in runs/$"#) { call in
+            try s.copiedIntoRunFolder(call[0])
+        },
+        def(#"^the run, in the scenario's run history, lists "([^"]*)"$"#) { call in
+            try await s.historyListsFile(call[0])
+        },
         def(
             #"^a developer whose git user\.name is "([^"]*)" has dropped in to "([^"]*)" and marked every Then step "Pass"$"#
         ) { call in
@@ -59,6 +66,7 @@ extension DropIntoAScenarioState {
         try writeSetup(name, Self.quickSetup)
         try await prepare()
         runKey = try runKeyOf(name)
+        scenario = name
         try await dropInMarkAll(try await dropInTo(name, SessionModel.ready))
     }
 
@@ -102,6 +110,47 @@ extension DropIntoAScenarioState {
             throw StepFailure(
                 "the run line for \(key) doesn't hold the note \"\(note)\": \(fields)")
         }
+    }
+
+    /// Writes a stand-in screenshot outside the project, as a tester's own file would be, and
+    /// attaches it to the Drop in.
+    func attachFile(_ name: String) async throws {
+        let desktop = w.dir.appendingPathComponent("desktop")
+        try FileManager.default.createDirectory(at: desktop, withIntermediateDirectories: true)
+        let file = desktop.appendingPathComponent(name)
+        try Data("proof of \(name)".utf8).write(to: file)
+        attached = file.path
+        try await session().attach(attached)
+    }
+
+    /// The newest run folder under runs/files/<run key>/ holds a copy of the attached file,
+    /// and the tester's own file is still where it was. Folders are named by time, so the
+    /// newest sorts last.
+    func copiedIntoRunFolder(_ name: String) throws {
+        let folder = w.capabilities.appendingPathComponent("runs/files/\(runKey)")
+        let runs = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        guard let newest = runs.max() else {
+            throw StepFailure("runs/files/\(runKey) has no run folder")
+        }
+        let copied = folder.appendingPathComponent(newest).appendingPathComponent(name)
+        let content = (try? String(contentsOf: copied, encoding: .utf8)) ?? ""
+        guard content == "proof of \(name)" else {
+            throw StepFailure("\(copied.path) holds \"\(content)\", not the attached file")
+        }
+        guard FileManager.default.fileExists(atPath: attached) else {
+            throw StepFailure("the tester's own \(name) was moved")
+        }
+    }
+
+    /// Selects the scenario and checks its newest run lists the file.
+    func historyListsFile(_ name: String) async throws {
+        let window = try await w.front()
+        try await window.select(scenario)
+        guard let newest = window.snapshot?.runs.first else {
+            throw StepFailure("the scenario's page lists no runs")
+        }
+        guard newest.files.contains(where: { URL(fileURLWithPath: $0).lastPathComponent == name })
+        else { throw StepFailure("the newest run lists \(newest.files), not \(name)") }
     }
 
     func nothingInRuns() throws {

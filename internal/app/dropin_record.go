@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"givens/internal/assert"
 	"givens/internal/fingerprint"
@@ -49,17 +50,18 @@ func (s *Session) Mark(item string, mark string) error {
 // SetRunNote sets the note that "Record run" saves with the run. Needed by "Record a run".
 func (s *Session) SetRunNote(note string) error {
 	assert.That(s != nil, "set note runs on a session")
-	assert.That(len(note) <= NameLengthMax, "a note fits NameLengthMax")
+	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
 	s.note = note
 	return nil
 }
 
 // RecordRun records the run with note, which may be "": one line in today's file in runs/,
-// passing when every Then step passed. Until every check is marked it records nothing and
-// shows MessageMarkEachCheck instead.
+// passing when every Then step passed. A note of more than one line is kept whole as note.md
+// in the run's folder, and the line keeps its first line. Until every check is marked it
+// records nothing and shows MessageMarkEachCheck instead.
 func (s *Session) RecordRun(note string) error {
 	assert.That(s != nil, "record run runs on a session")
-	assert.That(len(note) <= NameLengthMax, "a note fits NameLengthMax")
+	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
 	if s.Status() != SessionReady {
 		return errors.New("setup hasn't finished, so there's no run to record")
 	}
@@ -88,6 +90,16 @@ func (s *Session) RecordRun(note string) error {
 		Time: window.app.config.Clock.Now(), Key: s.key(), Result: result,
 		Author: runs.Author(filepath.Dir(window.path)), Values: s.row,
 		Fingerprint: parts, Note: note,
+	}
+	// Files first, so a line is never appended for a run whose files didn't copy.
+	if err := runs.CopyFiles(window.path, run, s.attachments); err != nil {
+		return err
+	}
+	if strings.Contains(note, "\n") {
+		run.Note = runs.Summary(note)
+		if err := runs.WriteNote(window.path, run, note); err != nil {
+			return err
+		}
 	}
 	if err := runs.Append(window.path, run); err != nil {
 		return err

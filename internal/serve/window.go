@@ -7,6 +7,7 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
+	"givens/internal/runs"
 )
 
 // Window and session methods. Each checks what internal/app asserts, so a bad request is an
@@ -113,8 +114,8 @@ func mark(session *app.Session, given params) (any, error) {
 func recordRun(session *app.Session, given params) (any, error) {
 	assert.That(session != nil, "record run runs on a session")
 	assert.That(session.Status() != "unknown", "a session has a known status")
-	if len(given.Note) > app.NameLengthMax {
-		return nil, fmt.Errorf("%w: a note fits %d bytes", ErrBadRequest, app.NameLengthMax)
+	if len(given.Note) > runs.NoteBytesMax {
+		return nil, fmt.Errorf("%w: a note fits %d bytes", ErrBadRequest, runs.NoteBytesMax)
 	}
 	return nil, session.RecordRun(given.Note)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"givens/internal/app"
+	"givens/internal/runs"
 )
 
 const gitTimeout = 20 * time.Second
@@ -31,7 +32,7 @@ func (s *state) droppedInAllPassed(name string) error {
 	if err != nil {
 		return err
 	}
-	s.runKey = key
+	s.runKey, s.scenario = key, name
 	session, err := s.dropInTo(name, app.SessionReady)
 	if err != nil {
 		return err
@@ -191,4 +192,65 @@ func (s *state) runLineIncludes(text string) error {
 		return fmt.Errorf("the run line for %s doesn't include %q: %q", s.runKey, text, fields)
 	}
 	return nil
+}
+
+// attachFile writes a stand-in screenshot outside the project, as a tester's own file would
+// be, and attaches it to the Drop in.
+func (s *state) attachFile(name string) error {
+	session, err := s.session()
+	if err != nil {
+		return err
+	}
+	s.attached = filepath.Join(s.Dir, "desktop", name)
+	if err := os.MkdirAll(filepath.Dir(s.attached), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.attached, []byte("proof of "+name), 0o644); err != nil {
+		return err
+	}
+	return session.Attach(s.attached)
+}
+
+// copiedIntoRunFolder finds the run's folder from its line's key and time, and checks it
+// holds a copy of the attached file, the original left where it was.
+func (s *state) copiedIntoRunFolder(name string) error {
+	lines, err := s.runLines(s.runKey)
+	if err != nil {
+		return err
+	}
+	at, err := time.Parse(time.RFC3339, lines[len(lines)-1][0])
+	if err != nil {
+		return err
+	}
+	copied := filepath.Join(runs.FilesDir(s.Capabilities(), s.runKey, at), name)
+	content, err := os.ReadFile(copied)
+	if err != nil {
+		return fmt.Errorf("%s isn't in the run's folder: %w", name, err)
+	}
+	if string(content) != "proof of "+name {
+		return fmt.Errorf("%s holds %q, not the attached file", copied, content)
+	}
+	if _, err := os.Stat(s.attached); err != nil {
+		return fmt.Errorf("the tester's own %s was moved: %w", name, err)
+	}
+	return nil
+}
+
+// historyListsFile selects the scenario and checks its newest run lists the file.
+func (s *state) historyListsFile(name string) error {
+	if err := s.Window.Select(s.scenario); err != nil {
+		return err
+	}
+	for _, window := range s.App.Snapshot().Windows {
+		if window.ID != s.Window.ID() || len(window.Runs) == 0 {
+			continue
+		}
+		for _, path := range window.Runs[0].Files {
+			if filepath.Base(path) == name {
+				return nil
+			}
+		}
+		return fmt.Errorf("the newest run lists %q, not %s", window.Runs[0].Files, name)
+	}
+	return fmt.Errorf("the scenario's page lists no runs")
 }
