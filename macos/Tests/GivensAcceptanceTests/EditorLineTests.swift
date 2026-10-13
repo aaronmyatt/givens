@@ -24,18 +24,3 @@ import Testing
         #expect(WindowModel.withSuggestion(text, line: 7, step: "z") == text)
     }
 }
-
-/// "Copy steps" text: tags, the Scenario: line, then the steps.
-@MainActor @Suite struct CopyStepsTests {
-    @Test func writesTheScenarioAsGherkin() throws {
-        let json = """
-            {"name":"Card declined","slug":"card-declined","capability":"Checkout","rule":"",
-             "error":true,"tags":["@error"],"steps":["Given a shopper","When they pay"],
-             "setup":"","status":"Never run","warning":""}
-            """
-        let scenario = try JSONDecoder().decode(ScenarioRecord.self, from: Data(json.utf8))
-        #expect(
-            WindowModel.gherkin(scenario)
-                == "@error\nScenario: Card declined\n  Given a shopper\n  When they pay\n")
-    }
-}

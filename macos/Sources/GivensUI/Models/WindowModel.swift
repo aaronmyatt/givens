@@ -94,17 +94,6 @@ public final class WindowModel: Identifiable {
         return values.joined(separator: ", ") + " — " + row.status
     }
 
-    /// A scenario as Gherkin text, for "Copy steps": its tags, its Scenario: line, then its
-    /// steps indented. An outline, whose steps hold <placeholders>, is a Scenario Outline.
-    /// Ref: https://cucumber.io/docs/gherkin/reference/
-    public static func gherkin(_ scenario: ScenarioRecord) -> String {
-        let outline = scenario.steps.contains { $0.contains("<") && $0.contains(">") }
-        var lines = scenario.tags.isEmpty ? [] : [scenario.tags.joined(separator: " ")]
-        lines.append((outline ? "Scenario Outline: " : "Scenario: ") + scenario.name)
-        lines += scenario.steps.map { "  " + $0 }
-        return lines.joined(separator: "\n") + "\n"
-    }
-
     /// The 0-based line where two texts first differ: the line just typed on in the editor.
     /// nil when nothing changed.
     public static func changedLine(from old: String, to new: String) -> Int? {

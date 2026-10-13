@@ -225,9 +225,10 @@ func TestNoCopyWithoutSetup(t *testing.T) {
 	if err := window.Select("Empty cart"); err != nil {
 		t.Fatal(err)
 	}
-	offers := strings.Join(window.Offers(), ", ")
-	if strings.Contains(offers, OfferCopy) || !strings.Contains(offers, OfferCreateScript) {
-		t.Errorf("offers %s, want Create script and no Copy", offers)
+	// Whole labels, as "Copy steps" holds "Copy" and is still offered.
+	offers := window.Offers()
+	if slices.Contains(offers, OfferCopy) || !slices.Contains(offers, OfferCreateScript) {
+		t.Errorf("offers %q, want Create script and no Copy", offers)
 	}
 }
 

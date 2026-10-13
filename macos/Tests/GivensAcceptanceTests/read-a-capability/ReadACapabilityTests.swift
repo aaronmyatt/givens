@@ -190,7 +190,7 @@ private func readACapabilityImages(_ markdown: String) throws -> [String] {
 func readACapabilitySteps(_ w: World) -> [StepDefinition] {
     let s = ReadACapabilityState(w)
     return readACapabilityStorySteps(s) + readACapabilityScenarioSteps(s)
-        + readACapabilityImageSteps(s)
+        + readACapabilityImageSteps(s) + readACapabilityHistorySteps(s)
 }
 
 @MainActor
@@ -373,6 +373,32 @@ private func readACapabilityImageSteps(_ s: ReadACapabilityState) -> [StepDefini
             else {
                 throw StepFailure(
                     "the placeholder for \(call[0]) isn't followed by \"\(s.textAfterImage)\"")
+            }
+        },
+    ]
+}
+
+/// What a scenario's page lists of its runs, and "Copy steps".
+@MainActor
+private func readACapabilityHistorySteps(_ s: ReadACapabilityState) -> [StepDefinition] {
+    let w = s.w
+    return [
+        def(#"^its page lists one run, "([^"]*)"$"#) { call in
+            let runs = try await w.front().snapshot?.runs ?? []
+            guard runs.count == 1, runs[0].text.hasPrefix(call[0]) else {
+                throw StepFailure("the scenario's page lists \(runs.map(\.text))")
+            }
+        },
+        def(#"^the clipboard holds "([^"]*)" as Gherkin, its Scenario: line then its steps$"#) {
+            call in
+            let onDisk = try s.checkoutScenario(call[0])
+            var lines = onDisk.tags.isEmpty ? [] : [onDisk.tags.joined(separator: " ")]
+            lines.append("Scenario: \(call[0])")
+            lines += onDisk.steps.map { "  " + $0 }
+            let want = lines.joined(separator: "\n") + "\n"
+            let got = w.clipboard.readText()
+            guard got == want else {
+                throw StepFailure("the clipboard holds \"\(got)\", not \"\(want)\"")
             }
         },
     ]

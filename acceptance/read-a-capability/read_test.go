@@ -34,7 +34,7 @@ type state struct {
 
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
-	return []world.Step{
+	return append(s.historySteps(),
 		world.Def(`^they see "([^"]*)", "([^"]*)" and "([^"]*)"$`, s.seeStory),
 		world.Def(`^below the scenarios, about\.md is shown with the checkout flow diagram$`,
 			s.aboutBelowStory),
@@ -51,7 +51,7 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^the rest of the story is shown as normal$`, s.restOfStoryShown),
 		world.Def(`^where the image would be there's a placeholder naming "([^"]*)"$`,
 			s.placeholderShown),
-	}
+	)
 }
 
 // diskScenario is a scenario as checkout.feature defines it, read without Givens.

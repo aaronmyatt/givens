@@ -311,7 +311,7 @@ func scenarioFileOf(action string) func(project.Scenario) string {
 func scenarioPageOffers(shown Scenario, loaded project.Scenario) []string {
 	assert.That(shown.Name != "", "a shown scenario has a name")
 	assert.That(loaded.Name == "" || loaded.Name == shown.Name, "both are the same scenario")
-	offers := scenarioOffers(shown)
+	offers := append(scenarioOffers(shown), OfferCopySteps)
 	if noSetup(loaded) {
 		// With no setup there's nothing to copy; the setup can be written instead.
 		offers = slices.DeleteFunc(offers, func(offer string) bool { return offer == OfferCopy })
@@ -346,6 +346,12 @@ func (w *Window) chooseOnScenarioPage(action string) error {
 	switch action {
 	case OfferCopy:
 		return w.copySetup(scenario)
+	case OfferCopySteps:
+		shown := w.shownScenario()
+		if shown == nil {
+			return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
+		}
+		return w.app.config.Clipboard.WriteText(gherkinOf(*shown))
 	case OfferAddTeardown:
 		return w.addTeardown()
 	case OfferCreateScript, OfferWriteSetupSteps:

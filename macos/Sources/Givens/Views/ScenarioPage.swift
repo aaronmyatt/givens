@@ -32,14 +32,16 @@ struct ScenarioPage: View {
                 if scenario.error { Badge(text: "Error state", tint: Theme.error) }
                 Spacer()
                 // Copies the scenario itself; "Copy" by the setup script copies how to run it.
-                Button {
-                    window.app.copyText(WindowModel.gherkin(scenario))
-                } label: {
-                    Label("Copy steps", systemImage: "doc.on.doc")
+                if window.offers.contains("Copy steps") {
+                    Button {
+                        window.app.run { _ in try await window.choose("Copy steps") }
+                    } label: {
+                        Label("Copy steps", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Copy this scenario as Gherkin text")
+                    .keyboardShortcut("c", modifiers: [.command, .option])
                 }
-                .buttonStyle(.bordered)
-                .help("Copy this scenario as Gherkin text")
-                .keyboardShortcut("c", modifiers: [.command, .option])
                 if window.offers.contains("Edit") {
                     Button {
                         window.app.run { _ in try await window.choose("Edit") }

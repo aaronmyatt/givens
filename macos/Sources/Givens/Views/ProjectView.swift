@@ -9,7 +9,7 @@ enum Placement {
     static let toolbar = ["New story", "New scenario"]
     /// A scenario's page, beside its setup script.
     static let scenario = [
-        "Copy", "Drop in", "Create script", "Write setup steps", "Edit script",
+        "Copy", "Copy steps", "Drop in", "Create script", "Write setup steps", "Edit script",
         "Edit setup", "Add teardown", "Edit teardown", "Edit",
     ]
     /// The Drop in page.

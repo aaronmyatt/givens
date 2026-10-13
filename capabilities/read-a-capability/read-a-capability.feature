@@ -39,3 +39,18 @@ Feature: Read a capability
     When they select "Checkout"
     Then the rest of the story is shown as normal
     And where the image would be there's a placeholder naming "images/flow.svg"
+
+  # A scenario's page lists its recorded runs, newest first, with who ran each and its note, so
+  # what's been tried shows before dropping in.
+  Scenario: See a scenario's runs
+    Given a developer has the sample shop project open in Givens
+    And "Card declined" has a passing run recorded
+    When they select the "Card declined" scenario
+    Then its page lists one run, "Passed today"
+
+  # "Copy steps" copies the scenario as Gherkin, to paste into a ticket or a chat.
+  Scenario: Copy a scenario's steps
+    Given a developer has the sample shop project open in Givens
+    When they select the "Card declined" scenario
+    And they choose "Copy steps"
+    Then the clipboard holds "Card declined" as Gherkin, its Scenario: line then its steps
