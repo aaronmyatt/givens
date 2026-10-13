@@ -41,6 +41,8 @@ type WindowSnapshot struct {
 	Offers            []string         `json:"offers"`
 	Labels            []string         `json:"labels"`
 	FolderPickerShown bool             `json:"folderPickerShown"`
+	// Branch is the branch a read-only window shows, or "" for the checked-out folder.
+	Branch string `json:"branch"`
 }
 
 // SearchSnapshot is the ⌘K search. Records.swift's SearchRecord.
@@ -125,6 +127,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 	} else {
 		messages = append(messages, w.kitMessages()...)
 	}
+	messages = append(messages, w.branchMessages()...)
 	if empty := w.emptyView(); empty != "" {
 		messages = append(messages, empty)
 	}
@@ -152,6 +155,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 		Rows:       w.DropInRows(),
 		Runs:       w.shownHistory(),
 		Offers:     append(make([]string, 0, 8), w.Offers()...),
+		Branch:     w.branch,
 		Labels:     labels,
 	}
 }

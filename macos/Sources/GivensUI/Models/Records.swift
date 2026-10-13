@@ -13,6 +13,8 @@ public struct WindowSnapshot: Decodable, Sendable, Equatable {
     public let title: String
     /// The capabilities folder a project window shows, or "".
     public let path: String
+    /// The branch a read-only window shows, or "" for the checked-out folder.
+    public let branch: String
     /// Messages across the top: "No capabilities here yet", "This project isn't trusted".
     public let messages: [String]
     /// Capabilities, views, tags and helpers.

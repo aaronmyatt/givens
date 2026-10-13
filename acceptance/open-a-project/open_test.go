@@ -44,6 +44,7 @@ func steps(w *world.World) []world.Step {
 	s := &state{World: w}
 	all := append(projectSteps(s), welcomeSteps(s)...)
 	all = append(all, terminalSteps(s)...)
+	all = append(all, branchSteps(s)...)
 	return append(all, windowSteps(s)...)
 }
 

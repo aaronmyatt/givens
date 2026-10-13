@@ -43,6 +43,9 @@ func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardo
 	*Session, error) {
 	assert.That(w != nil, "start session runs on a window")
 	assert.That(found.Capability != "", "the scenario belongs to a capability")
+	if w.branch != "" {
+		return nil, fmt.Errorf("%s isn't checked out, so its setup scripts don't run", w.branch)
+	}
 	trusted, err := w.app.Trusted(w.path)
 	if err != nil {
 		return nil, err

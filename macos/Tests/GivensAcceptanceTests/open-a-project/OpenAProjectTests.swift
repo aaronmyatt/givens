@@ -119,6 +119,7 @@ func storyLines(of feature: URL) throws -> [String] {
 func openAProjectSteps(_ w: World) -> [StepDefinition] {
     let s = OpenAProjectState(w)
     return openingSteps(s) + welcomeSteps(s) + terminalSteps(s) + windowSteps(s)
+        + openABranchSteps(s)
 }
 
 @MainActor

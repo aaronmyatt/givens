@@ -79,6 +79,7 @@ struct ProjectView: View {
                 }
                 .disabled(window.offers.filter(Placement.toolbar.contains).isEmpty)
             }
+            ToolbarItem(placement: .primaryAction) { BranchMenu(window: window) }
         }
         .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
     }
@@ -334,5 +335,36 @@ struct AuthoringSheet: View {
         }
         .padding(20)
         .frame(minWidth: 400)
+    }
+}
+
+/// Another branch's capabilities, read only, without checking that branch out. In a branch's
+/// window, a button closes it, back to the checked-out folder's window behind it.
+struct BranchMenu: View {
+    let window: WindowModel
+    @State private var names: [String] = []
+
+    var body: some View {
+        if window.branch.isEmpty {
+            Menu {
+                ForEach(names, id: \.self) { name in
+                    Button(name) { window.app.run { _ in try await window.openBranch(name) } }
+                }
+            } label: {
+                Label("Branch", systemImage: "arrow.triangle.branch")
+            }
+            .help("Read another branch's capabilities")
+            .disabled(names.isEmpty)
+            // Listed again whenever the window changes, so a new branch shows up.
+            // Ref: https://developer.apple.com/documentation/swiftui/view/task(id:priority:_:)
+            .task(id: window.id) { names = (try? await window.branches()) ?? [] }
+        } else {
+            Button {
+                window.app.run { _ in try await window.close() }
+            } label: {
+                Label("Back to the working tree", systemImage: "arrow.uturn.backward")
+            }
+            .help("Close \(window.branch) and go back to the checked-out capabilities")
+        }
     }
 }

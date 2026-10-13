@@ -17,6 +17,13 @@ import (
 func (w *Window) Offers() []string {
 	assert.That(w != nil, "offers runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	return w.readOnly(w.allOffers())
+}
+
+// allOffers is every offer before a branch's window cuts them to the read-only ones.
+func (w *Window) allOffers() []string {
+	assert.That(w != nil, "offers runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
 	if w.prompt != nil {
 		return []string{w.prompt.confirm, w.prompt.cancel}
 	}

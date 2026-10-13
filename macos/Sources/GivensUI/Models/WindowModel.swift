@@ -27,6 +27,8 @@ public final class WindowModel: Identifiable {
     public var title: String { snapshot?.title ?? "" }
     /// The capabilities folder shown, or "".
     public var path: String { snapshot?.path ?? "" }
+    /// The branch a read-only window shows, or "" for the checked-out folder.
+    public var branch: String { snapshot?.branch ?? "" }
     /// The sidebar's lines.
     public var sidebar: [SidebarItem] { snapshot?.sidebar ?? [] }
     /// The name of what's selected, or "".

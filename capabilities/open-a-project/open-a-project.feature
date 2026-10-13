@@ -101,3 +101,24 @@ Feature: Open a project
     Given a developer has two projects open in Givens
     When they quit Givens and open it again
     Then both projects reopen in their own windows
+
+  # Another branch's capabilities can be read without checking that branch out. Givens copies
+  # its capabilities folder out of git into Givens's own data folder, so the working tree is
+  # never touched. The window is read only: its setup scripts belong to code that isn't
+  # checked out.
+  Scenario: Read capabilities from another branch
+    Given the sample shop is a git repository with a branch "gift-cards" that adds the scenario "Pay with a gift card" to Checkout
+    And a developer has the sample shop project open in Givens
+    When they open the branch "gift-cards"
+    Then a second window opens, its title ending "@ gift-cards"
+    And it lists "Pay with a gift card" under "Checkout"
+    And the sample shop's own checkout.feature doesn't have "Pay with a gift card"
+    And "Drop in" isn't offered for "Pay with a gift card"
+
+  @error
+  Scenario: Open a branch that doesn't exist
+    Given the sample shop is a git repository with a branch "gift-cards" that adds the scenario "Pay with a gift card" to Checkout
+    And a developer has the sample shop project open in Givens
+    When they open the branch "no-such-branch"
+    Then they see "No branch called no-such-branch"
+    And no second window opens

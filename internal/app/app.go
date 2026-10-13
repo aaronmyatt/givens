@@ -154,8 +154,9 @@ func (a *App) Quit() error {
 	assert.That(a != nil, "quit runs on an app")
 	assert.That(a.config.AppDataDir != "", "the app knows where to remember windows")
 	open := make([]string, 0, len(a.windows))
+	// A branch's window isn't reopened: its folder is a throwaway copy.
 	for _, window := range a.windows {
-		if window.kind == WindowProject {
+		if window.kind == WindowProject && window.branch == "" {
 			open = append(open, window.path)
 		}
 	}

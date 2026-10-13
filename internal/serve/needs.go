@@ -42,6 +42,9 @@ func (s *Server) needs() map[string]handler {
 		"session.setRunNote":      s.onSession(setRunNote),
 		"window.dropInRows":       s.onWindow(dropInRows),
 		"window.chooseOnRow":      s.onWindow(chooseOnRow),
+		// capabilities/open-a-project: Needs/open-a-project.swift.
+		"window.branches":   s.onWindow(branches),
+		"window.openBranch": s.onWindow(openBranch),
 		// capabilities/views: Needs/views.swift.
 		"window.viewHelpers": s.onWindow(viewHelpers),
 		// capabilities/write-stories-and-scenarios: Needs/write-stories-and-scenarios.swift.
@@ -230,6 +233,46 @@ func setRunNote(session *app.Session, given params) (any, error) {
 			app.NameLengthMax)
 	}
 	return nil, session.SetRunNote(given.Note)
+}
+
+func attach(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "attach runs on a session")
+	assert.That(utf8.ValidString(given.Path), "JSON strings are text")
+	if !filepath.IsAbs(given.Path) || len(given.Path) > app.PathLengthMax {
+		return nil, fmt.Errorf("%w: an attached file has an absolute path", ErrBadRequest)
+	}
+	return nil, session.Attach(given.Path)
+}
+
+func detach(session *app.Session, given params) (any, error) {
+	assert.That(session != nil, "detach runs on a session")
+	assert.That(utf8.ValidString(given.Name), "JSON strings are text")
+	if given.Name == "" || len(given.Name) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: detach needs a file name", ErrBadRequest)
+	}
+	return nil, session.Detach(given.Name)
+}
+
+func branches(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "branches runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if window.Kind() != app.WindowProject {
+		return nil, fmt.Errorf("%w: only a project window has branches", ErrBadRequest)
+	}
+	return window.Branches()
+}
+
+func openBranch(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "open branch runs on a window")
+	assert.That(utf8.ValidString(given.Name), "JSON strings are text")
+	if window.Kind() != app.WindowProject {
+		return nil, fmt.Errorf("%w: only a project window has branches", ErrBadRequest)
+	}
+	if given.Name == "" || len(given.Name) > app.NameLengthMax {
+		return nil, fmt.Errorf("%w: open branch needs a branch name", ErrBadRequest)
+	}
+	_, err := window.OpenBranch(given.Name)
+	return nil, err
 }
 
 func dropInRows(window *app.Window, _ params) (any, error) {

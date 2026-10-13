@@ -43,6 +43,11 @@ type Window struct {
 	search             *search  // the ⌘K panel while it's open, or nil
 	selectedStep       string   // the step result on show, as its text, or ""
 	folderPicker       bool     // "Open folder…" showed the folder picker
+
+	// A branch's window shows a read-only copy of another branch's capabilities; see branch.go.
+	branch        string // the branch on show, or "" for the checked-out folder
+	branchOrigin  string // the capabilities folder the branch's copy came from, or ""
+	branchProblem string // why the last OpenBranch opened nothing, or ""
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -90,6 +95,9 @@ func (w *Window) Title() string {
 	assert.That(w.app != nil, "a window belongs to an app")
 	if w.kind == WindowWelcome {
 		return "Welcome to Givens"
+	}
+	if w.branch != "" {
+		return w.branchOrigin + " @ " + w.branch
 	}
 	return w.path
 }
