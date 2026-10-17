@@ -1,0 +1,11 @@
+2026-10-17 Check the remote takes pushes to refs/givens/* (GitHub, GitLab; Bitbucket and Azure unknown) @human
+x 2026-10-17 2026-10-17 Assess git LFS for runs off main, and how Givens would manage it — LFS doesn't move anything off main; a ref of Givens's own does; see notes.md
+x 2026-10-17 2026-10-17 Decide: refs/givens/runs (A) or an orphan branch (B) — A, with a limit: the last X runs or x MB, whichever is smaller
+x 2026-10-17 2026-10-17 Spec: capabilities/keep-runs-off-main, @wip — 7 scenarios: keep off main, record, another device, two devices, offline, share later, old runs dropped
+x 2026-10-17 2026-10-17 Core: runs reads the ref's tree beside runs/; prune by limits, unit-tested — runs/ref.go (RefCopy, GitCommonDir without running git, FolderOf, MergeLines), runs/prune.go (Limits, Prune); 7 unit tests
+x 2026-10-17 2026-10-17 Core: internal/runref: commit, three-way merge, fetch and push, unit-tested against real repos — runref.go, merge.go, sync.go; 6 tests on real repos: share and fetch, two devices, unreachable, trim drops history and isn't undone, stale push, adopt
+x 2026-10-17 2026-10-17 Core: app: "Keep runs off main", RecordRun into the ref, sync on open, "Share runs", messages — app/runs_off_main.go; RecordRun goes through writeRun into the ref's copy; Open syncs when off-main.md is there; serve window.syncRuns
+x 2026-10-17 2026-10-17 Go steps — acceptance/keep-runs-off-main; all 7 pass with GIVENS_TAGS=@wip against real repos and a bare remote; every other Go suite still passes
+x 2026-10-17 2026-10-17 Mac: "Keep runs off main" menu item, the not-shared banner with "Share runs", sync every 5 minutes — a toolbar button (arrow.up.bin) while it's offered; "Share runs" lands in the banner beside the count; a .task syncs every 300 s; Needs/keep-runs-off-main.swift; builds, not eyeballed yet
+x 2026-10-17 2026-10-17 Swift steps, remove @wip, GIVENS.md, scripts/check.sh passes — KeepRunsOffMainTests.swift and KeepRunsOffMainArrange.swift; 7 of 7 in Go and Swift; check.sh passes
+x 2026-10-17 2026-10-17 Make keeping runs off main the default in a git repository with a remote; "Move runs off main" for runs already in capabilities/runs — default with origin; no remote keeps runs/; opening never pushes; 8 of 8 in Go and Swift; check.sh passes

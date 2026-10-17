@@ -48,3 +48,15 @@ checking that branch out.
 - Known gaps: the Needs methods that write (edit, newStory, rename, delete) aren't gated in a
   branch's window, but the UI doesn't offer them there. Copies under
   `<app data>/branches/` are never cleaned up.
+
+## Follow-up: clean-up and refused writes (2026-10-17)
+- Copies: closing a branch's window removes its copy, and its origin's folder once empty.
+  `Launch` removes all of `<app data>/branches/`, since branch windows aren't reopened after
+  quitting. Only serve calls Launch, so a CLI run never clears a copy the app is showing.
+- Writes: `Window.writable` returns `ErrReadOnly` in a branch's window. Edit, NewStory,
+  NewScenario, Rename, Delete, NewHelper and SaveHelper check it first. The editor's own
+  calls need an open editor, which only those make, so they're covered too.
+- No scenario: nothing here is on screen. Unit tests in internal/app/branch_test.go, against
+  a real git repo.
+- Rejected: clearing copies in `New`, which the CLI calls too, so a `givens` run could delete
+  the folder a branch window shows.

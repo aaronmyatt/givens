@@ -48,3 +48,14 @@ steps" writes it.
   "a-visitor-reads-the-newest-posts.md has no steps yet", with no card and no text field.
   Choose "Edit setup", then "Delete file", then "Delete". The scenario page should offer
   "Create script" and "Write setup steps" again.
+
+## Follow-up: "Delete file" on a script others build on (2026-10-17)
+- Spec: "Delete a setup script another builds on" (@error) in write-stories-and-scenarios.
+  Steps in Go and Swift; the Go one fails with the fix taken out.
+- Core: `deleteFile` finds the scenario whose setup script is open, runs `builtOn` on its key,
+  and goes through `askDelete`, as `Delete` does: "<name> builds on this scenario" with
+  "Delete anyway", or "Delete <file>?" with "Delete".
+- Only the .sh warns: `from` runs a scenario's script (and its teardown, when there is one),
+  never its .md, so deleting a .md or a teardown breaks nobody's setup.
+- Steps: "a developer has chosen … on …" now keeps every file and the opened path, so
+  "nothing is deleted unless they choose" checks the file went to the Trash.

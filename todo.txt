@@ -1,8 +1,8 @@
-2026-10-12 Flag (tag) TODOs with a warning/red flag to emphasise they are failing or not testable/need work
-2026-10-12 Toggle TODO flag on scenarios to tag them in a view so the developer knows they need attention
-2026-10-12 Flag newly added scenarios as TODO, assuming they have not been implemented yet
+2026-10-17 Explore using git lfs(?) to store the runs/ off the main branch, but still carried across devices ref:runs-off-main @human built: refs/givens/runs with a limit; left: check your host takes pushes to refs/givens/* — see tasks/runs-off-main/notes.md
+2026-10-17 Runs off main: sync on open without holding the window up (every git project with a remote fetches on open, and waits up to 8 s for an unreachable one) — see tasks/runs-off-main/notes.md
+2026-10-17 Runs off main: a way to change the ref's limits (runs and MB) from Givens — see tasks/runs-off-main/notes.md
+2026-10-17 Runs off main: show the ref's runs in a branch's window — see tasks/runs-off-main/notes.md
 2026-10-11 Release: package Givens.app and the givens command ref:release
-2026-10-17 "Delete file" on a setup script another scenario builds on: warn and offer "Delete anyway", as deleting the scenario does — see tasks/empty-setup-steps/notes.md
 x 2026-10-11 2026-10-11 Foundation: core packages and the acceptance world ref:foundation — see tasks/foundation/notes.md
 x 2026-10-11 2026-10-11 macOS UI shell: SwiftUI over givens serve ref:ui-shell — see tasks/ui-shell/notes.md
 x 2026-10-11 2026-10-11 Gherkin files: 7 scenarios ref:gherkin-files — see tasks/gherkin-files/notes.md
@@ -33,6 +33,10 @@ x 2026-10-12 2026-10-12 pressing 'e' on a story or scenario screen should open a
 x 2026-10-12 2026-10-12 about.md content should be rendered _below_ the list of scenarios so that thye are not pushed off the screen — an About section after the scenarios; "Read a story" now checks about.md comes below them, in Go and Swift, and visible lines keep that order; not eyeballed yet
 x 2026-10-12 2026-10-12 about.md content should be richly formatted and rendered — drawn with MarkdownView (built for the run note): headings, lists, quotes, code, images from the capability's folder; parser unit-tested, no scenario, as it's how it looks; not eyeballed yet
 x 2026-10-11 2026-10-12 Spec the scenario page's run history and Copy steps in read-a-capability, with Go and Swift steps (built from a UI request, unit-tested only) — "See a scenario's runs" and "Copy a scenario's steps"; Copy steps moved into the core (gherkinOf, OfferCopySteps, also in branch windows), the Swift-only copy and its test removed
-2026-10-12 Branch windows: clean up old copies under <app data>/branches/, and refuse the Needs calls that write (edit, newStory, rename, delete) there — see tasks/read-another-branch/notes.md
-2026-10-12 Run files: two runs of one scenario in the same second share a folder; give the folder a tiebreak — see tasks/a-user-tester-should-be-able-to-add-test/notes.md
 x 2026-10-17 2026-10-17 Drop in: setup steps with nothing written fail with a clear message; the editor can delete a setup file ref:empty-setup-steps — see tasks/empty-setup-steps/notes.md
+x 2026-10-17 2026-10-12 Flag (tag) TODOs with a warning/red flag to emphasise they are failing or not testable/need work ref:todo-flag — @todo, drawn with a red flag; see tasks/todo-flag/notes.md
+x 2026-10-17 2026-10-12 Toggle TODO flag on scenarios to tag them in a view so the developer knows they need attention — see tasks/todo-flag/notes.md — "Flag as to do" and "Remove to do flag" on the scenario page; flagged ones under "todo" in Tags
+x 2026-10-17 2026-10-12 Flag newly added scenarios as TODO, assuming they have not been implemented yet — see tasks/todo-flag/notes.md — New scenario writes @todo (@error @todo for an error state)
+x 2026-10-17 2026-10-17 "Delete file" on a setup script another scenario builds on: warn and offer "Delete anyway", as deleting the scenario does — see tasks/empty-setup-steps/notes.md — done: 1 scenario in write-stories-and-scenarios, Go and Swift; only a .sh warns, as from never runs a .md
+x 2026-10-17 2026-10-12 Branch windows: clean up old copies under <app data>/branches/, and refuse the Needs calls that write (edit, newStory, rename, delete) there — see tasks/read-another-branch/notes.md — done: a copy goes when its window closes, and all at launch; writes give ErrReadOnly; unit-tested
+x 2026-10-17 2026-10-12 Run files: two runs of one scenario in the same second share a folder; give the folder a tiebreak — see tasks/a-user-tester-should-be-able-to-add-test/notes.md — done: runs.FreeTime moves the later run on a second, so the line format stays; unit-tested; known gap: same second on two branches

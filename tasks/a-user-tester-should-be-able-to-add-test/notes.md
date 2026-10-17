@@ -44,3 +44,17 @@ and the scenario's run history lists them.
 - Fixed after closing: the GIVENS.md layout line wasn't copied to internal/starter/GIVENS.md,
   so TestGuideMatchesGivens failed. Copied over while doing the Drop in order task.
 - Known gap: two runs of one scenario in the same second share a folder.
+
+## Follow-up: a tiebreak for runs in the same second (2026-10-17)
+- `runs.FreeTime`: RecordRun takes the first whole second, from now on, that has no run line
+  for the key in that day's file and no files folder. A second run in the same second is
+  recorded a second later, so it gets its own folder.
+- Chosen over a suffix on the folder (`<time>-2`): readers would have to count earlier lines
+  with the same key and time, and a merge can change that order. Moving the time keeps the
+  line format and every reader as they were.
+- A folder with no line counts as taken: a run whose note failed to write after its files
+  copied leaves one, and a new run mustn't pick up its files.
+- Limit: 60 seconds past now (`FreeSecondsMax`), then RecordRun fails with a message.
+- Known gap: two people on different branches recording the same scenario in the same second
+  still share a folder once merged. Rare enough to leave.
+
