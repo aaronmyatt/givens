@@ -22,6 +22,10 @@ var ErrNotImplemented = errors.New("not built yet: see todo.txt")
 // ErrNotFound is returned for a capability or scenario name a window doesn't have.
 var ErrNotFound = errors.New("there's nothing with that name")
 
+// ErrReadOnly is returned for a change asked of a branch's window: its folder is a throwaway
+// copy, so a change would be lost.
+var ErrReadOnly = errors.New("a branch's window is read only")
+
 // Limits. Tiger Style: put a limit on everything.
 // Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
 const (

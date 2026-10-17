@@ -47,6 +47,10 @@ func (a *App) rememberRecent(folder string) error {
 func (a *App) Launch() error {
 	assert.That(a != nil, "launch runs on an app")
 	assert.That(a.config.AppDataDir != "", "the app knows where its data lives")
+	// Branch windows aren't reopened after quitting, so every copy left from before is stale.
+	if err := os.RemoveAll(filepath.Join(a.config.AppDataDir, branchesDirName)); err != nil {
+		return err
+	}
 	open, err := a.folders(openWindowsFileName)
 	if err != nil {
 		return err
@@ -139,7 +143,8 @@ func (w *Window) openFolder() error {
 }
 
 // CloseWindow closes this window. Closing the last project window leaves nothing to reopen
-// at the next launch. Needed by "Reopen a recent project", whose last quit had nothing open.
+// at the next launch. A branch's window takes its copy with it. Needed by "Reopen a recent
+// project", whose last quit had nothing open.
 func (w *Window) CloseWindow() error {
 	assert.That(w != nil, "close runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
@@ -149,6 +154,9 @@ func (w *Window) CloseWindow() error {
 	w.app.windows = slices.DeleteFunc(w.app.windows, func(other *Window) bool {
 		return other == w
 	})
+	if w.branch != "" {
+		return w.removeBranchCopy()
+	}
 	return nil
 }
 

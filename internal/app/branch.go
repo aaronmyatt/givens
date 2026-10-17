@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 
@@ -53,10 +54,7 @@ func (w *Window) OpenBranch(name string) (*Window, error) {
 		w.branchProblem = MessageNoBranch + name
 		return nil, nil
 	}
-	// The name's own hash keeps "a/b" and "a-b", which slug the same, in different folders.
-	into := filepath.Join(w.app.config.AppDataDir, "branches", shortHash(w.origin()),
-		key+"-"+shortHash(name))
-	copied, err := branch.Extract(w.origin(), name, into)
+	copied, err := branch.Extract(w.origin(), name, w.app.branchCopy(w.origin(), name))
 	switch {
 	case errors.Is(err, branch.ErrNoBranch):
 		w.branchProblem = MessageNoBranch + name
@@ -97,6 +95,45 @@ func (a *App) openBranchWindow(folder string, origin string, name string) (*Wind
 	a.windows = append([]*Window{window}, a.windows...)
 	assert.That(a.windows[0] == window, "an opened window is in front")
 	return window, nil
+}
+
+// branchesDirName is the folder under Givens's data folder that holds branch copies.
+const branchesDirName = "branches"
+
+// branchCopy is where a branch's capabilities are copied to:
+// <app data>/branches/<hash of origin>/<branch slug>-<hash of name>. The name's own hash keeps
+// "a/b" and "a-b", which slug the same, in different folders.
+func (a *App) branchCopy(origin string, name string) string {
+	assert.That(filepath.IsAbs(origin), "the origin is an absolute path")
+	assert.That(slug.Of(name) != "", "a branch's name has letters or digits")
+	return filepath.Join(a.config.AppDataDir, branchesDirName, shortHash(origin),
+		slug.Of(name)+"-"+shortHash(name))
+}
+
+// removeBranchCopy deletes a closed branch window's copy, and its origin's folder once that's
+// empty. The copy is never reopened: opening the branch again copies it afresh.
+func (w *Window) removeBranchCopy() error {
+	assert.That(w.branch != "", "only a branch's window has a copy")
+	assert.That(w.branchOrigin != "", "a branch's window knows its origin")
+	copied := w.app.branchCopy(w.branchOrigin, w.branch)
+	if err := os.RemoveAll(copied); err != nil {
+		return err
+	}
+	// Remove fails on a folder that still holds another branch's copy, which is meant.
+	// Ref: https://pkg.go.dev/os#Remove
+	_ = os.Remove(filepath.Dir(copied))
+	return nil
+}
+
+// writable refuses a change in a branch's window. The UI doesn't offer one there; this stops
+// a Needs call or a CLI one that asks anyway.
+func (w *Window) writable() error {
+	assert.That(w != nil, "writable runs on a window")
+	assert.That(w.branch == "" || w.branchOrigin != "", "a branch's window knows its origin")
+	if w.branch != "" {
+		return fmt.Errorf("%s @ %s: %w", filepath.Base(w.branchOrigin), w.branch, ErrReadOnly)
+	}
+	return nil
 }
 
 // origin is the capabilities folder this window's project lives in: for a branch's window,

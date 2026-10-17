@@ -26,6 +26,9 @@ func (w *Window) Delete(name string) error {
 	assert.That(w != nil, "delete runs on a window")
 	assert.That(name != "", "delete names what to delete")
 	assert.That(len(name) <= NameLengthMax, "the name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	if capability, ok := w.findCapability(name); ok {
 		builder, err := w.builtOn(capability.Slug+"/", capability.Slug)
 		if err != nil {

@@ -26,6 +26,9 @@ func (w *Window) NewStory(draft StoryDraft) error {
 	assert.That(utf8.ValidString(draft.Name), "the story's name is text")
 	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
 	assert.That(len(draft.SoThat) <= StorySentenceLengthMax, "each story line stays bounded")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	name := slug.Of(draft.Name)
 	if name == "" || w.project == nil {
 		return errors.New("a story needs a name with letters or digits, in an open project")
@@ -62,6 +65,9 @@ func (w *Window) NewScenario(draft ScenarioDraft) error {
 	assert.That(w != nil, "new scenario runs on a window")
 	assert.That(utf8.ValidString(draft.Name), "the scenario's name is text")
 	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	capability, ok := w.findCapability(w.selectedCapability)
 	if w.selectedCapability == "" || !ok {
 		return errors.New("select a capability to add a scenario to")

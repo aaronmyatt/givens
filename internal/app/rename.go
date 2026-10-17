@@ -23,6 +23,9 @@ func (w *Window) Rename(name string, newName string) error {
 	assert.That(name != "", "rename names what to rename")
 	assert.That(newName != "", "rename names the new name")
 	assert.That(len(newName) <= NameLengthMax, "the new name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	if slug.Of(newName) == "" {
 		return errors.New("a name needs letters or digits")
 	}

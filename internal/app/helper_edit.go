@@ -94,6 +94,9 @@ func (w *Window) NewHelper(capability string, name string) error {
 	assert.That(w != nil, "new helper runs on a window")
 	assert.That(capability != "", "a helper belongs to a capability")
 	assert.That(!strings.ContainsAny(name, "/ \n"), "a helper's name is a shell function name")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(name) {
 		return fmt.Errorf("%q isn't a shell function name", name)
 	}
@@ -146,6 +149,9 @@ func (w *Window) openHelperFile(path string, name string) error {
 func (w *Window) SaveHelper(text string) error {
 	assert.That(w != nil, "save helper runs on a window")
 	assert.That(utf8.ValidString(text), "a helper file is text")
+	if err := w.writable(); err != nil {
+		return err
+	}
 	if w.editor == nil || filepath.Base(filepath.Dir(w.editor.path)) != sharedFolder {
 		return errors.New("no helper file is open in the editor")
 	}

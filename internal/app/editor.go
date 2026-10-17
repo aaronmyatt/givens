@@ -23,6 +23,9 @@ func (w *Window) Edit(target string) (*Editor, error) {
 	assert.That(w != nil, "edit runs on a window")
 	assert.That(target != "", "edit names a scenario or a file")
 	assert.That(!filepath.IsAbs(target), "a file is named relative to the capabilities folder")
+	if err := w.writable(); err != nil {
+		return nil, err
+	}
 	if w.project == nil {
 		return nil, fmt.Errorf("%s: %w", target, ErrNotFound)
 	}
