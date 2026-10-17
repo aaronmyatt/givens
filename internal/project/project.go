@@ -31,6 +31,7 @@ const (
 // Tags with a meaning of their own. Every other tag is a view.
 const (
 	TagError         = "@error"
+	TagTodo          = "@todo" // flags a scenario that needs work; see capabilities/tags
 	TagTimeoutPrefix = "@timeout:"
 )
 

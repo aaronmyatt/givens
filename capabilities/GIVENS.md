@@ -29,8 +29,9 @@ capabilities/
 - The Feature's description holds the story: an `As a`, an `I want` and a `So that` line.
   Descriptions are plain text; a line starting with `#` is a Gherkin comment.
 - Tags: `@error` marks an error state (untagged is a happy path). `@timeout:5m` sets when to
-  show "Still running" (default 2 minutes). Any other tag is a view. A tag on `Feature:`
-  applies to every scenario in the file.
+  show "Still running" (default 2 minutes). `@todo` flags a scenario that needs work, drawn
+  with a red flag; a new scenario starts with it. Any other tag, `@todo` included, is a view.
+  A tag on `Feature:` applies to every scenario in the file.
 - A slug is a name in lower case; letters and digits in any language are kept; every run of
   other characters becomes one hyphen; hyphens are trimmed from the ends.
   `Card declined` gives `card-declined`.

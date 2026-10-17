@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"givens/internal/assert"
+	"givens/internal/project"
 	"givens/internal/slug"
 )
 
@@ -53,9 +54,10 @@ func (w *Window) NewStory(draft StoryDraft) error {
 }
 
 // NewScenario adds a scenario to the selected capability from the New scenario dialog: a
-// "Scenario:" block (tagged @error for an error state) and scripts/<slug>.sh sourcing the kit,
-// then opens the scenario in the editor. Needed by "Add a scenario to a capability" and "Reuse
-// an existing step" in capabilities/write-stories-and-scenarios.
+// "Scenario:" block tagged @todo (and @error for an error state) and scripts/<slug>.sh sourcing
+// the kit, then opens the scenario in the editor. Needed by "Add a scenario to a capability",
+// "A new scenario starts flagged to do" and "Reuse an existing step" in
+// capabilities/write-stories-and-scenarios.
 func (w *Window) NewScenario(draft ScenarioDraft) error {
 	assert.That(w != nil, "new scenario runs on a window")
 	assert.That(utf8.ValidString(draft.Name), "the scenario's name is text")
@@ -75,11 +77,12 @@ func (w *Window) NewScenario(draft ScenarioDraft) error {
 	if err != nil {
 		return err
 	}
-	block := "\n"
+	// A new scenario isn't built yet, so it starts flagged @todo.
+	tags := project.TagTodo
 	if draft.Error {
-		block += "  @error\n"
+		tags = project.TagError + " " + tags
 	}
-	block += "  Scenario: " + draft.Name + "\n"
+	block := "\n  " + tags + "\n  Scenario: " + draft.Name + "\n"
 	updated := strings.TrimRight(text, "\n") + "\n" + block
 	if err := os.WriteFile(capability.FeaturePath, []byte(updated), 0o644); err != nil {
 		return err

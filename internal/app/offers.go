@@ -329,6 +329,9 @@ func scenarioPageOffers(shown Scenario, loaded project.Scenario) []string {
 	if loaded.Setup != "" && loaded.Teardown == "" {
 		offers = append(offers, OfferAddTeardown)
 	}
+	if loaded.Name != "" {
+		offers = append(offers, todoOffers(loaded)...)
+	}
 	return offers
 }
 
@@ -356,6 +359,8 @@ func (w *Window) chooseOnScenarioPage(action string) error {
 		return w.addTeardown()
 	case OfferCreateScript, OfferWriteSetupSteps:
 		return w.createSetup(action == OfferCreateScript)
+	case OfferFlagTodo, OfferRemoveTodo:
+		return w.flagTodo(scenario, action == OfferFlagTodo)
 	case OfferDropIn:
 		_, err := w.DropIn(w.selectedScenario)
 		return err

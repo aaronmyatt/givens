@@ -3,6 +3,7 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,7 +23,9 @@ type Scenario struct {
 	Line       int64
 	Outline    bool
 	Tags       []string // the scenario's tags, then its Rule's and Feature's, without repeats
+	OwnTags    []string // the tags on the lines above its Scenario: line only
 	Error      bool     // tagged @error
+	Todo       bool     // tagged @todo, on itself, its Rule or its Feature
 	// StillRunning is when to show "Still running": StillRunningDefault, or the @timeout tag's.
 	// It is zero when a @timeout tag can't be read.
 	StillRunning time.Duration
@@ -107,6 +110,8 @@ func scenarioOf(
 		Line:       scenario.Location.Line,
 		Outline:    len(scenario.Examples) > 0,
 		Tags:       tags,
+		OwnTags:    tagNames(scenario.Tags),
+		Todo:       slices.Contains(tags, TagTodo),
 		Background: background,
 		Steps:      stepsOf(scenario.Steps),
 		Examples:   examplesOf(scenario.Examples),

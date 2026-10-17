@@ -75,6 +75,7 @@ type Scenario struct {
 	Capability string   `json:"capability"` // the capability's name
 	Rule       string   `json:"rule"`       // the Rule: block it's under, or ""
 	Error      bool     `json:"error"`      // tagged @error
+	Todo       bool     `json:"todo"`       // tagged @todo: drawn with a red flag
 	Tags       []string `json:"tags"`       // every tag, Feature tags included
 	Steps      []string `json:"steps"`      // "Given …", "When …", "Then …", Background first
 	Setup      string   `json:"setup"`      // the setup script's text, or ""

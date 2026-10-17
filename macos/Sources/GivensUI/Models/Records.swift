@@ -85,6 +85,8 @@ public struct ScenarioRecord: Decodable, Sendable, Equatable {
     public let rule: String
     /// Tagged @error.
     public let error: Bool
+    /// Tagged @todo: it needs work, so it's drawn with a red flag.
+    public let todo: Bool
     /// Every tag, Feature tags included.
     public let tags: [String]
     /// "Given …", "When …", "Then …", Background steps first.

@@ -67,6 +67,8 @@ func (s *state) storySteps() []world.Step {
 		world.Def(`^"([^"]*)" appears in the sidebar$`, s.inSidebar),
 		world.Def(`^they choose "New scenario" in ([A-Za-z ]+), name it "([^"]*)" and mark it `+
 			`as an error state$`, s.newErrorScenario),
+		world.Def(`^they choose "New scenario" in ([A-Za-z ]+) and name it "([^"]*)"$`,
+			s.newHappyScenario),
 		world.Def(`^a "Scenario: ([^"]*)" block tagged (@\S+) is added to checkout\.feature$`,
 			s.blockAdded),
 		world.Def(`^checkout/scripts/([a-z0-9-]+\.sh) is created, starting with the line that `+
@@ -228,11 +230,21 @@ func sidebarHas(items []app.SidebarItem, name string) error {
 }
 
 func (s *state) newErrorScenario(capabilityName string, name string) error {
+	return s.newScenario(capabilityName, app.ScenarioDraft{Name: name, Error: true})
+}
+
+func (s *state) newHappyScenario(capabilityName string, name string) error {
+	return s.newScenario(capabilityName, app.ScenarioDraft{Name: name})
+}
+
+// newScenario fills in the New scenario dialog in a capability, keeping its .feature file's
+// text from before.
+func (s *state) newScenario(capabilityName string, draft app.ScenarioDraft) error {
 	window, err := s.window()
 	if err != nil {
 		return err
 	}
-	s.subject = name
+	s.subject = draft.Name
 	s.featureBefore, err = s.ReadFile(featurePath(slug.Of(capabilityName)))
 	if err != nil {
 		return err
@@ -243,7 +255,7 @@ func (s *state) newErrorScenario(capabilityName string, name string) error {
 	if err := window.Choose("New scenario"); err != nil {
 		return err
 	}
-	return window.NewScenario(app.ScenarioDraft{Name: name, Error: true})
+	return window.NewScenario(draft)
 }
 
 // blockAdded checks the new block, and that every other scenario is as it was.

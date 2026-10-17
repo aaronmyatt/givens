@@ -82,6 +82,16 @@ struct Badge: View {
     }
 }
 
+/// The red flag on a scenario tagged @todo. Ref: https://developer.apple.com/sf-symbols/
+struct TodoFlag: View {
+    var body: some View {
+        Image(systemName: "flag.fill")
+            .foregroundStyle(Theme.error)
+            .help("To do: tagged @todo")
+            .accessibilityLabel("To do")
+    }
+}
+
 /// A happy path or error state dot, as the scenario list marks them.
 struct KindDot: View {
     let error: Bool

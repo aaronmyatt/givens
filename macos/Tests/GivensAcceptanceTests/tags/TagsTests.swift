@@ -36,6 +36,8 @@ final class TagsState {
     let w: World
     /// The scenarios a Given step tagged, in the order it named them.
     var names: [String] = []
+    /// The scenario a step called "it".
+    var subject = ""
 
     init(_ w: World) { self.w = w }
 
@@ -183,7 +185,7 @@ private func tagsNoResultsUntilComplete(_ s: TagsState) async throws {
 @MainActor
 func tagsSteps(_ w: World) -> [StepDefinition] {
     let s = TagsState(w)
-    return tagsTaggingSteps(s) + tagsViewSteps(s) + tagsSearchSteps(s)
+    return tagsTaggingSteps(s) + tagsViewSteps(s) + tagsSearchSteps(s) + tagsTodoSteps(s)
 }
 
 /// Tags written into the sample shop's .feature files.
@@ -197,6 +199,7 @@ private func tagsTaggingSteps(_ s: TagsState) -> [StepDefinition] {
             guard folder == "checkout" else {
                 throw StepFailure("\"\(call[0])\" is in \(folder), not checkout")
             }
+            s.subject = call[0]
             try s.addTag(folder, "Scenario: \(call[0])", call[1])
         },
         def(#"^"([^"]*)" and "([^"]*)" are both tagged (@\S+)$"#) { call in

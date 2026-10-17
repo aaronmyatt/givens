@@ -226,7 +226,8 @@ func (w *Window) scenarioOf(capability project.Capability, loaded project.Scenar
 	shown := Scenario{
 		Name: loaded.Name, Slug: loaded.Slug, Capability: capability.Name, Rule: loaded.Rule,
 		Warning: scenarioWarning(capability, loaded),
-		Error:   loaded.Error, Tags: append([]string{}, loaded.Tags...), Steps: steps,
+		Error:   loaded.Error, Todo: loaded.Todo, Tags: append([]string{}, loaded.Tags...),
+		Steps: steps,
 	}
 	if loaded.Setup != "" {
 		if setup, err := os.ReadFile(loaded.Setup); err == nil {

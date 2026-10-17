@@ -21,6 +21,14 @@ Feature: Write stories and scenarios
     And checkout/scripts/expired-card.sh is created, starting with the line that sources givens.sh
     And the new scenario opens in the editor
 
+  # A new scenario isn't built yet, so it starts flagged to do. The developer removes the flag
+  # once it works.
+  Scenario: A new scenario starts flagged to do
+    Given a developer has the sample shop project open in Givens
+    When they choose "New scenario" in Checkout and name it "Gift card"
+    Then a "Scenario: Gift card" block tagged @todo is added to checkout.feature
+    And "Gift card" is shown with a red flag
+
   Scenario: Reuse an existing step
     Given a developer is writing a new scenario in Checkout
     When they type "Given a signed-in sh"

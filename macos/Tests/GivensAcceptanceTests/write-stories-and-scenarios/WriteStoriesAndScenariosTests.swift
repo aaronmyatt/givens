@@ -250,6 +250,15 @@ private func writeStoriesStorySteps(_ s: WriteStoriesAndScenariosState) -> [Step
             try await window.choose("New scenario")
             try await window.newScenario(call[1], error: true)
         },
+        def(#"^they choose "New scenario" in ([A-Za-z ]+) and name it "([^"]*)"$"#) { call in
+            let window = try await w.front()
+            s.subject = call[1]
+            s.featureBefore = try w.readFile(
+                WriteStoriesAndScenariosState.featurePath(slug(call[0])))
+            try await window.select(call[0])
+            try await window.choose("New scenario")
+            try await window.newScenario(call[1], error: false)
+        },
         def(#"^a "Scenario: ([^"]*)" block tagged (@\S+) is added to checkout\.feature$"#) {
             call in try s.blockAdded(call[0], call[1])
         },

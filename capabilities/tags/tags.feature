@@ -49,3 +49,26 @@ Feature: Tags
     When they press ⌘K and type "@error and"
     Then they see "Not a tag expression: expected a tag after 'and'"
     And no results are listed until the expression is complete
+
+  # @todo flags a scenario that needs work: not built yet, failing, or not testable. Givens
+  # draws it with a red flag, and like any other tag it's a view. A runner can skip flagged
+  # scenarios with "not @todo".
+  Scenario: A scenario flagged to do
+    Given "Empty cart" is tagged @todo in checkout.feature
+    When a developer selects "Checkout"
+    Then "Empty cart" is shown with a red flag
+    And "todo" is listed under Tags in the sidebar
+
+  Scenario: Flag a scenario to do
+    Given a developer has the sample shop project open in Givens
+    And "Pay with saved card" is selected
+    When they choose "Flag as to do"
+    Then "Pay with saved card" is tagged @todo in checkout.feature, and nothing else changes
+    And it's listed when they select "todo" under Tags
+
+  Scenario: Remove a to do flag
+    Given "Empty cart" is tagged @todo in checkout.feature
+    And "Empty cart" is selected
+    When a developer chooses "Remove to do flag"
+    Then "Empty cart" isn't tagged @todo in checkout.feature, and nothing else changes
+    And it isn't shown with a red flag

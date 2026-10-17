@@ -181,6 +181,7 @@ struct SidebarSection: View {
         case ("view", "Unverified"): "clock"
         case ("view", "Shared"): "chevron.left.forwardslash.chevron.right"
         case ("view", _): "line.3.horizontal.decrease.circle"
+        case ("tag", "todo"): "flag"
         case ("tag", _): "tag"
         case ("helper", _): "function"
         default: "doc.text"

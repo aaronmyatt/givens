@@ -34,12 +34,13 @@ func TestStepsDefined(t *testing.T) { world.CheckStepsDefined(t, capability, ste
 // state is what this capability's steps keep between steps of one scenario.
 type state struct {
 	*world.World
-	names []string // the scenarios a Given step tagged, in the order it named them
+	names   []string // the scenarios a Given step tagged, in the order it named them
+	subject string   // the scenario a step called "it"
 }
 
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
-	return []world.Step{
+	defined := []world.Step{
 		world.Def(`^"([^"]*)" is tagged (@\S+) in checkout\.feature$`, s.taggedInCheckout),
 		world.Def(`^a developer selects the "([^"]*)" view$`, s.selectView),
 		world.Def(`^a developer presses ⌘K and types "([^"]*)"$`, s.Search),
@@ -62,6 +63,7 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^no results are listed until the expression is complete$`,
 			s.noResultsUntilComplete),
 	}
+	return append(defined, s.todoSteps()...)
 }
 
 func (s *state) taggedInCheckout(name string, tag string) error {
@@ -75,6 +77,7 @@ func (s *state) taggedInCheckout(name string, tag string) error {
 	if folder != "checkout" {
 		return fmt.Errorf("%q is in %s, not checkout", name, folder)
 	}
+	s.subject = name
 	return s.addTag(folder, "Scenario: "+name, tag)
 }
 
@@ -121,18 +124,12 @@ func (s *state) bothTagged(first string, second string, tag string) error {
 
 // selectTag expects the tag under Tags in the sidebar, then selects it.
 func (s *state) selectTag(tag string) error {
+	if err := s.underTags(tag); err != nil {
+		return err
+	}
 	window, err := s.Front()
 	if err != nil {
 		return err
-	}
-	tags := make([]string, 0, 8)
-	for _, item := range window.Sidebar() {
-		if item.Kind == "tag" {
-			tags = append(tags, item.Name)
-		}
-	}
-	if !slices.Contains(tags, tag) {
-		return fmt.Errorf("Tags in the sidebar lists %q, not %q", tags, tag)
 	}
 	return window.Select(tag)
 }

@@ -127,6 +127,7 @@ struct ScenarioListRow: View {
         HStack(spacing: 10) {
             KindDot(error: scenario.error)
             Text(scenario.name).lineLimit(2)
+            if scenario.todo { TodoFlag() }
             Spacer(minLength: 8)
             if !scenario.warning.isEmpty {
                 Image(systemName: "exclamationmark.triangle")

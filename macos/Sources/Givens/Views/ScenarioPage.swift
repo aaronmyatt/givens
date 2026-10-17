@@ -30,7 +30,12 @@ struct ScenarioPage: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(scenario.name).font(.title).bold()
                 if scenario.error { Badge(text: "Error state", tint: Theme.error) }
+                if scenario.todo {
+                    TodoFlag()
+                    Badge(text: "To do", tint: Theme.error)
+                }
                 Spacer()
+                todoButton
                 // Copies the scenario itself; "Copy" by the setup script copies how to run it.
                 if window.offers.contains("Copy steps") {
                     Button {
@@ -55,13 +60,30 @@ struct ScenarioPage: View {
                 }
             }
             WarningText(warning: scenario.warning)
-            let tags = scenario.tags.filter { $0 != "@error" }
+            let tags = scenario.tags.filter { $0 != "@error" && $0 != "@todo" }
             if !tags.isEmpty {
                 HStack(spacing: 6) { ForEach(tags, id: \.self) { Badge(text: $0) } }
             }
             if !scenario.rule.isEmpty {
                 Text("Rule: \(scenario.rule)").foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// Flags the scenario to do, or takes the flag off: whichever the window offers. A @todo
+    /// from the Feature or Rule line offers neither, so there's no button.
+    @ViewBuilder private var todoButton: some View {
+        let flag = window.offers.contains("Flag as to do")
+        if flag || window.offers.contains("Remove to do flag") {
+            let action = flag ? "Flag as to do" : "Remove to do flag"
+            Button {
+                window.app.run { _ in try await window.choose(action) }
+            } label: {
+                Label(action, systemImage: flag ? "flag" : "flag.slash")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help(action)
         }
     }
 

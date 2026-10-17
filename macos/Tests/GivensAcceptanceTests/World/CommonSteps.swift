@@ -78,10 +78,30 @@ func commonSteps(_ w: World) -> [StepDefinition] {
         def(#"^"([^"]*)" has only scripts/([a-z0-9-]+)\.md$"#) {
             try w.onlyMarkdownSetup($0[0], $0[1])
         },
+        def(#"^"([^"]*)" is shown with a red flag$"#) { call in
+            guard try await w.shownFlagged(call[0]) else {
+                throw StepFailure("\"\(call[0])\" is shown without a red flag")
+            }
+        },
     ]
 }
 
 extension World {
+    /// Whether the named scenario is drawn with a red flag where the front window shows it: in
+    /// the capability's list, on its own page, or in a view's list. Fails when it isn't shown.
+    /// Mirrors World.ShownFlagged in acceptance/world/todo.go.
+    func shownFlagged(_ name: String) async throws -> Bool {
+        let snapshot = try await front().snapshot
+        let shown =
+            (snapshot?.listed ?? []) + (snapshot?.capability?.scenarios ?? [])
+            + [snapshot?.scenario].compactMap { $0 }
+        guard let scenario = shown.first(where: { $0.name == name }) else {
+            let selected = snapshot?.selected ?? ""
+            throw StepFailure("the window doesn't show \"\(name)\"; it shows \"\(selected)\"")
+        }
+        return scenario.todo
+    }
+
     func offered(_ first: String, _ second: String) async throws {
         let offers = try await front().offers
         try expect(offers, first, "the offered actions")
