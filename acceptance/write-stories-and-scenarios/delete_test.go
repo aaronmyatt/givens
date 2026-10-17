@@ -182,6 +182,9 @@ func (s *state) deletedOnlyWhen(action string) error {
 	if s.deletingFolder != "" {
 		return s.trashed(s.deletingFolder)
 	}
+	if s.deletingFile != "" {
+		return s.trashed(s.deletingFile)
+	}
 	return s.scenarioDeleted()
 }
 
@@ -209,7 +212,8 @@ func (s *state) sidebarLists(first string, second string) error {
 	return nil
 }
 
-// editFromPage selects a scenario and chooses an edit offer on its page, like "Edit setup".
+// editFromPage selects a scenario and chooses an edit offer on its page, like "Edit setup",
+// remembering every file before, and the one opened, for "Delete file".
 func (s *state) editFromPage(action string, name string) error {
 	window, err := s.window()
 	if err != nil {
@@ -224,7 +228,9 @@ func (s *state) editFromPage(action string, name string) error {
 	if window.Editing() == "" {
 		return fmt.Errorf("%q opened nothing in the editor", action)
 	}
-	return nil
+	s.deletingFile = window.Editing()
+	s.before, err = snapshot(s.Capabilities(), everyFile)
+	return err
 }
 
 func (s *state) setupFileTrashed(file string) error {

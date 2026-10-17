@@ -62,6 +62,8 @@ final class WriteStoriesAndScenariosState {
     var deleting = ""
     var deletingFolder: URL?
     var deletingScript: URL?
+    /// The setup file open in the editor, for "Delete file".
+    var deletingFile: URL?
 
     init(_ w: World) { self.w = w }
 
@@ -933,7 +935,9 @@ private func writeStoriesDeleteSteps(_ s: WriteStoriesAndScenariosState) -> [Ste
             let window = try await w.front()
             try await window.select(call[1])
             try await window.choose(call[0])
-            _ = try await s.editor()
+            // Every file before, and the one opened, for "Delete file".
+            s.deletingFile = URL(fileURLWithPath: try await s.editor().path)
+            s.before = try writeStoriesFiles(w.capabilities)
         },
         def(#"^([a-z0-9-]+\.(?:md|sh)) is moved to the Trash$"#) { call in
             try s.trashed(w.capabilities.appendingPathComponent("checkout/scripts/\(call[0])"))
@@ -1006,6 +1010,12 @@ extension WriteStoriesAndScenariosState {
             throw StepFailure("the window doesn't offer \"\(action)\": \(window.offers)")
         }
         try await window.choose(action)
-        if let folder = deletingFolder { try trashed(folder) } else { try scenarioDeleted() }
+        if let folder = deletingFolder {
+            try trashed(folder)
+        } else if let file = deletingFile {
+            try trashed(file)
+        } else {
+            try scenarioDeleted()
+        }
     }
 }

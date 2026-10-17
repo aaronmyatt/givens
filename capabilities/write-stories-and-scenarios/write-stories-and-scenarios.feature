@@ -194,3 +194,13 @@ Feature: Write stories and scenarios
     Then pay-in-app.md is moved to the Trash
     And the editor closes
     And they're offered "Create script" and "Write setup steps"
+
+  # A setup script another scenario runs with a from line gets the same warning as deleting
+  # the scenario does.
+  @error
+  Scenario: Delete a setup script another builds on
+    Given a developer has the sample shop project open in Givens
+    And a developer has chosen "Edit script" on "Pay with saved card"
+    When they choose "Delete file"
+    Then they see "3-D Secure challenge builds on this scenario"
+    And nothing is deleted unless they choose "Delete anyway"

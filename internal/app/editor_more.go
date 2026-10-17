@@ -230,18 +230,34 @@ func (e *Editor) setupFile() bool {
 }
 
 // deleteFile asks, then moves the file open in the editor to the Trash and closes the editor,
-// unsaved changes and all. Needed by "Delete a setup file while editing it".
+// unsaved changes and all. A setup script another scenario runs with a from line asks "Delete
+// anyway", as deleting the scenario does. Needed by "Delete a setup file while editing it"
+// and "Delete a setup script another builds on".
 func (w *Window) deleteFile() error {
 	assert.That(w.editor != nil, "there's a file open to delete")
 	assert.That(w.editor.setupFile(), "only a setup file is offered for deleting")
 	path := w.editor.path
-	w.ask("Delete "+filepath.Base(path)+"?", OfferDelete, func() error {
-		if err := w.app.trash(path); err != nil {
-			return err
+	builder := ""
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if scenario.Setup != path {
+				continue
+			}
+			found, err := w.builtOn(scenario.Key(), "")
+			if err != nil {
+				return err
+			}
+			builder = found
 		}
-		w.editor = nil
-		return w.reload()
-	})
+	}
+	w.askDelete(builder, builder+" builds on this scenario", "Delete "+filepath.Base(path)+"?",
+		func() error {
+			if err := w.app.trash(path); err != nil {
+				return err
+			}
+			w.editor = nil
+			return w.reload()
+		})
 	return nil
 }
 

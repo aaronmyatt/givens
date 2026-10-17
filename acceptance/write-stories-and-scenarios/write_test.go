@@ -50,6 +50,7 @@ type state struct {
 	deleting               string   // what a step asked to delete
 	deletingFolder         string   // its folder when it's a capability
 	deletingScript         string   // its setup script when it's a scenario
+	deletingFile           string   // the setup file open in the editor, for "Delete file"
 }
 
 func steps(w *world.World) []world.Step {
