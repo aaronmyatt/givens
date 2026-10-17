@@ -54,6 +54,16 @@ struct EditorPage: View {
                 }
                 .toggleStyle(.button)
             }
+            if window.offers.contains("Delete file") {
+                // A setup file only. The core asks first, in the banner above, then moves the
+                // file to the Trash and closes the editor.
+                Button {
+                    window.app.run { _ in try await window.choose("Delete file") }
+                } label: {
+                    Label("Delete file", systemImage: "trash")
+                }
+                .help("Move this file to the Trash")
+            }
             if window.offers.contains("Close") {
                 // With unsaved changes the core asks first, in the banner above.
                 Button {

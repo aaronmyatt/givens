@@ -369,6 +369,17 @@ Feature: Drop into a scenario
     And no checklist is shown
     And they're offered "Edit setup" and "Try again"
 
+  # "Write setup steps" starts scripts/<slug>.md as an empty numbered list, "1." alone. Until a
+  # step is written there's no card to show, so Drop in says so rather than wait on nothing.
+  @error
+  Scenario: Setup steps not written yet
+    Given "Pay in app" has scripts/pay-in-app.md holding only "1."
+    When a developer drops in to "Pay in app"
+    Then they see "pay-in-app.md has no steps yet"
+    And no checklist is shown
+    And they're offered "Edit setup" and "Try again"
+    And choosing "Edit setup" leaves the Drop in and opens pay-in-app.md in the editor
+
   # A card often holds something to paste elsewhere: a command for a terminal, or a snippet for
   # a browser console. Each fenced code block gets its own Copy button, and copies exactly its
   # code: no fences, no list numbers, no indent from the list it sits in. The same goes for code

@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,9 @@ const (
 const (
 	MessageEnterValue      = "Enter a value first"
 	MessageStoppedAtByHand = "Setup stopped at a step done by hand"
+	// MessageNoStepsYet follows the markdown setup's file name, as in "pay-in-app.md has no
+	// steps yet".
+	MessageNoStepsYet = " has no steps yet"
 )
 
 // cardHeader starts the line the kit prints for a card under GIVENS_UI=1: the record
@@ -140,6 +144,14 @@ func (s *Session) addMarkdownCards() error {
 	parsed, err := markdown.Parse(text)
 	if err != nil {
 		return err
+	}
+	// With no step there's no card to mark, so waiting could never end. "Write setup steps"
+	// starts the file as "1." alone, which is an empty list item, not a step.
+	// Ref: https://spec.commonmark.org/0.31.2/#list-items
+	if len(parsed.Steps) == 0 {
+		s.fail(filepath.Base(s.scenario.SetupCards) + MessageNoStepsYet)
+		s.markdownFailed = true
+		return nil
 	}
 	s.intro, s.markdownFrom = parsed.Intro, len(s.cards)
 	for _, step := range parsed.Steps {

@@ -920,6 +920,20 @@ private func writeStoriesDeleteSteps(_ s: WriteStoriesAndScenariosState) -> [Ste
                 throw StepFailure("the sidebar lists \(names), not \(call.captures)")
             }
         },
+        def(#"^a developer has chosen "([^"]*)" on "([^"]*)"$"#) { call in
+            let window = try await w.front()
+            try await window.select(call[1])
+            try await window.choose(call[0])
+            _ = try await s.editor()
+        },
+        def(#"^([a-z0-9-]+\.(?:md|sh)) is moved to the Trash$"#) { call in
+            try s.trashed(w.capabilities.appendingPathComponent("checkout/scripts/\(call[0])"))
+        },
+        def(#"^the editor closes$"#) { _ in
+            if let editor = try await w.front().snapshot?.editor, !editor.path.isEmpty {
+                throw StepFailure("the editor still holds \(editor.path)")
+            }
+        },
     ]
 }
 

@@ -19,7 +19,7 @@ enum Placement {
         "Continue", "Open", "Copy",
     ]
     /// The editor's header.
-    static let editor = ["Preview", "Close", "Keep mine", "Use theirs", "Compare"]
+    static let editor = ["Preview", "Delete file", "Close", "Keep mine", "Use theirs", "Compare"]
     /// A capability's story, in the middle column.
     static let story = ["Edit about.md", "Add about.md"]
 }

@@ -175,3 +175,14 @@ Feature: Write stories and scenarios
     When a developer chooses "Write setup steps"
     Then scripts/pay-in-app.md is created with an empty numbered list
     And it opens in the editor
+
+  # A setup file can be deleted from the editor, like setup steps started by mistake. It goes to
+  # the Trash, so it can be brought back in Finder.
+  Scenario: Delete a setup file while editing it
+    Given "Pay in app" has only scripts/pay-in-app.md
+    And a developer has chosen "Edit setup" on "Pay in app"
+    When they choose "Delete file"
+    And they confirm
+    Then pay-in-app.md is moved to the Trash
+    And the editor closes
+    And they're offered "Create script" and "Write setup steps"

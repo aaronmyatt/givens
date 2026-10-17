@@ -117,12 +117,14 @@ func (s *Session) choose(action string) error {
 		return s.restart(false)
 	case OfferRunSetupAnyway:
 		return s.restart(true)
-	case OfferEditScript:
-		return window.editFile(s.scenario.Setup)
-	case OfferEditTeardown:
-		return window.editFile(s.scenario.Teardown)
-	case OfferEditSetup:
-		return window.editFile(s.scenario.SetupCards)
+	case OfferEditScript, OfferEditTeardown, OfferEditSetup:
+		// The page draws the Drop in over the editor, so leave it first. These are offered
+		// only once setup has ended, so there are no marks to lose.
+		path := scenarioFileOf(action)(s.scenario)
+		if err := window.leaveSession(); err != nil {
+			return err
+		}
+		return window.editFile(path)
 	case OfferRecordRun:
 		return s.RecordRun(s.note)
 	case OfferCopy:

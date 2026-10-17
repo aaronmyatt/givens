@@ -375,3 +375,32 @@ func hasCopy(card app.SetupCard) bool {
 	}
 	return slices.Contains(card.Offers, "Copy")
 }
+
+// markdownHolding makes name's setup only scripts/<slug>.md, holding exactly content, as
+// "Write setup steps" leaves it before a step is written.
+func (s *state) markdownHolding(name string, scriptSlug string, content string) error {
+	if slug.Of(name) != scriptSlug {
+		return fmt.Errorf("%q's setup is %s.md, not %s.md", name, slug.Of(name), scriptSlug)
+	}
+	return s.markdownSetup(name, content+"\n")
+}
+
+// editorAfterDropIn chooses action on the Drop in, then expects the Drop in gone, since the
+// Mac page draws a Drop in over the editor, and file open in the editor.
+func (s *state) editorAfterDropIn(action string, file string) error {
+	window, err := s.window()
+	if err != nil {
+		return err
+	}
+	if err := window.Choose(action); err != nil {
+		return err
+	}
+	if window.Session() != nil {
+		return fmt.Errorf("the Drop in is still open after %q", action)
+	}
+	want := filepath.Join(s.Capabilities(), "checkout", "scripts", file)
+	if window.Editing() != want {
+		return fmt.Errorf("the editor holds %q, not %q", window.Editing(), want)
+	}
+	return nil
+}

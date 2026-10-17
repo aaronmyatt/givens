@@ -2,6 +2,7 @@
 2026-10-12 Toggle TODO flag on scenarios to tag them in a view so the developer knows they need attention
 2026-10-12 Flag newly added scenarios as TODO, assuming they have not been implemented yet
 2026-10-11 Release: package Givens.app and the givens command ref:release
+2026-10-17 "Delete file" on a setup script another scenario builds on: warn and offer "Delete anyway", as deleting the scenario does — see tasks/empty-setup-steps/notes.md
 x 2026-10-11 2026-10-11 Foundation: core packages and the acceptance world ref:foundation — see tasks/foundation/notes.md
 x 2026-10-11 2026-10-11 macOS UI shell: SwiftUI over givens serve ref:ui-shell — see tasks/ui-shell/notes.md
 x 2026-10-11 2026-10-11 Gherkin files: 7 scenarios ref:gherkin-files — see tasks/gherkin-files/notes.md
@@ -34,3 +35,4 @@ x 2026-10-12 2026-10-12 about.md content should be richly formatted and rendered
 x 2026-10-11 2026-10-12 Spec the scenario page's run history and Copy steps in read-a-capability, with Go and Swift steps (built from a UI request, unit-tested only) — "See a scenario's runs" and "Copy a scenario's steps"; Copy steps moved into the core (gherkinOf, OfferCopySteps, also in branch windows), the Swift-only copy and its test removed
 2026-10-12 Branch windows: clean up old copies under <app data>/branches/, and refuse the Needs calls that write (edit, newStory, rename, delete) there — see tasks/read-another-branch/notes.md
 2026-10-12 Run files: two runs of one scenario in the same second share a folder; give the folder a tiebreak — see tasks/a-user-tester-should-be-able-to-add-test/notes.md
+x 2026-10-17 2026-10-17 Drop in: setup steps with nothing written fail with a clear message; the editor can delete a setup file ref:empty-setup-steps — see tasks/empty-setup-steps/notes.md

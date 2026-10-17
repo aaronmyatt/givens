@@ -120,7 +120,9 @@ struct DropInPage: View {
             ForEach(Array(session.cards.enumerated()), id: \.offset) { _, line in
                 Text(line).textSelection(.enabled)
             }
-            if session.status == SessionModel.waiting {
+            // Only an ask card takes a value, and only it offers "Continue". Under any other
+            // card, typing has nowhere to go.
+            if window.offers.contains("Continue") {
                 TextField("Type the value", text: $answer)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { window.app.run { _ in try await window.type(answer) } }

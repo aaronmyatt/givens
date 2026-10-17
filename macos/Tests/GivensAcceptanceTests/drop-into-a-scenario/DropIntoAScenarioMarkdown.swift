@@ -57,6 +57,15 @@ func dropInMarkdownSteps(_ s: DropIntoAScenarioState) -> [StepDefinition] {
             guard at < cards.count else { throw StepFailure("there's no \(call[1]) card") }
             try await session.chooseOnCard(cards[at].index, call[0])
         },
+        def(#"^"([^"]*)" has scripts/([a-z0-9-]+)\.md holding only "([^"]*)"$"#) { call in
+            guard slug(call[0]) == call[1] else {
+                throw StepFailure("\(call[0])'s setup is \(slug(call[0])).md, not \(call[1]).md")
+            }
+            try s.markdownSetup(call[0], call[2] + "\n")
+        },
+        def(#"^choosing "([^"]*)" leaves the Drop in and opens ([a-z0-9-]+\.md) in the editor$"#) {
+            call in try await s.editorAfterDropIn(call[0], call[1])
+        },
     ]
 }
 
@@ -83,6 +92,21 @@ extension DropIntoAScenarioState {
             try FileManager.default.removeItem(at: shell)
         }
         try w.writeFile("capabilities/checkout/scripts/\(slug(name)).md", content)
+    }
+
+    /// Chooses `action` on the Drop in, then expects the Drop in gone, since the page draws a
+    /// Drop in over the editor, and `file` open in the editor.
+    func editorAfterDropIn(_ action: String, _ file: String) async throws {
+        let window = try await w.front()
+        try await window.choose(action)
+        guard window.session == nil else {
+            throw StepFailure("the Drop in is still open after \"\(action)\"")
+        }
+        let want = w.capabilities.appendingPathComponent("checkout/scripts/\(file)").path
+        let held = window.snapshot?.editor?.path ?? ""
+        guard samePath(held, want) else {
+            throw StepFailure("the editor holds \"\(held)\", not \(want)")
+        }
     }
 
     /// Waits for setup to pause at its cards, and returns the markdown ones.

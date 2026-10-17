@@ -22,6 +22,8 @@ const (
 	OfferCloseEditor = "Close"
 	// OfferDiscardChanges answers that question: close, losing what wasn't saved.
 	OfferDiscardChanges = "Discard changes"
+	// OfferDeleteFile moves a setup file open in the editor to the Trash, after asking.
+	OfferDeleteFile = "Delete file"
 	// SuggestionsMax bounds the steps offered while typing.
 	SuggestionsMax = 20
 )
@@ -202,7 +204,45 @@ func (e *Editor) editorOffers() []string {
 	if e.previewable() {
 		return []string{OfferPreview, OfferCloseEditor}
 	}
+	if e.setupFile() {
+		return []string{OfferDeleteFile, OfferCloseEditor}
+	}
 	return []string{OfferCloseEditor}
+}
+
+// setupFile is true while the editor holds one of a scenario's setup files: its script, its
+// setup steps or its teardown.
+func (e *Editor) setupFile() bool {
+	assert.That(e != nil, "setup file runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	if e.window.project == nil {
+		return false
+	}
+	for _, capability := range e.window.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if e.path == scenario.Setup || e.path == scenario.SetupCards ||
+				e.path == scenario.Teardown {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// deleteFile asks, then moves the file open in the editor to the Trash and closes the editor,
+// unsaved changes and all. Needed by "Delete a setup file while editing it".
+func (w *Window) deleteFile() error {
+	assert.That(w.editor != nil, "there's a file open to delete")
+	assert.That(w.editor.setupFile(), "only a setup file is offered for deleting")
+	path := w.editor.path
+	w.ask("Delete "+filepath.Base(path)+"?", OfferDelete, func() error {
+		if err := w.app.trash(path); err != nil {
+			return err
+		}
+		w.editor = nil
+		return w.reload()
+	})
+	return nil
 }
 
 // previewable is true for what Preview can show: a scenario's block, or about.md.
@@ -266,6 +306,8 @@ func (e *Editor) chooseInEditor(action string) error {
 		return nil
 	case OfferCloseEditor:
 		return e.window.closeEditor(func() error { return nil })
+	case OfferDeleteFile:
+		return e.window.deleteFile()
 	}
 	return ErrNotImplemented
 }

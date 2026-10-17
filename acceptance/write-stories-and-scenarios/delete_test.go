@@ -22,6 +22,9 @@ func (s *state) deleteSteps() []world.Step {
 		world.Def(`^nothing is deleted unless they choose "([^"]*)"$`, s.deletedOnlyWhen),
 		world.Def(`^the invites folder is moved to the Trash$`, s.invitesTrashed),
 		world.Def(`^the sidebar lists "([^"]*)" and "([^"]*)"$`, s.sidebarLists),
+		world.Def(`^a developer has chosen "([^"]*)" on "([^"]*)"$`, s.editFromPage),
+		world.Def(`^([a-z0-9-]+\.(?:md|sh)) is moved to the Trash$`, s.setupFileTrashed),
+		world.Def(`^the editor closes$`, s.editorClosed),
 	}
 }
 
@@ -202,6 +205,39 @@ func (s *state) sidebarLists(first string, second string) error {
 	slices.Sort(want)
 	if !slices.Equal(capabilities, want) {
 		return fmt.Errorf("the sidebar lists the capabilities %q, not %q", capabilities, want)
+	}
+	return nil
+}
+
+// editFromPage selects a scenario and chooses an edit offer on its page, like "Edit setup".
+func (s *state) editFromPage(action string, name string) error {
+	window, err := s.window()
+	if err != nil {
+		return err
+	}
+	if err := window.Select(name); err != nil {
+		return err
+	}
+	if err := window.Choose(action); err != nil {
+		return err
+	}
+	if window.Editing() == "" {
+		return fmt.Errorf("%q opened nothing in the editor", action)
+	}
+	return nil
+}
+
+func (s *state) setupFileTrashed(file string) error {
+	return s.trashed(filepath.Join(s.Capabilities(), "checkout", "scripts", file))
+}
+
+func (s *state) editorClosed() error {
+	window, err := s.window()
+	if err != nil {
+		return err
+	}
+	if window.Editor() != nil {
+		return fmt.Errorf("the editor still holds %s", window.Editing())
 	}
 	return nil
 }

@@ -1,0 +1,5 @@
+x 2026-10-17 2026-10-17 Spec: "Setup steps not written yet" in drop-into-a-scenario, and "Delete a setup file while editing it" in write-stories-and-scenarios, @wip — added after "A card marked failed" and "Write setup steps", @wip
+x 2026-10-17 2026-10-17 Core: zero-step markdown setup fails; Edit offers leave the Drop in; editor "Delete file" — cards.go fails with MessageNoStepsYet; dropin_page.go leaves the Drop in before editing; editor_more.go setupFile and deleteFile
+x 2026-10-17 2026-10-17 Go steps for both scenarios — markdown_test.go and delete_test.go; both pass with GIVENS_TAGS=@wip, and the Drop in one fails with the core fix stashed
+x 2026-10-17 2026-10-17 Swift: "Delete file" in the editor header; Type the value only with "Continue" — EditorPage draws "Delete file" (trash icon) before Close; DropInPage shows the field only while "Continue" is offered; not eyeballed yet
+x 2026-10-17 2026-10-17 Swift steps, remove @wip, scripts/check.sh passes — DropIntoAScenarioMarkdown.swift and WriteStoriesAndScenariosTests.swift; 47 and 25 scenarios pass in Go and Swift; check.sh passes

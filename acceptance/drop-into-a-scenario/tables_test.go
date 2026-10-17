@@ -113,5 +113,9 @@ func markdownSteps(s *state) []world.Step {
 			s.unclosedFence),
 		world.Def(`^step (\d+)'s card shows "([^"]*)"$`, s.stepCardShows),
 		world.Def(`^it has no Copy button until the fence is closed$`, s.noCopyUntilClosed),
+		world.Def(`^"([^"]*)" has scripts/([a-z0-9-]+)\.md holding only "([^"]*)"$`,
+			s.markdownHolding),
+		world.Def(`^choosing "([^"]*)" leaves the Drop in and opens ([a-z0-9-]+\.md) in the `+
+			`editor$`, s.editorAfterDropIn),
 	}
 }
