@@ -133,7 +133,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 	} else {
 		messages = append(messages, w.kitMessages()...)
 	}
-	messages = append(messages, w.branchMessages()...)
+	messages = append(append(messages, w.branchMessages()...), w.runsMessages()...)
 	if empty := w.emptyView(); empty != "" {
 		messages = append(messages, empty)
 	}

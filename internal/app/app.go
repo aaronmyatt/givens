@@ -114,6 +114,9 @@ func (a *App) Open(path string) (*Window, error) {
 	if err := window.reload(); err != nil {
 		return nil, err
 	}
+	if err := window.openRunStore(); err != nil {
+		return nil, err
+	}
 	if err := a.rememberRecent(folder); err != nil {
 		return nil, err
 	}

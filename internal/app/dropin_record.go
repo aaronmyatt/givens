@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"givens/internal/assert"
 	"givens/internal/fingerprint"
+	"givens/internal/runref"
 	"givens/internal/runs"
 )
 
@@ -91,17 +91,14 @@ func (s *Session) RecordRun(note string) error {
 		Author: runs.Author(filepath.Dir(window.path)), Values: s.row,
 		Fingerprint: parts, Note: note,
 	}
-	// Files first, so a line is never appended for a run whose files didn't copy.
-	if err := runs.CopyFiles(window.path, run, s.attachments); err != nil {
-		return err
+	if window.keepsRunsOffMain() {
+		// The run goes into the ref's copy, then out to the remote; see runs_off_main.go.
+		write := func(tree string) error { return writeRun(tree, run, s.attachments, note) }
+		err = window.afterRunsChange(window.runStore.Change(write, runref.NetworkTimeout))
+	} else {
+		err = writeRun(window.path, run, s.attachments, note)
 	}
-	if strings.Contains(note, "\n") {
-		run.Note = runs.Summary(note)
-		if err := runs.WriteNote(window.path, run, note); err != nil {
-			return err
-		}
-	}
-	if err := runs.Append(window.path, run); err != nil {
+	if err != nil {
 		return err
 	}
 	s.message, s.recorded = "", true

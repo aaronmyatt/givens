@@ -68,7 +68,7 @@ func runFiles(capabilities string, run runs.Run) []string {
 	if err != nil {
 		return []string{}
 	}
-	folder := runs.FilesDir(capabilities, run.Key, run.Time)
+	folder := runs.FolderOf(capabilities, run)
 	paths := make([]string, 0, len(names))
 	for _, name := range names {
 		paths = append(paths, filepath.Join(folder, name))

@@ -22,7 +22,13 @@ enum Placement {
     static let editor = ["Preview", "Delete file", "Close", "Keep mine", "Use theirs", "Compare"]
     /// A capability's story, in the middle column.
     static let story = ["Edit about.md", "Add about.md"]
+    /// The toolbar's runs button, while capabilities/runs still holds runs. "Share runs"
+    /// isn't here: it goes in the banner, beside the count of runs waiting to be shared.
+    static let runs = ["Move runs off main"]
 }
+
+/// How often a window shares its runs kept off main and fetches other devices'.
+let runsSyncSeconds = 300
 
 /// A project: capabilities and views on the left, the chosen capability's story and
 /// scenarios in the middle, the chosen scenario, its Drop in or the editor on the right.
@@ -82,6 +88,26 @@ struct ProjectView: View {
                 .disabled(window.offers.filter(Placement.toolbar.contains).isEmpty)
             }
             ToolbarItem(placement: .primaryAction) { BranchMenu(window: window) }
+            ToolbarItem(placement: .primaryAction) {
+                if window.offers.contains("Move runs off main") {
+                    Button {
+                        window.app.run { _ in try await window.choose("Move runs off main") }
+                    } label: {
+                        Label("Move runs off main", systemImage: "arrow.up.bin")
+                    }
+                    .help("Move the runs in capabilities/runs to refs/givens/runs on origin")
+                }
+            }
+        }
+        // Runs kept off main are shared, and other devices' fetched, every few minutes, so
+        // they show up without reopening the project. Ref:
+        // https://developer.apple.com/documentation/swiftui/view/task(id:priority:_:)
+        .task(id: window.id) {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(runsSyncSeconds))
+                if Task.isCancelled || !window.branch.isEmpty { continue }
+                window.app.run { _ in try await window.syncRuns() }
+            }
         }
         .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
         .background {
@@ -262,7 +288,7 @@ struct DetailColumn: View {
 
     /// The offers a page on show draws itself; the banner draws the rest.
     private var placed: Set<String> {
-        var labels = Set(Placement.toolbar).union(Placement.story)
+        var labels = Set(Placement.toolbar).union(Placement.story).union(Placement.runs)
         if window.session != nil {
             labels.formUnion(Placement.dropIn)
         } else if window.snapshot?.editor != nil {

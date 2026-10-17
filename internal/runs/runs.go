@@ -155,10 +155,39 @@ func Parse(line string) (Run, error) {
 	return run, nil
 }
 
-// Read reads every run in runs/, oldest file first and in file order within a day. No runs/
-// folder means no runs. A line that can't be read is skipped: one bad merge shouldn't hide
-// every run.
+// Read reads every run in runs/ and, when the project keeps its runs off main, in the copy of
+// refs/givens/runs (see RefCopy). A run in both is read once.
 func Read(capabilities string) ([]Run, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	all, err := ReadFolder(capabilities)
+	if err != nil {
+		return nil, err
+	}
+	copied := RefCopy(capabilities)
+	if copied == "" {
+		return all, nil
+	}
+	kept, err := ReadFolder(copied)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(all)+len(kept))
+	for _, run := range all {
+		seen[format(run)] = true
+	}
+	for _, run := range kept {
+		if !seen[format(run)] {
+			all = append(all, run)
+		}
+	}
+	assert.That(len(all) <= len(seen)+len(kept), "a run is read at most once more")
+	return all, nil
+}
+
+// ReadFolder reads every run in root/runs/, oldest file first and in file order within a day.
+// No runs/ folder means no runs. A line that can't be read is skipped: one bad merge shouldn't
+// hide every run.
+func ReadFolder(capabilities string) ([]Run, error) {
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
 	// Glob returns names in lexical order, which for YYYY-MM-DD is date order.
 	// Ref: https://pkg.go.dev/path/filepath#Glob

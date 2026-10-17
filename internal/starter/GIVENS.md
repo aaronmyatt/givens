@@ -20,6 +20,7 @@ capabilities/
     _shared/*.sh               # helpers only this capability's scripts can call
   runs/YYYY-MM-DD.log          # one line per recorded Drop in
   runs/files/<run key>/<time>/ # files kept with a run, like a screenshot
+  runs/off-main.md             # left once runs moved to the git ref refs/givens/runs
 ```
 
 ## Rules
@@ -40,6 +41,10 @@ capabilities/
   Setup should be idempotent: running it twice leaves the same state as once.
 - A run is recorded against `<capability>/<scenario slug>`, plus `/<examples slug>` for a named
   Examples block. Renaming a scenario starts its runs over.
+- In a git repository with an `origin` remote, runs are kept off main: Givens keeps the run log
+  and its files in the git ref `refs/givens/runs`, which it fetches and pushes itself, and
+  `runs/` only holds runs from before. The ref keeps the newest runs only: its `limits` file
+  says how many runs and MB (1000 and 250). Without a remote, runs go in `runs/`.
 - Step definitions belong to the project's test runner, not to Givens. They may live in the
   capability folders (e.g. `checkout/steps/`).
 

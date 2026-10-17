@@ -69,7 +69,7 @@ func historyOf(capabilities string, recorded []runs.Run, key string, now time.Ti
 		lines = append(lines, RunLine{
 			Result: run.Result, Text: runText(run, now), Note: run.Note,
 			Files: runFiles(capabilities, run), NoteMarkdown: markdown,
-			Folder: runs.FilesDir(capabilities, run.Key, run.Time),
+			Folder: runs.FolderOf(capabilities, run),
 		})
 	}
 	return lines

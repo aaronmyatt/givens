@@ -99,3 +99,30 @@ func TestNote(t *testing.T) {
 		t.Errorf("Files lists the note: %q, %v", names, err)
 	}
 }
+
+// TestFreeTime records a run, then finds the next free second for the same key: past the
+// run's line, and past a folder with no line. Another key keeps the same second.
+func TestFreeTime(t *testing.T) {
+	root := t.TempDir()
+	at := time.Date(2026, time.October, 12, 21, 38, 5, 400, time.FixedZone("MYT", 8*3600))
+	whole := at.Truncate(time.Second)
+	free, err := FreeTime(root, "checkout/card-declined", at)
+	if err != nil || !free.Equal(whole) {
+		t.Fatalf("with no runs, FreeTime = %s, %v; want %s", free, err, whole)
+	}
+	run := Run{Time: whole, Key: "checkout/card-declined", Result: ResultPass}
+	if err := Append(root, run); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(FilesDir(root, run.Key, whole.Add(time.Second)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	free, err = FreeTime(root, run.Key, at)
+	if want := whole.Add(2 * time.Second); err != nil || !free.Equal(want) {
+		t.Errorf("past a line and a folder, FreeTime = %s, %v; want %s", free, err, want)
+	}
+	free, err = FreeTime(root, "checkout/empty-cart", at)
+	if err != nil || !free.Equal(whole) {
+		t.Errorf("for another key, FreeTime = %s, %v; want %s", free, err, whole)
+	}
+}

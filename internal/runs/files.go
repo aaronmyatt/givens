@@ -24,6 +24,8 @@ const (
 	FilesPerRunMax = 32
 	// FileBytesMax bounds one attached file: room for a screen recording, not a disk image.
 	FileBytesMax = 100 << 20
+	// FreeSecondsMax bounds how many seconds FreeTime looks past a run's time.
+	FreeSecondsMax = 60
 )
 
 // filesFolderTimeLayout names a run's folder by its time in UTC, so folders sort by time and
@@ -38,6 +40,52 @@ func FilesDir(capabilities string, key string, at time.Time) string {
 	assert.That(!at.IsZero(), "a run has a time")
 	return filepath.Join(Dir(capabilities), "files", filepath.FromSlash(key),
 		at.UTC().Format(filesFolderTimeLayout))
+}
+
+// FreeTime is the first whole second from at on that no run of key was recorded at and no
+// folder of key's files is named after. A run's files are found from its key and time, to the
+// second, so two runs of one scenario in the same second would share a folder: the later one
+// is recorded a second on instead, and the run line's format stays as it is.
+func FreeTime(capabilities string, key string, at time.Time) (time.Time, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	assert.That(key != "", "a run has a key")
+	candidate := at.Truncate(time.Second)
+	for range FreeSecondsMax {
+		taken, err := timeTaken(capabilities, key, candidate)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if !taken {
+			assert.That(!candidate.Before(at.Truncate(time.Second)), "a run never moves back")
+			return candidate, nil
+		}
+		candidate = candidate.Add(time.Second)
+	}
+	return time.Time{}, fmt.Errorf("%s has a run in each of the %d seconds from %s", key,
+		FreeSecondsMax, at.Format(time.RFC3339))
+}
+
+// timeTaken is true when key has a run line at at, in that day's file, or a files folder
+// named after at.
+func timeTaken(capabilities string, key string, at time.Time) (bool, error) {
+	assert.That(key != "", "a run has a key")
+	assert.That(at.Equal(at.Truncate(time.Second)), "run times are whole seconds")
+	if _, err := os.Stat(FilesDir(capabilities, key, at)); err == nil {
+		return true, nil
+	}
+	found, err := readFile(filepath.Join(Dir(capabilities), at.Format(time.DateOnly)+".log"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, run := range found {
+		if run.Key == key && run.Time.Equal(at) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // CheckFile returns an error unless path is a regular file of at most FileBytesMax bytes.
@@ -116,7 +164,7 @@ func Files(capabilities string, run Run) ([]string, error) {
 	assert.That(!run.Time.IsZero(), "a run has a time")
 	// ReadDir returns entries sorted by name.
 	// Ref: https://pkg.go.dev/os#ReadDir
-	entries, err := os.ReadDir(FilesDir(capabilities, run.Key, run.Time))
+	entries, err := os.ReadDir(FolderOf(capabilities, run))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -186,7 +234,7 @@ func WriteNote(capabilities string, run Run, note string) error {
 func ReadNote(capabilities string, run Run) (string, error) {
 	assert.That(run.Key != "", "a run has a key")
 	assert.That(!run.Time.IsZero(), "a run has a time")
-	path := filepath.Join(FilesDir(capabilities, run.Key, run.Time), NoteFileName)
+	path := filepath.Join(FolderOf(capabilities, run), NoteFileName)
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil

@@ -58,6 +58,8 @@ func (s *Server) needs() map[string]handler {
 		"window.chooseStepSuggestion": s.onEditor(chooseStepSuggestion),
 		"window.editorPreview":        s.onEditor(editorPreview),
 		"window.delete":               s.onWindow(deleteItem),
+		// capabilities/keep-runs-off-main: Needs/keep-runs-off-main.swift.
+		"window.syncRuns": s.onWindow(syncRuns),
 	}
 }
 
@@ -254,6 +256,17 @@ func detach(session *app.Session, given params) (any, error) {
 		return nil, fmt.Errorf("%w: detach needs a file name", ErrBadRequest)
 	}
 	return nil, session.Detach(given.Name)
+}
+
+// syncRuns shares a project's runs kept off main, and fetches other devices': the Mac app
+// calls it every few minutes.
+func syncRuns(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "sync runs runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	if window.Kind() != app.WindowProject {
+		return nil, fmt.Errorf("%w: only a project window has runs", ErrBadRequest)
+	}
+	return nil, window.SyncRuns()
 }
 
 func branches(window *app.Window, _ params) (any, error) {

@@ -9,6 +9,7 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/project"
+	"givens/internal/runref"
 	"givens/internal/slug"
 )
 
@@ -34,6 +35,10 @@ func (w *Window) allOffers() []string {
 		return []string{OfferCreateFolder}
 	}
 	if w.session != nil {
+		// Runs waiting to be shared can be shared from a Drop in too, right after recording.
+		if slices.Contains(w.runsOffers(), OfferShareRuns) {
+			return append(w.session.offers(), OfferShareRuns)
+		}
 		return w.session.offers()
 	}
 	offers := make([]string, 0, 8)
@@ -45,7 +50,7 @@ func (w *Window) allOffers() []string {
 			strings.HasPrefix(messages[0], "Kit update available") {
 			offers = append(offers, OfferUpdateKit)
 		}
-		offers = append(offers, OfferNewStory)
+		offers = append(append(offers, OfferNewStory), w.runsOffers()...)
 		if w.selectedCapability != "" {
 			offers = append(offers, OfferNewScenario)
 		}
@@ -143,6 +148,12 @@ func (w *Window) Choose(action string) error {
 	}
 	if action == OfferEditAbout || action == OfferAddAbout {
 		return w.editAbout()
+	}
+	switch action {
+	case OfferMoveRunsOffMain:
+		return w.askMoveRunsOffMain()
+	case OfferShareRuns:
+		return w.syncRuns(runref.NetworkTimeout)
 	}
 	if w.session != nil {
 		return w.session.choose(action)

@@ -15,7 +15,7 @@ import (
 func (w *Window) Select(name string) error {
 	assert.That(w != nil, "select runs on a window")
 	assert.That(utf8.ValidString(name), "the name is text")
-	w.branchProblem = ""
+	w.branchProblem, w.runsNote = "", ""
 	if w.editor != nil {
 		return w.closeEditor(func() error { return w.leaveThenSelect(name) })
 	}
