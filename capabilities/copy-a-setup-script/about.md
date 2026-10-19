@@ -1,0 +1,2 @@
+# Copy a setup script
+
