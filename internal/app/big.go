@@ -2677,11 +2677,14 @@ func (w *Window) emptyView() string {
 // OfferNewScenario (with the page offers) and editorOffers and runs chooseInEditor (allOffers and
 // Choose, offers.go), types into the editor (Type, input.go), calls editShown on KeyEdit (Press,
 // input.go), closes the editor before selecting (closeEditor in Select, selection.go), and shows it
-// (Snapshot, snapshot.go). Editor, the drafts, marks, suggestions and preview lines, and the
-// editing limits are types in edit.go; EditorSnapshot is in snapshot.go. The terminal edits in the
-// developer's editor: `givens new` and `givens edit` (cmd/givens/new.go and edit.go) and the TUI's
-// e, s and n (internal/tui) hand the text over through internal/termedit; `givens rename` and
-// `givens delete` are cmd/givens/manage.go.
+// (Snapshot, snapshot.go). It also offers aboutOffers and runs editAbout (allOffers and Choose),
+// and the scenario page offers and runs "Create script" and "Write setup steps" (scenarioPageOffers
+// and chooseOnScenarioPage, offers.go), whose labels stay there with KitSourceLine; createSetup
+// opens its new file with Drop in's editFile (dropin_page.go). Editor, the drafts, marks,
+// suggestions and preview lines, and the editing limits are types in edit.go; EditorSnapshot is in
+// snapshot.go. The terminal edits in the developer's editor: `givens new` and `givens edit`
+// (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui) hand the text over
+// through internal/termedit; `givens rename` and `givens delete` are cmd/givens/manage.go.
 
 // Authoring offers.
 const (
@@ -3681,4 +3684,163 @@ func (e *Editor) snapshot() *EditorSnapshot {
 		Path: e.path, Text: e.text, Problems: problems, Preview: preview, Dirty: e.dirty(),
 		Scenario: e.scenario,
 	}
+}
+
+// Scenario: Edit a capability's about.md
+// Scenario: Add an about.md
+
+// A capability's about.md, edited from its story: "Edit about.md", or "Add about.md" when
+// there's none yet.
+
+// About.md actions, offered with the story of the capability on show.
+const (
+	OfferEditAbout = "Edit about.md"
+	OfferAddAbout  = "Add about.md"
+)
+
+// storyCapability is the capability whose story is on show: the selected one, or the first
+// when nothing is selected, as shownCapability picks it.
+func (w *Window) storyCapability() (project.Capability, bool) {
+	assert.That(w != nil, "story capability runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.project == nil {
+		return project.Capability{}, false
+	}
+	name := w.selectedCapability
+	if w.selected == "" && len(w.project.Capabilities) > 0 {
+		name = w.project.Capabilities[0].Slug
+	}
+	if name == "" {
+		return project.Capability{}, false
+	}
+	return w.findCapability(name)
+}
+
+// aboutOffers is "Edit about.md" or "Add about.md" while a story is on show and nothing is in
+// the editor. Needed by "Edit a capability's about.md" and "Add an about.md".
+func (w *Window) aboutOffers() []string {
+	assert.That(w != nil, "about offers runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.editor != nil || w.session != nil {
+		return []string{}
+	}
+	capability, ok := w.storyCapability()
+	if !ok {
+		return []string{}
+	}
+	if capability.About == "" {
+		return []string{OfferAddAbout}
+	}
+	return []string{OfferEditAbout}
+}
+
+// editAbout opens the story's about.md in the editor, first writing one that holds only the
+// capability's name as a heading when there's none.
+func (w *Window) editAbout() error {
+	assert.That(w != nil, "edit about runs on a window")
+	assert.That(w.editor == nil, "nothing is in the editor yet")
+	capability, ok := w.storyCapability()
+	if !ok {
+		return fmt.Errorf("no capability is on show: %w", ErrNotFound)
+	}
+	path := filepath.Join(filepath.Dir(capability.FeaturePath), "about.md")
+	// O_EXCL leaves an about.md another tool just wrote alone.
+	// Ref: https://pkg.go.dev/os#O_EXCL
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err == nil {
+		_, err = file.WriteString("# " + capability.Name + "\n\n")
+		err = errors.Join(err, file.Close())
+	}
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	_, err = w.Edit(filepath.Join(capability.Slug, "about.md"))
+	return err
+}
+
+// Scenario: Write setup steps
+
+// createSetup starts the selected scenario's setup: a script sourcing the kit, or setup steps
+// done by hand as an empty numbered list. It opens the new file in the editor.
+func (w *Window) createSetup(script bool) error {
+	assert.That(w != nil, "create setup runs on a window")
+	assert.That(w.selectedScenario != "", "a scenario is selected")
+	scenario, ok := w.findScenario(w.selectedScenario)
+	if !ok || scenario.Slug == "" {
+		return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
+	}
+	capability, _ := w.findCapability(scenario.Capability)
+	path := filepath.Join(capability.Dir, "scripts", scenario.Slug+".md")
+	text := "1.\n"
+	if script {
+		path = filepath.Join(capability.Dir, "scripts", scenario.Slug+".sh")
+		text = KitSourceLine + "\n"
+	}
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", filepath.Base(path))
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.editFile(path)
+}
+
+// Scenario: Delete a setup file while editing it
+// Scenario: Delete a setup script another builds on
+
+// setupFile is true while the editor holds one of a scenario's setup files: its script, its
+// setup steps or its teardown.
+func (e *Editor) setupFile() bool {
+	assert.That(e != nil, "setup file runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	if e.window.project == nil {
+		return false
+	}
+	for _, capability := range e.window.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if e.path == scenario.Setup || e.path == scenario.SetupCards ||
+				e.path == scenario.Teardown {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// deleteFile asks, then moves the file open in the editor to the Trash and closes the editor,
+// unsaved changes and all. A setup script another scenario runs with a from line asks "Delete
+// anyway", as deleting the scenario does. Needed by "Delete a setup file while editing it"
+// and "Delete a setup script another builds on".
+func (w *Window) deleteFile() error {
+	assert.That(w.editor != nil, "there's a file open to delete")
+	assert.That(w.editor.setupFile(), "only a setup file is offered for deleting")
+	path := w.editor.path
+	builder := ""
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if scenario.Setup != path {
+				continue
+			}
+			found, err := w.builtOn(scenario.Key(), "")
+			if err != nil {
+				return err
+			}
+			builder = found
+		}
+	}
+	w.askDelete(builder, builder+" builds on this scenario", "Delete "+filepath.Base(path)+"?",
+		func() error {
+			if err := w.app.trash(path); err != nil {
+				return err
+			}
+			w.editor = nil
+			return w.reload()
+		})
+	return nil
 }

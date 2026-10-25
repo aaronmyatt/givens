@@ -190,37 +190,6 @@ func noSetup(scenario project.Scenario) bool {
 		scenario.Teardown == ""
 }
 
-// createSetup starts the selected scenario's setup: a script sourcing the kit, or setup steps
-// done by hand as an empty numbered list. It opens the new file in the editor.
-func (w *Window) createSetup(script bool) error {
-	assert.That(w != nil, "create setup runs on a window")
-	assert.That(w.selectedScenario != "", "a scenario is selected")
-	scenario, ok := w.findScenario(w.selectedScenario)
-	if !ok || scenario.Slug == "" {
-		return fmt.Errorf("%s: %w", w.selectedScenario, ErrNotFound)
-	}
-	capability, _ := w.findCapability(scenario.Capability)
-	path := filepath.Join(capability.Dir, "scripts", scenario.Slug+".md")
-	text := "1.\n"
-	if script {
-		path = filepath.Join(capability.Dir, "scripts", scenario.Slug+".sh")
-		text = KitSourceLine + "\n"
-	}
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists", filepath.Base(path))
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		return err
-	}
-	if err := w.reload(); err != nil {
-		return err
-	}
-	return w.editFile(path)
-}
-
 // scenarioFileOf says which of a scenario's setup files an edit offer opens, or nil for any
 // other offer.
 func scenarioFileOf(action string) func(project.Scenario) string {

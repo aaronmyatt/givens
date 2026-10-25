@@ -390,3 +390,16 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   "the" starts that line; same words. A heading check that keys on a line's start can trip on
   prose, so a comment that wraps onto "Scenario:" or "Feature:" needs the same care.
 - Section +338 lines (1,020 in all), big_helpers.go +49. big.go 3,684, big_helpers.go 677.
+- c) about.md and setup files. about_edit.go and editor_more.go are gone. At the section's end:
+  about_edit.go (its about.md offers, `storyCapability`, `aboutOffers` and `editAbout`) under
+  "Edit a capability's about.md" and "Add an about.md"; `createSetup` under "Write setup steps";
+  `setupFile` and `deleteFile` under the two "Delete a setup …" scenarios.
+- `createSetup` came out of offers.go, though the task named only about_edit.go, `setupFile` and
+  `deleteFile`: it's "Write setup steps", and `chooseOnScenarioPage` is its one caller. It isn't
+  the dispatcher, so it moved as `moveToOwnCapability` did. The "Create script" and "Write setup
+  steps" labels stay in offers.go's const block with `MessageNoSetup` (Read a capability's "A
+  scenario with no setup"), and `KitSourceLine` stays there too: Drop in's `addTeardown` uses it.
+- `storyCapability` stays in the section, though `editShown` (a) calls it: both are this story's.
+- Nothing went to big_helpers.go. No seams cut.
+- Section +158 lines, 1,182 in all; big_helpers.go +0. big.go 3,846, big_helpers.go 677.
+  15 of 17. internal/app is down to 29 Go files.
