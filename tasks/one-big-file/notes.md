@@ -63,3 +63,16 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   - Some of a story's code is bash (the kit). A comment points at it; `--debug` only helps
     with Go.
 - Next, if it grows: trust-a-project (4 scenarios), then views (4).
+
+## Trust a project moves in (2026-10-25)
+- trust.go is gone: its folder lists' trust half is the section, and `remember`, `forget`,
+  `writeFolders` and `folders` are Helpers, since recents and open windows use them too.
+- The trust gate was a `switch` inside Drop in's `startSession` (dropin_run.go). It's now two
+  functions in the section, `trustOf` and `runTrusted`, which `startSession` calls; the trust
+  constants and `scriptsOff` moved with it. "Trust this project" on the Drop in page calls
+  `trustThisProject`. No behaviour changed; the trust, Drop in and copy suites pass.
+- Finding: a story's code can live inside another story's function, here Drop in's. Moving it
+  meant cutting a seam (`trustOf`, `runTrusted`) first, so a migration can touch the code of a
+  story that isn't in the big file yet.
+- The header said helpers are for "every story", but repoRoot is copy's alone: it now says
+  helpers sit below the sections so a section reads as what its story does.

@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -46,11 +45,7 @@ func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardo
 	if w.branch != "" {
 		return nil, fmt.Errorf("%s isn't checked out, so its setup scripts don't run", w.branch)
 	}
-	trusted, err := w.app.Trusted(w.path)
-	if err != nil {
-		return nil, err
-	}
-	refused, err := w.app.untrusted(w.path)
+	trusted, refused, err := w.trustOf()
 	if err != nil {
 		return nil, err
 	}
@@ -66,24 +61,7 @@ func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardo
 	// A markdown setup's run blocks are code too, so they're asked about as a script is.
 	runsScripts := found.Setup != "" || found.Teardown != "" ||
 		len(runBlocksIn(found.SetupCards)) > 0
-	switch {
-	case runsScripts && refused:
-		session.scriptsOff()
-	case runsScripts && !trusted:
-		w.askEither("Run scripts from this project? "+filepath.Dir(w.path), OfferTrust,
-			func() error {
-				if err := w.app.MarkTrusted(w.path); err != nil {
-					return err
-				}
-				return session.begin()
-			}, OfferDontTrust, func() error {
-				session.scriptsOff()
-				return w.app.markUntrusted(w.path)
-			})
-	default:
-		return session, session.begin()
-	}
-	return session, nil
+	return session, w.runTrusted(session, runsScripts, trusted, refused)
 }
 
 // restart drops in again to the same scenario and row: "Try again" and "Reset state".
@@ -294,20 +272,4 @@ func outlineWithoutRow(built project.Scenario, values []string) string {
 		}
 	}
 	return built.Slug + " is an outline: pick a row" + example
-}
-
-// Trust prompt buttons and the message once scripts are off.
-const (
-	OfferTrust            = "Trust"
-	OfferDontTrust        = "Don't trust"
-	OfferTrustThisProject = "Trust this project"
-	MessageScriptsOff     = "Scripts are off for this project"
-)
-
-// scriptsOff opens the Drop in page with nothing run: the developer chose "Don't trust".
-// Reading and copying still work. See capabilities/trust-a-project.
-func (s *Session) scriptsOff() {
-	assert.That(s != nil, "scripts off runs on a session")
-	assert.That(s.process == nil, "nothing has run")
-	s.status, s.message, s.untrusted = SessionStopped, MessageScriptsOff, true
 }

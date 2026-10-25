@@ -136,10 +136,7 @@ func (s *Session) choose(action string) error {
 		}
 		return window.app.config.Clipboard.WriteText(s.hints[0])
 	case OfferTrustThisProject:
-		if err := window.app.MarkTrusted(window.path); err != nil {
-			return err
-		}
-		return s.restart(false)
+		return s.trustThisProject()
 	}
 	return ErrNotImplemented
 }
