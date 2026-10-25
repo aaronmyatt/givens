@@ -161,22 +161,6 @@ func noSetup(scenario project.Scenario) bool {
 		scenario.Teardown == ""
 }
 
-// scenarioFileOf says which of a scenario's setup files an edit offer opens, or nil for any
-// other offer.
-func scenarioFileOf(action string) func(project.Scenario) string {
-	assert.That(action != "", "an action has a label")
-	assert.That(OfferEditScript != OfferEditSetup, "each file has its own offer")
-	switch action {
-	case OfferEditScript:
-		return func(scenario project.Scenario) string { return scenario.Setup }
-	case OfferEditSetup:
-		return func(scenario project.Scenario) string { return scenario.SetupCards }
-	case OfferEditTeardown:
-		return func(scenario project.Scenario) string { return scenario.Teardown }
-	}
-	return nil
-}
-
 // scenarioPageOffers is what a scenario's page offers: its own actions, then ways to write
 // a missing setup or to open each setup file there is.
 func scenarioPageOffers(shown Scenario, loaded project.Scenario) []string {

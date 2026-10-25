@@ -46,24 +46,6 @@ func (w *Window) leaveThenSelect(name string) error {
 	return nil
 }
 
-// leaveSession closes the Drop in page: setup still running is stopped, and its arguments
-// folder removed.
-func (w *Window) leaveSession() error {
-	assert.That(w.session != nil, "there's a Drop in to leave")
-	session := w.session
-	assert.That(session.window == w, "the Drop in is this window's")
-	w.session = nil
-	session.scripts = nil
-	if err := session.stopBlock(); err != nil {
-		return err
-	}
-	session.removeArguments()
-	if session.process == nil {
-		return nil
-	}
-	return session.process.Stop()
-}
-
 // selectNow selects by name, with no Drop in open.
 func (w *Window) selectNow(name string) error {
 	assert.That(w.session == nil, "a Drop in is left before selecting")

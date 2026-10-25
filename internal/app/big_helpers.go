@@ -766,3 +766,28 @@ func (s *Session) restart(skipTeardown bool) error {
 
 // KitSourceLine is the first line of every setup script: it sources the kit.
 const KitSourceLine = `source "$(dirname "${BASH_SOURCE[0]}")/../../_shared/givens.sh"`
+
+// resume ends a wait at a card, adding the time waited so it doesn't count as slow.
+func (s *Session) resume() {
+	assert.That(s != nil, "resume runs on a session")
+	assert.That(!s.started.IsZero(), "the session started")
+	if s.status == SessionWaiting {
+		s.waited += s.window.app.config.Clock.Now().Sub(s.waitingSince)
+		s.status = SessionRunning
+	}
+}
+
+// editFile opens a file inside the capabilities folder in the editor.
+func (w *Window) editFile(path string) error {
+	assert.That(w != nil, "edit file runs on a window")
+	assert.That(path == "" || filepath.IsAbs(path), "the path is absolute")
+	if path == "" {
+		return ErrNotFound
+	}
+	relative, err := filepath.Rel(w.path, path)
+	if err != nil {
+		return err
+	}
+	_, err = w.Edit(relative)
+	return err
+}

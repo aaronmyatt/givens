@@ -493,3 +493,24 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   setup's own idempotency, with "Reset state" in `restart`.
 - Write stories' opening comment said KitSourceLine stays in offers.go; it says big_helpers.go.
 - Section +99 lines, 721 in all; big_helpers.go +3. big.go 4,827, big_helpers.go 768.
+- d) Cards, steps by hand and asks. cards.go and dropin_page.go are gone. After "Build on an
+  outline without a row": `ChecklistPart` and `Parts` under "Steps stay in the order they're
+  written"; the page (dropin_page.go's intro, `snapshot`, `messages`, `offers`, `choose`,
+  `failedOffers`, then `scenarioFileOf` from offers.go and `leaveSession` from selection.go)
+  under "Reset state part way through"; the card offers and messages, `cardHeader`, `Cards`, the
+  script cards' reading and answering, `pendingCard` and `PendingCard` under the five by_hand
+  and ask scenarios; `UseURLOpener` under "A step in the browser"; `addMarkdownCards`,
+  `markMarkdownCard` and `cardLines` under the five markdown-card scenarios; `CopyCodeBlock`,
+  `ClickInlineCode` and `CopyCard` under the three copy scenarios. "Waiting doesn't count as
+  slow" joins the stack over `stillRunning`, which takes the time waited off.
+- To big_helpers.go: `resume`, since Mix shell's `runNextCard` resumes too, and `editFile`,
+  since Write stories' `createSetup` opens its new file with it (and core glue's
+  `chooseOnScenarioPage` opens setup files).
+- `leaveSession` and `scenarioFileOf` came out of core files: each is one story's function, not
+  the dispatcher, as `editShown` came out of input.go. `leaveThenSelect` stays in selection.go:
+  it's Select's own flow, and calls `marked` and `leaveSession`. No seams cut.
+- The opening comment is now in paragraphs: what the story is, the guests it calls, what's in
+  big_helpers.go, the bash and git scenarios, and core glue's calls in.
+- Mix shell's, Share setup's and Write stories' opening comments named cards.go and
+  dropin_page.go; they name the functions only now, or big_helpers.go for `editFile`.
+- Section +569 lines, 1,290 in all; big_helpers.go +25. big.go 5,395, big_helpers.go 793.
