@@ -1,4 +1,4 @@
-package branch
+package app
 
 import (
 	"archive/tar"
@@ -53,12 +53,12 @@ func repository(t *testing.T) string {
 // working tree on main as it was.
 func TestListAndExtract(t *testing.T) {
 	capabilities := repository(t)
-	names, err := List(capabilities)
+	names, err := ListBranches(capabilities)
 	if err != nil || !slices.Equal(names, []string{"gift-cards", "main"}) {
 		t.Fatalf("List = %q, %v", names, err)
 	}
 	into := filepath.Join(t.TempDir(), "copy")
-	copied, err := Extract(capabilities, "gift-cards", into)
+	copied, err := ExtractBranch(capabilities, "gift-cards", into)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestExtractRefuses(t *testing.T) {
 	capabilities := repository(t)
 	into := filepath.Join(t.TempDir(), "copy")
 	for _, name := range []string{"no-such-branch", "--output=/tmp/x", ""} {
-		if _, err := Extract(capabilities, name, into); !errors.Is(err, ErrNoBranch) {
+		if _, err := ExtractBranch(capabilities, name, into); !errors.Is(err, ErrNoBranch) {
 			t.Errorf("Extract(%q) = %v", name, err)
 		}
 	}
@@ -87,7 +87,7 @@ func TestExtractRefuses(t *testing.T) {
 	if err := os.MkdirAll(other, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Extract(other, "main", into); !errors.Is(err, ErrNoCapabilities) {
+	if _, err := ExtractBranch(other, "main", into); !errors.Is(err, ErrNoCapabilities) {
 		t.Errorf("Extract of a folder main doesn't have = %v", err)
 	}
 	if _, err := os.Stat(into); !os.IsNotExist(err) {

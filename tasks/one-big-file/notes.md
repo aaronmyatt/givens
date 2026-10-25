@@ -622,3 +622,16 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - big.go 5,651 lines, big_helpers.go 900 (+52).
 - Surprise: fold.py's `gopls -remote=auto` can't reach a daemon here; a copy without
   `-remote=auto` worked, about 18 s for this package.
+
+## internal/branch folds in (2026-10-25)
+- internal/branch is gone. All of it is at the end of Open a project's section, after
+  `shortHash`, under its package doc: only `Branches` and `OpenBranch` call it.
+- Renames: `List` -> `ListBranches`, `Extract` -> `ExtractBranch`, `checkName` ->
+  `checkBranchName`, `EntriesMax` -> `ArchiveEntriesMax`, and `NameLengthMax` ->
+  `BranchNameLengthMax`. That last one clashed with app's `NameLengthMax`, but the values differ
+  (a branch name 256, app's names 1024), so it was renamed, not merged: merging would change
+  which branch names `OpenBranch` turns down.
+- branch_test.go is internal/app/branch_archive_test.go, beside app's own branch_test.go.
+- Open a project's opening comment and the "Read capabilities from another branch" note named
+  internal/branch; they point at the section's end now.
+- big.go 5,873 lines, big_helpers.go 900 (+0).

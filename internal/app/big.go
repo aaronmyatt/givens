@@ -28,18 +28,21 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, runref, branch, setup, tags, slug, markdown, helpers,
-//     kit, starter and watch: domain packages, each with one job and its own tests.
+//   - internal/spec, project, runs, runref, setup, tags, slug, markdown, helpers, kit,
+//     starter and watch: domain packages, each with one job and its own tests.
 
 package app
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -54,7 +57,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/branch"
 	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/kit"
@@ -2387,18 +2389,17 @@ func (s *Session) stopBlock() error {
 // Feature: Open a project
 //
 // capabilities/open-a-project. Opening a folder finds its capabilities folder, reads it into a
-// window and watches it; nothing is copied, so files other tools write show up. The loading
-// every story reads through is in big_helpers.go: findCapabilities, reload, refresh (which
-// "Files written by other tools appear" runs on), findCapability and findScenario; so is
-// writable, which every change asks of a branch's window. Code elsewhere: core glue shows
-// MessageNoCapabilities and branchMessages (Snapshot, snapshot.go), and offers and runs
-// "Create capabilities folder" and cuts a branch's offers with readOnly (allOffers and Choose,
-// offers.go). createCapabilities writes with writeNew (big_helpers.go),
-// which Write stories' NewScenario uses too. Open starts Keep runs off main's sync
-// (openRunStore), and OpenBranch links a branch's copy to the ref the project keeps runs in
-// (runs.LinkRefCopy). Window's branch fields are in window.go's types; internal/branch
-// copies a branch out of git. The terminal scenarios are openFolder in cmd/givens/main.go and
-// the TUI.
+// window and watches it; nothing is copied, so files other tools write show up. The loading every
+// story reads through is in big_helpers.go: findCapabilities, reload, refresh (which "Files written
+// by other tools appear" runs on), findCapability and findScenario; so is writable, which every
+// change asks of a branch's window. Code elsewhere: core glue shows MessageNoCapabilities and
+// branchMessages (Snapshot, snapshot.go), and offers and runs "Create capabilities folder" and cuts
+// a branch's offers with readOnly (allOffers and Choose, offers.go). createCapabilities writes with
+// writeNew (big_helpers.go), which Write stories' NewScenario uses too. Open starts Keep runs off
+// main's sync (openRunStore), and OpenBranch links a branch's copy to the ref the project keeps
+// runs in (runs.LinkRefCopy). Window's branch fields are in window.go's types. The end of this
+// section, from internal/branch, copies a branch out of git. The terminal scenarios are openFolder
+// in cmd/givens/main.go and the TUI.
 
 // CloseWindow closes this window. Closing the last project window leaves nothing to reopen
 // at the next launch. A branch's window takes its copy with it. Needed by "Reopen a recent
@@ -2517,9 +2518,9 @@ func (w *Window) createCapabilities() error {
 // Scenario: Read capabilities from another branch
 // Scenario: Open a branch that doesn't exist
 
-// Another branch's capabilities, read without checking that branch out. internal/branch copies
-// the folder out of git into Givens's data folder; the window that shows the copy is read
-// only, since its setup scripts belong to code that isn't checked out.
+// Another branch's capabilities, read without checking that branch out. ExtractBranch, at the
+// section's end, copies the folder out of git into Givens's data folder; the window that shows
+// the copy is read only, since its setup scripts belong to code that isn't checked out.
 
 // Messages about branches.
 const (
@@ -2541,7 +2542,7 @@ func (w *Window) Branches() ([]string, error) {
 	if w.project == nil {
 		return []string{}, nil
 	}
-	return branch.List(w.origin())
+	return ListBranches(w.origin())
 }
 
 // OpenBranch opens this project's capabilities folder as it is on name, read only, in a new
@@ -2553,16 +2554,16 @@ func (w *Window) OpenBranch(name string) (*Window, error) {
 	assert.That(w.kind == WindowProject, "only a project window has branches")
 	w.branchProblem = ""
 	key := slug.Of(name)
-	if key == "" || len(name) > branch.NameLengthMax {
+	if key == "" || len(name) > BranchNameLengthMax {
 		w.branchProblem = MessageNoBranch + name
 		return nil, nil
 	}
-	copied, err := branch.Extract(w.origin(), name, w.app.branchCopy(w.origin(), name))
+	copied, err := ExtractBranch(w.origin(), name, w.app.branchCopy(w.origin(), name))
 	switch {
-	case errors.Is(err, branch.ErrNoBranch):
+	case errors.Is(err, ErrNoBranch):
 		w.branchProblem = MessageNoBranch + name
 		return nil, nil
-	case errors.Is(err, branch.ErrNoCapabilities):
+	case errors.Is(err, ErrNoCapabilities):
 		w.branchProblem = fmt.Sprintf("%s has no capabilities folder on %s", w.origin(), name)
 		return nil, nil
 	case err != nil:
@@ -2676,6 +2677,227 @@ func shortHash(text string) string {
 	short := hex.EncodeToString(sum[:])[:12]
 	assert.That(len(short) == 12, "the hash is 12 digits")
 	return short
+}
+
+// From internal/branch, which copies a capabilities folder out of another git branch, without
+// checking that branch out, so Givens can read it.
+//
+// `git archive` streams the folder as it is on the branch as a tar, which is unpacked into a
+// folder Givens owns. The working tree, the index and .git are never written to.
+// Ref: https://git-scm.com/docs/git-archive
+
+// Limits. Tiger Style: put a limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	// gitTimeout bounds each git call; an archive of a large capabilities folder included.
+	gitTimeout = 20 * time.Second
+	// ArchiveBytesMax bounds what one branch's capabilities folder unpacks to.
+	ArchiveBytesMax = 256 << 20
+	// ArchiveEntriesMax bounds the files and folders one archive holds.
+	ArchiveEntriesMax = 100000
+	// BranchesMax bounds the branches List returns.
+	BranchesMax = 1000
+	// BranchNameLengthMax bounds a branch name; git allows longer, nobody types them.
+	BranchNameLengthMax = 256
+)
+
+// ErrNoBranch is returned for a branch the repository doesn't have.
+var ErrNoBranch = errors.New("no such branch")
+
+// ErrNoCapabilities is returned when the branch has no capabilities folder at that path.
+var ErrNoCapabilities = errors.New("no capabilities folder on that branch")
+
+// ListBranches returns the repository's local branches, then its remote ones, as git names them:
+// "main", "origin/gift-cards". A remote's HEAD is left out: it only points at another.
+// Ref: https://git-scm.com/docs/git-for-each-ref
+func ListBranches(dir string) ([]string, error) {
+	assert.That(filepath.IsAbs(dir), "dir is absolute")
+	output, err := git(dir, "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, 16)
+	for _, ref := range strings.Split(strings.TrimSpace(output), "\n") {
+		if ref == "" || strings.HasSuffix(ref, "/HEAD") || len(names) >= BranchesMax {
+			continue
+		}
+		if local, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			names = append(names, local)
+		} else if remote, ok := strings.CutPrefix(ref, "refs/remotes/"); ok {
+			names = append(names, remote)
+		}
+	}
+	assert.That(len(names) <= BranchesMax, "branches stay bounded")
+	return names, nil
+}
+
+// ExtractBranch unpacks the capabilities folder at capabilities, as it is on name, into the empty
+// folder into, replacing anything there. It returns where the copied capabilities folder is.
+func ExtractBranch(capabilities string, name string, into string) (string, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	assert.That(filepath.IsAbs(into), "into is absolute")
+	if err := checkBranchName(name); err != nil {
+		return "", err
+	}
+	root, inside, err := locate(capabilities)
+	if err != nil {
+		return "", err
+	}
+	// --verify --quiet prints nothing and fails for a name that isn't a commit.
+	// Ref: https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---verify
+	if _, err := git(root, "rev-parse", "--verify", "--quiet", name+"^{commit}"); err != nil {
+		return "", fmt.Errorf("%w: %s", ErrNoBranch, name)
+	}
+	if err := os.RemoveAll(into); err != nil {
+		return "", err
+	}
+	if err := archiveInto(root, name, inside, into); err != nil {
+		return "", errors.Join(err, os.RemoveAll(into))
+	}
+	copied := filepath.Join(into, filepath.FromSlash(inside))
+	if _, err := os.Stat(copied); err != nil {
+		return "", errors.Join(fmt.Errorf("%w: %s on %s", ErrNoCapabilities, inside, name),
+			os.RemoveAll(into))
+	}
+	assert.That(strings.HasPrefix(copied, into), "the copy is inside into")
+	return copied, nil
+}
+
+// archiveInto streams `git archive` of inside on name straight into unpack, so a large
+// folder is never held in memory whole. A path the branch doesn't have makes git fail.
+// Ref: https://pkg.go.dev/os/exec#Cmd.StdoutPipe
+func archiveInto(root string, name string, inside string, into string) error {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(!strings.HasPrefix(name, "-"), "a name isn't an option")
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "git", "archive", "--format=tar", name, "--", inside)
+	command.Dir = root
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := command.Start(); err != nil {
+		return err
+	}
+	unpacked := unpack(stdout, into)
+	if unpacked != nil {
+		cancel()
+	}
+	if err := command.Wait(); err != nil && unpacked == nil {
+		return fmt.Errorf("%w: %s on %s (%s)", ErrNoCapabilities, inside, name,
+			strings.TrimSpace(stderr.String()))
+	}
+	return unpacked
+}
+
+// checkBranchName turns down a branch name git could read as an option, or that's too long.
+func checkBranchName(name string) error {
+	assert.That(BranchNameLengthMax > 0, "names have a limit")
+	if name == "" || len(name) > BranchNameLengthMax || strings.HasPrefix(name, "-") ||
+		strings.ContainsAny(name, " \t\n\r\x00") {
+		return fmt.Errorf("%w: %q isn't a branch name", ErrNoBranch, name)
+	}
+	assert.That(!strings.HasPrefix(name, "-"), "a name isn't an option")
+	return nil
+}
+
+// locate finds the repository holding capabilities, and the capabilities folder's path inside
+// it, slash-separated as git archive wants. Symlinks are resolved first: git reports the
+// resolved root, like /private/var for /var.
+// Ref: https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-toplevel
+func locate(capabilities string) (string, string, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	resolved, err := filepath.EvalSymlinks(capabilities)
+	if err != nil {
+		return "", "", err
+	}
+	output, err := git(resolved, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", "", fmt.Errorf("%s isn't in a git repository", capabilities)
+	}
+	root := strings.TrimSpace(output)
+	inside, err := filepath.Rel(root, resolved)
+	if err != nil || !filepath.IsLocal(inside) {
+		return "", "", fmt.Errorf("%s isn't inside %s", resolved, root)
+	}
+	assert.That(filepath.IsAbs(root), "git reports an absolute root")
+	return root, filepath.ToSlash(inside), nil
+}
+
+// unpack writes the folders and regular files of a tar into into. Links and anything else are
+// skipped; a path that would land outside into is refused.
+// Ref: https://pkg.go.dev/archive/tar#Reader
+func unpack(archive io.Reader, into string) error {
+	assert.That(filepath.IsAbs(into), "into is absolute")
+	reader := tar.NewReader(archive)
+	written := int64(0)
+	for entries := 0; entries <= ArchiveEntriesMax; entries++ {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// IsLocal is false for absolute paths and ones that climb out with "..".
+		// Ref: https://pkg.go.dev/path/filepath#IsLocal
+		if !filepath.IsLocal(header.Name) {
+			return fmt.Errorf("the archive holds %q, outside its folder", header.Name)
+		}
+		target := filepath.Join(into, filepath.FromSlash(header.Name))
+		switch header.Typeflag {
+		case tar.TypeDir:
+			err = os.MkdirAll(target, 0o755)
+		case tar.TypeReg:
+			written += header.Size
+			if written > ArchiveBytesMax {
+				return fmt.Errorf("the branch's capabilities are over %d MB", ArchiveBytesMax>>20)
+			}
+			err = writeFile(target, reader, header.Size)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("the archive holds more than %d entries", ArchiveEntriesMax)
+}
+
+// writeFile writes size bytes from source into a new file at target, making its folder.
+func writeFile(target string, source io.Reader, size int64) error {
+	assert.That(size >= 0, "a size isn't negative")
+	assert.That(size <= ArchiveBytesMax, "a file fits the archive's limit")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.CopyN(file, source, size); err != nil {
+		return errors.Join(err, file.Close())
+	}
+	return file.Close()
+}
+
+// git runs git in dir and returns its standard output, away from prompts for credentials.
+// Ref: https://git-scm.com/docs/git#Documentation/git.txt-GITTERMINALPROMPT
+func git(dir string, args ...string) (string, error) {
+	assert.That(filepath.IsAbs(dir), "git runs in an absolute folder")
+	assert.That(len(args) > 0, "git has a command")
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "git", args...)
+	command.Dir = dir
+	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := command.Run(); err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String(), nil
 }
 
 // Feature: Read a capability
