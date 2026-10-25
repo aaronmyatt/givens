@@ -64,19 +64,3 @@ func (s *Session) removeArguments() {
 		_ = os.RemoveAll(s.argumentsDir)
 	}
 }
-
-// scratchDir is the session's folder of its own, made on first use: argument files and run
-// blocks' scripts. removeArguments removes it.
-func (s *Session) scratchDir() (string, error) {
-	assert.That(s != nil, "scratch dir runs on a session")
-	assert.That(s.window != nil, "a session belongs to a window")
-	if s.argumentsDir == "" {
-		// Ref: https://pkg.go.dev/os#MkdirTemp
-		dir, err := os.MkdirTemp("", "givens-arguments-")
-		if err != nil {
-			return "", err
-		}
-		s.argumentsDir = dir
-	}
-	return s.argumentsDir, nil
-}

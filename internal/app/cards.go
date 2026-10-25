@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"givens/internal/assert"
-	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/markdown"
 )
@@ -313,21 +312,6 @@ func (s *Session) pendingCard() int {
 		}
 	}
 	return -1
-}
-
-// openLink opens a by_hand --url link: in the Givens browser while this project's is open,
-// so the step shares the session setup signed in to, or else in the default browser.
-// See capabilities/mix-shell-browser-and-hand-steps.
-func (w *Window) openLink(link string) error {
-	assert.That(w != nil, "open link runs on a window")
-	assert.That(link != "", "a card with a link is opened")
-	if profile, err := browser.Profile(w.path); err == nil && browser.Running(profile) {
-		return browser.Open(profile, link)
-	}
-	if w.app.opener == nil {
-		return errors.New("nothing is set up to open links")
-	}
-	return w.app.opener.OpenURL(link)
 }
 
 // CopyCard copies a card's code: its first closed code block, or else its first inline code

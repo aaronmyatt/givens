@@ -21,6 +21,8 @@
 //     data model with no code, so it stays a file of its own.
 //   - edit.go: Write stories' types (Editor, StoryDraft, ScenarioDraft, EditorMark,
 //     StepSuggestion, PreviewLine) and the editing limits. A data model, so it stays apart too.
+//   - internal/browser: Mix shell's Chrome of Givens's own, a wrapper on chromedp, the
+//     third-party CDP client; a package of its own, so the dependency stays in one place.
 
 package app
 
@@ -44,11 +46,14 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/branch"
+	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/kit"
+	"givens/internal/markdown"
 	"givens/internal/project"
 	"givens/internal/runref"
 	"givens/internal/runs"
+	"givens/internal/setup"
 	"givens/internal/slug"
 	"givens/internal/spec"
 	"givens/internal/starter"
@@ -612,6 +617,256 @@ func (w *Window) SetRunLimits(limits runs.Limits) error {
 	}
 	write := func(tree string) error { return runs.WriteLimits(tree, limits) }
 	return w.afterRunsChange(w.runStore.Change(write, runref.NetworkTimeout))
+}
+
+// Feature: Mix shell, browser and hand steps
+//
+// capabilities/mix-shell-browser-and-hand-steps. One setup mixes shell lines, browser lines and
+// steps by hand, and a setup card's "bash run" or "js run" block runs by itself. The browser
+// functions (browser_open, in_browser, app_action) are bash in internal/kit/givens.sh; they
+// call `givens browser` (cmd/givens/browser.go), which drives a Chrome of Givens's own through
+// internal/browser, the wrapper on chromedp. So in a Drop in, this story's app code for the
+// browser lines is GIVENS_BIN; the terminal scenarios ("Browser lines in a terminal", "Run
+// cards in a terminal", "The givens command isn't installed") are the kit and
+// cmd/givens/run.go (runBlocks). Code elsewhere: Drop in calls into this section from its own
+// functions. startSession (dropin_run.go) asks for trust when runBlocksIn finds a run block,
+// which is "Cards that run code ask for trust"; precheck checks a setup with run blocks only;
+// begin adds givensBin. addMarkdownCards (cards.go) marks run blocks with runLanguage and
+// clears a card's offers when it runs; it and markMarkdownCard move on with runNextCard, and
+// ChooseOnCard's "Open" calls openLink. cardLines (dropin_page.go) shows runState; poll and
+// Wait (session.go) poll a running block; "Stop" (choose, dropin_page.go) and leaveSession
+// (selection.go) call stopBlock. In big_helpers.go: runBlocksIn, since Share setup's setupTexts
+// reads run blocks as script lines too; scratchDir, which Drop in's argument files share; and
+// RequiredCommands, which adds Chrome through chromeRequired. runNextCard and openLink came in
+// with this story and hold Drop in's part too: a card that waits, the checklist once every card
+// is marked, and the default browser when the Givens browser isn't open. givensCommand's other
+// caller is the dead InstallCommand (windows.go). Session's block and markdownFailed fields are
+// in session.go's type, and SetupCard's Output and runBlocks and CodeBlock's Run in dropin.go's.
+
+// cardOutputLinesMax bounds what one card keeps of its blocks' output.
+const cardOutputLinesMax = 1000
+
+// blockRun is the run block running now, and those of its card still to run after it.
+type blockRun struct {
+	card    int   // the card's index in Session.cards
+	waiting []int // the card's run blocks still to run, as indices into its Blocks
+	process *setup.Process
+	parsed  int // output lines already moved into the card
+}
+
+// Scenario: Open a page from setup
+// Scenario: Shell, browser and hand steps in one script
+// Scenario: An app action that returns a promise
+// Scenario: Use what the JavaScript returns
+// Scenario: The JavaScript throws
+// Scenario: The page has no such app action
+// Scenario: JavaScript that never answers
+// Scenario: Carry on in the same browser
+// Scenario: Reset state in the same browser
+// Scenario: A terminal run and Drop in share the browser
+
+// givensBin is the GIVENS_BIN variable a Drop in's setup runs with. The kit's browser
+// functions run Givens's own givens, so a Drop in needn't find one on the PATH.
+func (s *Session) givensBin() (string, error) {
+	assert.That(s != nil, "givens bin runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	command, err := s.window.app.givensCommand()
+	if err != nil {
+		return "", err
+	}
+	return "GIVENS_BIN=" + command, nil
+}
+
+// givensCommand is the givens command: Config.Command, or else the running program, which is
+// the givens binary under serve.
+func (a *App) givensCommand() (string, error) {
+	assert.That(a != nil, "givens command runs on an app")
+	assert.That(len(a.config.Command) <= PathLengthMax, "the path fits PathLengthMax")
+	if a.config.Command != "" {
+		return a.config.Command, nil
+	}
+	// Ref: https://pkg.go.dev/os#Executable
+	return os.Executable()
+}
+
+// Scenario: No Chrome installed
+
+// ChromeHint is the install hint for a setup with browser lines.
+const ChromeHint = "brew install --cask google-chrome"
+
+// chromeRequired is Chrome as a command a setup needs, and true, when a line of the setup's
+// texts uses the browser: a browser line needs Chrome, as a need line needs its command.
+func chromeRequired(all string) (RequiredCommand, bool) {
+	assert.That(len(all) <= helpers.FileSizeBytesMax*helpers.HelpersMax, "texts stay bounded")
+	assert.That(all == "" || strings.HasSuffix(all, "\n"), "each text ends its line")
+	if !helpers.UsesBrowser(all) {
+		return RequiredCommand{}, false
+	}
+	_, found := browser.Chrome()
+	return RequiredCommand{Command: "Chrome", Hint: ChromeHint, Installed: found}, true
+}
+
+// Scenario: A step by hand in the Givens browser
+
+// openLink opens a by_hand --url link: in the Givens browser while this project's is open,
+// so the step shares the session setup signed in to, or else in the default browser.
+// See capabilities/mix-shell-browser-and-hand-steps.
+func (w *Window) openLink(link string) error {
+	assert.That(w != nil, "open link runs on a window")
+	assert.That(link != "", "a card with a link is opened")
+	if profile, err := browser.Profile(w.path); err == nil && browser.Running(profile) {
+		return browser.Open(profile, link)
+	}
+	if w.app.opener == nil {
+		return errors.New("nothing is set up to open links")
+	}
+	return w.app.opener.OpenURL(link)
+}
+
+// Scenario: A card that runs a shell command
+// Scenario: A card that runs JavaScript
+
+// A setup card whose code block's info string is "bash run" or "js run" runs by itself when
+// Drop in reaches it: a bash block with the kit loaded, a js block in the Givens browser
+// through in_browser. Each runs as a script of Givens's own, so it's polled, stopped and
+// timed like setup. See capabilities/mix-shell-browser-and-hand-steps.
+
+// runLanguage says how a run block runs: "bash", "js", or "" when it doesn't run.
+func runLanguage(block markdown.Block) string {
+	assert.That(len(block.Code) <= markdown.TextBytesMax, "a block stays bounded")
+	assert.That(block.Line >= 0, "a block has a line")
+	return setup.BlockLanguage(block.Language, block.Run, block.Closed)
+}
+
+// runNextCard moves on through the markdown cards: the first one not yet marked runs its
+// blocks if it has any, or else setup waits on it. Once every card is marked, the checklist
+// shows.
+func (s *Session) runNextCard() error {
+	assert.That(s.markdownFrom >= 0, "markdown cards were added")
+	assert.That(s.block == nil, "one card runs at a time")
+	for index := s.markdownFrom; index < len(s.cards); index++ {
+		if s.cards[index].Mark != "" {
+			continue
+		}
+		if waiting := s.cards[index].runBlocks; len(waiting) > 0 {
+			s.resume()
+			return s.startBlock(index, waiting)
+		}
+		if s.status != SessionWaiting {
+			s.status, s.waitingSince = SessionWaiting, s.window.app.config.Clock.Now()
+		}
+		return nil
+	}
+	s.resume()
+	s.status, s.checklist = SessionReady, checklistOf(s.scenario, s.row)
+	return nil
+}
+
+// startBlock runs the first of a card's waiting run blocks.
+func (s *Session) startBlock(card int, waiting []int) error {
+	assert.That(card >= s.markdownFrom && card < len(s.cards), "the card is a markdown card")
+	assert.That(len(waiting) > 0, "a block waits to run")
+	script, err := s.blockScript(card, waiting[0])
+	if err != nil {
+		return err
+	}
+	// GIVENS_SCRIPT_AS makes the kit load the capability's own helpers, as for its .sh.
+	stands := strings.TrimSuffix(s.scenario.SetupCards, ".md") + ".sh"
+	process, err := setup.Start(setup.Request{
+		Script: script, Dir: filepath.Dir(s.window.path),
+		Env: append(append(s.env[:0:0], s.env...), setup.ScriptAsEnv+"="+stands),
+	})
+	if err != nil {
+		s.fail("Setup couldn't start: " + err.Error())
+		return nil
+	}
+	s.block = &blockRun{card: card, waiting: waiting[1:], process: process}
+	return nil
+}
+
+// blockScript writes the script one run block runs as, beside the session's argument files.
+func (s *Session) blockScript(card int, block int) (string, error) {
+	assert.That(card >= 0 && card < len(s.cards), "the card exists")
+	assert.That(block >= 0 && block < len(s.cards[card].Blocks), "the block exists")
+	dir, err := s.scratchDir()
+	if err != nil {
+		return "", err
+	}
+	code := s.cards[card].Blocks[block]
+	language := setup.BlockLanguage(code.Language, code.Run, code.Copyable)
+	return setup.WriteBlock(dir, "card-"+strconv.Itoa(card)+"-block-"+strconv.Itoa(block),
+		filepath.Join(s.window.path, "_shared", "givens.sh"), language, code.Code)
+}
+
+// runState follows a card's heading when it runs by itself: " · runs by itself" until it
+// runs, then " · running", " · ran" or " · failed".
+func (s *Session) runState(card int) string {
+	assert.That(card >= 0 && card < len(s.cards), "the card exists")
+	assert.That(s.markdownFrom >= 0, "a markdown card is asked about")
+	switch {
+	case len(s.cards[card].runBlocks) == 0:
+		return ""
+	case s.block != nil && s.block.card == card:
+		return " · running"
+	case s.cards[card].Mark == MarkDone:
+		return " · ran"
+	case s.cards[card].Mark != "":
+		return " · failed"
+	}
+	return " · runs by itself"
+}
+
+// Scenario: A card's run block fails
+
+// pollBlock moves the running block's output into its card, and moves on once it ends: to
+// the card's next block, to the next card, or to "Setup stopped at step N of M (exit X)".
+func (s *Session) pollBlock() {
+	assert.That(s.block != nil, "a block is running")
+	assert.That(s.block.process != nil, "the block has a process")
+	run := s.block
+	result, ended := run.process.Wait(time.Millisecond)
+	card := &s.cards[run.card]
+	lines := run.process.Output()
+	for _, line := range lines[run.parsed:] {
+		if len(card.Output) < cardOutputLinesMax {
+			card.Output = append(card.Output, line)
+		}
+	}
+	run.parsed = len(lines)
+	if !ended {
+		return
+	}
+	s.block = nil
+	step, steps := run.card-s.markdownFrom+1, len(s.cards)-s.markdownFrom
+	switch {
+	case errors.Is(result.Err, setup.ErrStopped):
+		s.status = SessionStopped
+	case result.Err != nil:
+		s.fail("Setup failed: " + result.Err.Error())
+	case result.ExitCode != 0:
+		card.Mark, s.markdownFailed = "failed", true
+		s.fail(fmt.Sprintf("Setup stopped at step %d of %d (exit %d)", step, steps,
+			result.ExitCode))
+	case len(run.waiting) > 0:
+		if err := s.startBlock(run.card, run.waiting); err != nil {
+			s.fail("Setup couldn't start: " + err.Error())
+		}
+	default:
+		card.Mark = MarkDone
+		if err := s.runNextCard(); err != nil {
+			s.fail("Setup couldn't start: " + err.Error())
+		}
+	}
+}
+
+// stopBlock stops the running block, if there's one: "Stop", and leaving the Drop in.
+func (s *Session) stopBlock() error {
+	assert.That(s != nil, "stop block runs on a session")
+	assert.That(s.block == nil || s.block.process != nil, "a running block has a process")
+	if s.block == nil {
+		return nil
+	}
+	return s.block.process.Stop()
 }
 
 // Feature: Open a project

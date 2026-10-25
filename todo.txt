@@ -44,7 +44,6 @@ x 2026-10-24 2026-10-17 Runs off main: show the ref's runs in a branch's window 
 x 2026-10-24 2026-10-11 Release: package Givens.app and the givens command ref:release — 2026-10-24: the Mac app is archived (_archive/); a release is now the givens command, built by scripts/install.sh
 x 2026-10-25 2026-10-25 One big file: pilot the scenario-driven big-file workflow on copy-a-setup-script ref:one-big-file — big.go tells the story in Feature/Scenario-headed sections, TestBigFile checks them, scripts/entry.sh finds and debugs a section; no tags in the scenarios — see tasks/one-big-file/notes.md
 x 2026-10-25 2026-10-25 One big file: decide whether to grow the pilot to trust-a-project and views ref:one-big-file @human — grown: Trust a project is in big.go; views next — see tasks/one-big-file/notes.md
-2026-10-25 One big file: move Mix shell, browser and hand steps into big.go ref:one-big-file
 2026-10-25 One big file: move Drop into a scenario into big.go, in 5 commits ref:one-big-file
 2026-10-25 One big file: finish: require every story, decide core glue, measure ref:one-big-file
 x 2026-10-25 2026-10-25 One big file: move Views into big.go ref:one-big-file — done: views.go is big.go's Views section; tagViews and isViewTag in big_helpers.go; seam usesStep (search_find.go) — see tasks/one-big-file/notes.md
@@ -58,3 +57,4 @@ x 2026-10-25 2026-10-25 One big file: move Gherkin files into big.go ref:one-big
 x 2026-10-25 2026-10-25 One big file: move Open a project into big.go ref:one-big-file — done: moved after a rebase onto Read a capability and Gherkin files — see tasks/one-big-file/notes.md
 x 2026-10-25 2026-10-25 One big file: move Keep runs off main into big.go ref:one-big-file — done: moved after a rebase onto Read a capability and Gherkin files — see tasks/one-big-file/notes.md
 x 2026-10-25 2026-10-25 One big file: move Write stories and scenarios into big.go, in 3 commits ref:one-big-file — done: authoring, editor, editor_more, preview, rename, delete and about_edit.go moved into big.go's Write stories section in 3 commits; Edit, readEditable, writeNew, trash, withoutTrashed to big_helpers.go
+x 2026-10-25 2026-10-25 One big file: move Mix shell, browser and hand steps into big.go ref:one-big-file — done: cards_run.go, openLink, runState and givensCommand into big.go; seams givensBin and chromeRequired; runBlocksIn and scratchDir to big_helpers.go

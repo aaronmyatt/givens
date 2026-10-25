@@ -93,13 +93,11 @@ func (s *Session) begin() error {
 	if err != nil {
 		return err
 	}
-	// The kit's browser functions run Givens's own givens, so a Drop in needn't find one on
-	// the PATH.
-	command, err := s.window.app.givensCommand()
+	bin, err := s.givensBin()
 	if err != nil {
 		return err
 	}
-	s.env = append(append(s.env, arguments...), "GIVENS_BIN="+command)
+	s.env = append(append(s.env, arguments...), bin)
 	for _, script := range []string{s.scenario.Teardown, s.scenario.Setup} {
 		if script != "" && !(s.skipTeardown && script == s.scenario.Teardown) {
 			s.scripts = append(s.scripts, script)

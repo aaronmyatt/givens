@@ -47,7 +47,7 @@ type SetupCard struct {
 	Output  []string `json:"output"`  // what its run blocks printed, in order
 
 	inline    []string // inline code spans, which copy when clicked
-	runBlocks []int    // its run blocks, as indices into Blocks; see cards_run.go
+	runBlocks []int    // its run blocks, as indices into Blocks; see big.go's Mix shell section
 }
 
 // DropInRow is one Examples row on an outline's Drop in page.

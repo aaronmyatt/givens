@@ -403,3 +403,35 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Nothing went to big_helpers.go. No seams cut.
 - Section +158 lines, 1,182 in all; big_helpers.go +0. big.go 3,846, big_helpers.go 677.
   15 of 17. internal/app is down to 29 Go files.
+
+## Mix shell, browser and hand steps moves in (2026-10-25)
+- cards_run.go is gone. The section is between Keep runs off main and Open a project:
+  `cardOutputLinesMax` and `blockRun` at the top; `givensBin` and `givensCommand` (from
+  windows.go) under the ten Drop in browser scenarios, since GIVENS_BIN is all the app code
+  those have (the rest is the kit, cmd/givens/browser.go and internal/browser); `ChromeHint`
+  and `chromeRequired` under "No Chrome installed"; `openLink` (from cards.go) under "A step by
+  hand in the Givens browser"; cards_run.go's intro, `runLanguage`, `runNextCard`,
+  `startBlock`, `blockScript` and `runState` (from dropin_page.go) under the two card
+  scenarios; `pollBlock` and `stopBlock` under "A card's run block fails". big.go imports
+  internal/browser, internal/markdown and internal/setup now.
+- Seams cut: Drop in's `begin` (dropin_run.go) set GIVENS_BIN inline; it's now `givensBin`,
+  which `begin` calls. `RequiredCommands`' Chrome check (big_helpers.go) is now
+  `chromeRequired`, which `RequiredCommands` calls; big_helpers.go no longer imports
+  internal/browser.
+- To big_helpers.go: `runBlocksIn`, since Share setup's `setupTexts` and Drop in's
+  `startSession` and `precheck` call it (the `RequiredCommands` call again); `scratchDir`, from
+  arguments.go, since Drop in's `writeArguments` and this story's `blockScript` share it.
+- `runLanguage` stays in the section though its callers are the helper `runBlocksIn` and Drop
+  in's `addMarkdownCards`: it says what a run block is, the same call as `blockEnd` (a helper
+  calls it) and `elsewhere` (Drop in calls it).
+- `runNextCard` and `openLink` came in with this story's first commit and hold Drop in's part
+  too (a card that waits, the checklist, the default browser); they're this story's, called
+  from Drop in like `keepRun`, and sit here as `writeRun` does.
+- Not cut, one-line calls named in the opening comment: `startSession`'s and `precheck`'s
+  `runBlocksIn`, `addMarkdownCards`' `runLanguage` and run-block offers, `markMarkdownCard`'s
+  `runNextCard`, `ChooseOnCard`'s `openLink`, `cardLines`' `runState`, `poll`'s and `Wait`'s
+  block checks (session.go), and `stopBlock` in `choose` and `leaveSession`.
+- Plan was wrong here: `givensCommand` was down for Drop in (12a), but with GIVENS_BIN in
+  `givensBin` its one live story caller is this section; the other is the dead
+  `InstallCommand`, which windows.go now holds alone. The header gains internal/browser.
+- Section 250 lines, big_helpers.go +39. big.go 4,101, big_helpers.go 716. 16 of 17.

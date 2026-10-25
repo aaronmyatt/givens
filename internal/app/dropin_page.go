@@ -200,21 +200,3 @@ func (s *Session) cardLines() []string {
 	}
 	return lines
 }
-
-// runState follows a card's heading when it runs by itself: " · runs by itself" until it
-// runs, then " · running", " · ran" or " · failed".
-func (s *Session) runState(card int) string {
-	assert.That(card >= 0 && card < len(s.cards), "the card exists")
-	assert.That(s.markdownFrom >= 0, "a markdown card is asked about")
-	switch {
-	case len(s.cards[card].runBlocks) == 0:
-		return ""
-	case s.block != nil && s.block.card == card:
-		return " · running"
-	case s.cards[card].Mark == MarkDone:
-		return " · ran"
-	case s.cards[card].Mark != "":
-		return " · failed"
-	}
-	return " · runs by itself"
-}

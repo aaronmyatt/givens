@@ -22,9 +22,9 @@ import (
 	"unicode/utf8"
 
 	"givens/internal/assert"
-	"givens/internal/browser"
 	"givens/internal/fingerprint"
 	"givens/internal/helpers"
+	"givens/internal/markdown"
 	"givens/internal/project"
 	"givens/internal/runs"
 	"givens/internal/slug"
@@ -234,9 +234,6 @@ const bashErrorPattern = `line (\d+): (.+)`
 
 var bashError = regexp.MustCompile(bashErrorPattern) //tiger:allow-global compiled once
 
-// ChromeHint is the install hint for a setup with browser lines.
-const ChromeHint = "brew install --cask google-chrome"
-
 // RequiredCommands lists the commands a scenario's setup needs, whether each is installed, and
 // its install hint: the `need` lines in its script, the setups it builds on, and every helper
 // those call. Needed by "See what a scenario needs installed" and by Drop in's check before
@@ -258,12 +255,8 @@ func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
 	}
 	needs := helpers.Needs(all)
 	required := make([]RequiredCommand, 0, len(needs)+1)
-	// A browser line needs Chrome, as a need line needs its command.
-	if helpers.UsesBrowser(all) {
-		_, found := browser.Chrome()
-		required = append(required, RequiredCommand{
-			Command: "Chrome", Hint: ChromeHint, Installed: found,
-		})
+	if chrome, uses := chromeRequired(all); uses {
+		required = append(required, chrome)
 	}
 	for _, need := range needs {
 		// LookPath searches PATH as a shell would. Ref: https://pkg.go.dev/os/exec#LookPath
@@ -674,4 +667,50 @@ func (a *App) withoutTrashed(loaded *project.Project) {
 		kept = append(kept, capability)
 	}
 	loaded.Capabilities = kept
+}
+
+// runBlocksIn reads a markdown setup's run blocks' code, a js block as the in_browser line it
+// runs as, so Drop in's checks read them as a script's lines. Empty when nothing runs.
+func runBlocksIn(path string) []string {
+	assert.That(path == "" || filepath.IsAbs(path), "a setup file is absolute")
+	assert.That(markdown.StepsMax > 0, "steps have a limit")
+	texts := make([]string, 0, 2)
+	if path == "" {
+		return texts
+	}
+	text, err := helpers.ReadScript(path)
+	if err != nil {
+		return texts
+	}
+	parsed, err := markdown.Parse(text)
+	if err != nil {
+		return texts
+	}
+	for _, step := range parsed.Steps {
+		for _, block := range step.Blocks {
+			switch runLanguage(block) {
+			case "bash":
+				texts = append(texts, block.Code)
+			case "js":
+				texts = append(texts, "in_browser js")
+			}
+		}
+	}
+	return texts
+}
+
+// scratchDir is the session's folder of its own, made on first use: argument files and run
+// blocks' scripts. removeArguments removes it.
+func (s *Session) scratchDir() (string, error) {
+	assert.That(s != nil, "scratch dir runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	if s.argumentsDir == "" {
+		// Ref: https://pkg.go.dev/os#MkdirTemp
+		dir, err := os.MkdirTemp("", "givens-arguments-")
+		if err != nil {
+			return "", err
+		}
+		s.argumentsDir = dir
+	}
+	return s.argumentsDir, nil
 }
