@@ -85,3 +85,21 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   big_helpers.go holds a Feature, Rule or Scenario heading; checked by adding one.
   `scripts/entry.sh` no longer stops at a Helpers heading.
 - big.go 229 lines, big_helpers.go 104.
+
+## Views moves in (2026-10-25)
+- views.go is gone. Its Views code is the section: the view names and sidebar kinds,
+  `selectView`, `viewItems`, then `ListedScenarios`, `ScenariosIn`, `scenariosIn`, `inView` and
+  `unverifiedRows` under "See every error state" and "See what needs checking again",
+  `ViewHelper` and `ViewHelpers` under "Browse helpers", and `emptyView` under "A view with
+  nothing in it".
+- `tagViews` and `isViewTag`, which make each tag a view, went to big_helpers.go: Views'
+  `selectView` and `viewItems` call them, and they're the Tags story's "each tag is a view".
+- Seam cut: `inView`'s step branch was Search everything's ("Find every use of a step"). It's
+  now `usesStep` in search_find.go, which `inView` calls; it moves with Search in slice 4.
+- The tag branches inside `inView`, `emptyView` and `viewItems` stayed in the section, no seam:
+  the Views Feature's description owns "one view per tag" and the Tags tab.
+- Section 194 lines, big_helpers.go +30. big.go 425, big_helpers.go 134. 3 of 17.
+- Surprise: the plan's "tagViews is tags' too" holds for the story, not the code. Nothing in
+  todo.go or search.go calls `tagViews`; only Views' code does. They went to big_helpers.go
+  anyway, as the plan says, since a Tags scenario ("todo" is listed on the Tags tab) is what
+  they do.

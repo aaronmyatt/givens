@@ -22,6 +22,7 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"givens/internal/assert"
 	"givens/internal/helpers"
@@ -226,4 +227,199 @@ func (s *Session) trustThisProject() error {
 		return err
 	}
 	return s.restart(false)
+}
+
+// Feature: Views
+//
+// capabilities/views. Views gather scenarios and helpers from every capability: Error states,
+// Unverified and Shared, plus one view per tag, each worked out from the loaded project with
+// nothing stored. A view is selected by name through selectNow (selection.go); the TUI's Views,
+// Tags and Helpers tabs are internal/tui, and snapshot.go reads what's listed. tagViews and
+// isViewTag, which make each tag a view, are in big_helpers.go, since Tags lists them too.
+
+// Views, under the capabilities in the sidebar. Each other tag is a view of its own, named
+// after it without its @. See capabilities/views.
+const (
+	ViewErrorStates = "Error states"
+	ViewUnverified  = "Unverified"
+	ViewShared      = "Shared"
+)
+
+// Sidebar kinds below the capabilities.
+const (
+	KindView = "view"
+	KindTag  = "tag"
+)
+
+// selectView selects a view by name, if there's one: a fixed view or a tag's.
+func (w *Window) selectView(name string) bool {
+	assert.That(w != nil, "select view runs on a window")
+	assert.That(name != "", "a view has a name")
+	if name != ViewErrorStates && name != ViewUnverified && name != ViewShared &&
+		!slices.Contains(w.tagViews(), name) {
+		return false
+	}
+	w.selected, w.selectedView = name, name
+	w.selectedCapability, w.selectedScenario, w.selectedHelper = "", "", ""
+	return true
+}
+
+// viewItems are the sidebar's views, then one view per tag, each with how many it lists.
+func (w *Window) viewItems() []SidebarItem {
+	assert.That(w.project != nil, "views are of a loaded project")
+	assert.That(!w.holdRefresh || w.watcher != nil, "a snapshot looks at a watched folder")
+	errorStates, unverified := 0, 0
+	tagCounts := make(map[string]int, 8)
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if scenario.Error {
+				errorStates++
+			}
+			status := w.statusOf(scenario)
+			if !strings.HasPrefix(status, statusVerified) {
+				unverified++
+			}
+			for _, tag := range scenario.Tags {
+				tagCounts[strings.TrimPrefix(tag, "@")]++
+			}
+		}
+	}
+	items := []SidebarItem{
+		{Name: ViewErrorStates, Kind: KindView, Count: errorStates},
+		{Name: ViewUnverified, Kind: KindView, Count: unverified},
+		{Name: ViewShared, Kind: KindView, Count: len(w.Helpers())},
+	}
+	for _, tag := range w.tagViews() {
+		items = append(items, SidebarItem{Name: tag, Kind: KindTag, Count: tagCounts[tag]})
+	}
+	return items
+}
+
+// Scenario: See every error state
+// Scenario: See what needs checking again
+
+// ListedScenarios is the list the main pane shows for what's selected: a view ("Error
+// states"), a tag ("payments"), or a step search result (the scenarios using that step).
+// Needed by capabilities/tags, "List by tag" in capabilities/use-givens-from-the-terminal and
+// "Find every use of a step" in capabilities/search-everything.
+func (w *Window) ListedScenarios() []Scenario {
+	assert.That(w != nil, "listed scenarios run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	return w.scenariosIn(w.selectedView, w.selectedStep)
+}
+
+// ScenariosIn lists a view's scenarios ("Error states", "Unverified") or a tag's
+// ("payments"), as ListedScenarios does once it's selected, but leaves the selection alone:
+// the TUI lists a view under its heading while the cursor moves on to its scenarios, which
+// selects each one. "Shared" lists helpers, not scenarios, so it has none.
+func (w *Window) ScenariosIn(view string) []Scenario {
+	assert.That(w != nil, "scenarios in runs on a window")
+	assert.That(view != "", "a view or tag is named")
+	return w.scenariosIn(view, "")
+}
+
+// scenariosIn lists the scenarios in a view or tag, or that use a step.
+func (w *Window) scenariosIn(view string, step string) []Scenario {
+	assert.That(w.app != nil, "a window belongs to an app")
+	assert.That(view == "" || step == "", "a view or a step, not both")
+	w.refresh()
+	listed := make([]Scenario, 0, 16)
+	if w.project == nil || (view == "" && step == "") || view == ViewShared {
+		return listed
+	}
+	for _, capability := range w.project.Capabilities {
+		for _, loaded := range capability.Scenarios {
+			shown := w.scenarioOf(capability, loaded)
+			if view == ViewUnverified && loaded.Outline {
+				listed = append(listed, w.unverifiedRows(shown, loaded)...)
+			} else if inView(shown, view, step) {
+				listed = append(listed, shown)
+			}
+		}
+	}
+	return listed
+}
+
+// inView is true when a scenario belongs in a view or tag, or uses a step.
+func inView(scenario Scenario, view string, step string) bool {
+	assert.That(view != "" || step != "", "a view or step is named")
+	assert.That(scenario.Name != "", "the scenario has a name")
+	if step != "" {
+		return usesStep(scenario, step)
+	}
+	switch view {
+	case ViewErrorStates:
+		return scenario.Error
+	case ViewUnverified:
+		return !strings.HasPrefix(scenario.Status, statusVerified)
+	}
+	return slices.Contains(scenario.Tags, "@"+view)
+}
+
+// unverifiedRows lists an outline's rows that aren't verified, each as its own entry, named
+// after the outline and the row: "Card rejected by the bank: stolen".
+func (w *Window) unverifiedRows(shown Scenario, loaded project.Scenario) []Scenario {
+	assert.That(loaded.Outline, "only an outline has rows")
+	assert.That(shown.Name == loaded.Name, "the shown scenario is the loaded one")
+	listed := make([]Scenario, 0, 2)
+	for _, row := range rowsOf(loaded) {
+		status := rowStatus(w.project, loaded, row, w.app.config.Clock.Now())
+		if strings.HasPrefix(status, statusVerified) {
+			continue
+		}
+		entry := shown
+		entry.Name, entry.Status = shown.Name+": "+rowName(row.values), status
+		listed = append(listed, entry)
+	}
+	return listed
+}
+
+// Scenario: Browse helpers
+
+// ViewHelper is one helper listed in the sidebar's "Shared" view.
+type ViewHelper struct {
+	Name        string `json:"name"`        // "seed_shopper"
+	Signature   string `json:"signature"`   // the text after "# @helper"
+	Description string `json:"description"` // the comment lines under it, joined with spaces
+	File        string `json:"file"`        // where it's defined, in the capabilities folder
+	Callers     int    `json:"callers"`     // how many setup scripts call it
+}
+
+// ViewHelpers lists the helpers the "Shared" view shows, when it's selected: every helper
+// documented with a "# @helper" comment, in capabilities/_shared and each capability's
+// _shared folder. Needed by "Browse helpers" in capabilities/views. The scenarios in the
+// other views ("Error states", "Unverified", a tag) are listed by ListedScenarios.
+func (w *Window) ViewHelpers() []ViewHelper {
+	assert.That(w != nil, "view helpers run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	listed := make([]ViewHelper, 0, 8)
+	if w.selectedView != ViewShared {
+		return listed
+	}
+	for _, helper := range w.Helpers() {
+		listed = append(listed, ViewHelper{
+			Name: helper.Name, Signature: helper.Signature, Description: helper.Description,
+			File: helper.DefinedIn, Callers: len(helper.Callers),
+		})
+	}
+	return listed
+}
+
+// Scenario: A view with nothing in it
+
+// emptyView says a selected view lists nothing: "No error states yet", or "" when it lists
+// something or no view is selected.
+func (w *Window) emptyView() string {
+	assert.That(w != nil, "empty view runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.selectedView == "" || w.selectedView == ViewShared || len(w.ListedScenarios()) > 0 {
+		return ""
+	}
+	switch w.selectedView {
+	case ViewErrorStates:
+		return "No error states yet"
+	case ViewUnverified:
+		return "Every scenario is verified"
+	}
+	return "No scenarios are tagged @" + w.selectedView
 }

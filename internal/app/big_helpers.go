@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"givens/internal/assert"
+	"givens/internal/project"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -101,4 +102,33 @@ func (a *App) folders(name string) ([]string, error) {
 		}
 	}
 	return folders, nil
+}
+
+// tagViews lists the tags that are views, without their @, in the order first seen. @error
+// and @timeout have meanings of their own, so they aren't views.
+func (w *Window) tagViews() []string {
+	assert.That(w != nil, "tag views run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	views := make([]string, 0, 8)
+	if w.project == nil {
+		return views
+	}
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			for _, tag := range scenario.Tags {
+				name := strings.TrimPrefix(tag, "@")
+				if isViewTag(tag) && !slices.Contains(views, name) {
+					views = append(views, name)
+				}
+			}
+		}
+	}
+	return views
+}
+
+// isViewTag is true for a tag that's a view: any but @error and @timeout:….
+func isViewTag(tag string) bool {
+	assert.That(strings.HasPrefix(tag, "@"), "a tag starts with @")
+	assert.That(len(tag) <= NameLengthMax, "a tag fits NameLengthMax")
+	return tag != project.TagError && !strings.HasPrefix(tag, "@timeout")
 }

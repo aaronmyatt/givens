@@ -68,6 +68,19 @@ func (w *Window) findSteps(words string) []SearchResult {
 	return limit(found)
 }
 
+// usesStep is true when one of a scenario's steps is step word for word, keyword aside: the
+// scenarios "Find every use of a step" lists once a step result is selected.
+func usesStep(scenario Scenario, step string) bool {
+	assert.That(step != "", "a step is named")
+	assert.That(scenario.Name != "", "the scenario has a name")
+	for _, used := range scenario.Steps {
+		if _, text, _ := strings.Cut(used, " "); text == step {
+			return true
+		}
+	}
+	return false
+}
+
 // uniqueSteps is a scenario's steps, each text once, so a step it repeats counts as one use.
 func uniqueSteps(scenario project.Scenario) []project.Step {
 	assert.That(scenario.Name != "", "the scenario has a name")
