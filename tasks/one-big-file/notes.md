@@ -542,3 +542,37 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   App and Window (app.go 138, window.go 169); data models (dropin.go 66, edit.go 63, helpers.go
   51); the dead install code (install.go 95, windows.go 32); and tests (app_test.go 414,
   branch_test.go 107, runs_off_main_test.go 58, todo_test.go 51).
+
+## Finish (2026-10-25)
+- All 17 stories have a section. `TestBigFile` now fails on a Feature with no section (checked
+  by hiding Views' heading), instead of counting stories still to come.
+- big.go's header lists every file outside it and why: the edges, the kit, the three data
+  models, internal/browser, the core glue, app.go and window.go, the domain packages, and the
+  dead install code.
+- Sizes: big.go 5,620 lines, big_helpers.go 847; internal/app's non-test code 7,964 lines in
+  15 files (46 files at the start). Left out of the two big files: core glue 883 (snapshot.go
+  357, offers.go 224, selection.go 123, prompt.go 68, input.go 59, project.go 52), the App and
+  Window types 307, data models 180, dead code 127.
+- Core glue, decided: it stays apart (plan.md's A). B would put 883 lines of plumbing into
+  big_helpers.go (to 1,730): still under big.go, so not a tripwire, but the helpers file would
+  then be mostly dispatcher and view code rather than code stories share.
+- Tripwire: never tripped. big_helpers.go ended at 15% of big.go.
+- Speed at 5,620 lines, measured from a cold Go build cache: `go build ./internal/app` 5.6 s
+  cold and 0.1 s warm; tigerlint on internal/app 3.2 s; TestBigFile 1.4 s; `scripts/entry.sh`
+  0.03 s; `gopls check big.go` 2.4 s and `gopls references` 1.6 s from the command line
+  (both include gopls starting up); one scenario's test (Record a run) 1.5 s.
+- Hops: `scripts/entry.sh` on each story's first scenario lands in that story's section for
+  all 17; Gherkin files' and Tags' first scenarios land on their Feature's section (no heading
+  of their own), and the three edge stories on their pointer sections.
+- What the work found, beyond the pilot:
+  - Most moves needed no seam. Seams were needed where one story's code sat inline in a
+    shared or host function (trust in Drop in, the kit offer in allOffers, the run-store
+    choice in RecordRun, GIVENS_BIN in begin, the Chrome check in RequiredCommands).
+  - Guests before hosts paid off: by Drop in's turn, its five slices cut no seams.
+  - The rules the agents settled (a seam stays with its story; live callers only; labels stay
+    with their story; core one-line calls stay and are named) were enough for every case.
+  - Dead code surfaced twice (install code, most of the window code), each found because a
+    move asked "who calls this?".
+  - Parallel slices: fine when the stories and their files are apart; clashes came from the
+    import blocks, the end of big_helpers.go, and notes.md. The rest went one at a time.
+  - A moved doc comment with a wrapped line starting "// Scenario:" read as a heading.

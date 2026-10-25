@@ -1,8 +1,8 @@
 // The big file: Givens's behaviour, told in the order of its stories.
 //
-// Each story in capabilities/ that's moved here has a section, in the order of the
-// capabilities folders. A section starts with a "// Feature: <name>" comment, the Feature's
-// name word for word, and runs to the next one. Inside it, each of the Feature's Rules has a
+// Each story in capabilities/ has a section, in the order of the capabilities folders. A
+// section starts with a "// Feature: <name>" comment, the Feature's name word for word, and
+// runs to the next one. Inside it, each of the Feature's Rules has a
 // "// Rule: <name>" comment, in the Feature's order, and a "// Scenario: <name>" comment marks
 // the code a scenario starts in where that helps a reader; several can share one piece of code.
 // Code that two or more stories use is in big_helpers.go, so this file reads as the stories
@@ -10,8 +10,7 @@
 //
 // TestBigFile in acceptance/ checks those comments against the feature files, and
 // scripts/entry.sh finds the section for a Feature, Rule or Scenario name. The workflow is
-// tasks/one-big-file/essay.md; the pilot is tasks/one-big-file/notes.md. The rest of
-// internal/app isn't here yet.
+// tasks/one-big-file/essay.md; how it got here is tasks/one-big-file/notes.md.
 //
 // Code outside this file that a story depends on, and why it's elsewhere:
 //   - internal/kit/givens.sh: bash, run in the developer's shell by every setup script.
@@ -25,6 +24,15 @@
 //     limits and kinds. A data model too.
 //   - internal/browser: Mix shell's Chrome of Givens's own, a wrapper on chromedp, the
 //     third-party CDP client; a package of its own, so the dependency stays in one place.
+//   - snapshot.go, offers.go (Offers, Choose, allOffers), selection.go, input.go, prompt.go
+//     and project.go (capabilityOf, scenarioOf): the core glue every story runs on. They turn
+//     a label, a key or a selection into a call to a story, and build what the TUI and the
+//     steps read; kept apart so this file reads as the stories, not the plumbing.
+//   - app.go and window.go: the App and Window types and the API the edges hold.
+//   - internal/spec, project, runs, runref, branch, fingerprint, setup, tags, slug, markdown,
+//     helpers, kit, starter and watch: domain packages, each with one job and its own tests.
+//   - install.go and windows.go: dead code only the archived Mac app calls; todo.txt has a
+//     line to delete them.
 
 package app
 

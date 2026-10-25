@@ -3,6 +3,7 @@ package acceptance
 import (
 	"bufio"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,8 +49,7 @@ type story struct {
 // TestBigFile keeps the big file's sections in step with the feature files, as a plain check
 // that needs no agent. Each section names a Feature word for word, the sections follow the
 // order of the capabilities folders, a section has every one of its Feature's Rules in order,
-// and a Scenario comment names one of the Feature's scenarios. Run it with
-// `go test ./acceptance -run BigFile -v` to see how many stories are in.
+// a Scenario comment names one of the Feature's scenarios, and every Feature has a section.
 func TestBigFile(t *testing.T) {
 	stories, err := readStories()
 	if err != nil {
@@ -88,6 +88,18 @@ func TestBigFile(t *testing.T) {
 			if !slices.Contains(told.scenarios, name) {
 				t.Errorf("%s: \"Scenario: %s\" isn't in %s", where, name, told.path)
 			}
+		}
+	}
+	told := make(map[string]bool, len(sections))
+	for _, part := range sections {
+		told[part.feature] = true
+	}
+	// Every story is in now, so one with no section is a story left out, not one to come.
+	// Ref: https://pkg.go.dev/maps#Keys
+	for _, name := range slices.Sorted(maps.Keys(stories)) {
+		if !told[name] {
+			t.Errorf("%s: \"Feature: %s\" has no section in internal/app/big.go", stories[name].path,
+				name)
 		}
 	}
 	t.Logf("%d of %d stories are in the big file", len(sections), len(stories))

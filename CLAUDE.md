@@ -13,7 +13,7 @@ scenarios, sets up each scenario's starting state, and walks a developer through
 - `internal/app/`: the core the TUI, the CLI and the steps all drive; mostly stubs that
   return `ErrNotImplemented` until built. `internal/tui/`: the TUI. `cmd/givens/`: the CLI.
   `tools/tigerlint/`: the linter.
-- `internal/app/big.go`: the one-big-file pilot (`tasks/one-big-file/`), in story order:
+- `internal/app/big.go`: Givens's behaviour in story order (`tasks/one-big-file/`):
   `// Feature:`, `// Rule:` and `// Scenario:` comments mark the sections. Code two or more
   stories use is in `internal/app/big_helpers.go`. `scripts/entry.sh "<name>"` prints a
   section's lines and functions, `--debug` a delve command; `TestBigFile` checks the headings

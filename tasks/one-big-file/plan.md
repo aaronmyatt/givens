@@ -5,6 +5,8 @@ and `TestBigFile` fails on a story without one.
 
 ## Where it stands
 
+- 2026-10-25: done. All 17 stories are in big.go; see notes.md's "Finish" entry.
+
 - 2026-10-25: helpers moved out of big.go into `internal/app/big_helpers.go`, at the
   developer's ask. `TestBigFile` fails if that file holds a Feature, Rule or Scenario heading.
 
