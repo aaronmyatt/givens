@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, setup, tags, slug, markdown, helpers, kit and starter:
+//   - internal/spec, project, runs, setup, tags, slug, markdown, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -60,7 +60,6 @@ import (
 	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/browser"
-	"givens/internal/helpers"
 	"givens/internal/kit"
 	"givens/internal/markdown"
 	"givens/internal/project"
@@ -89,7 +88,7 @@ func (w *Window) copySetup(scenario project.Scenario) error {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	clipboard := w.app.config.Clipboard
 	if scenario.Setup == "" && scenario.SetupCards != "" {
-		text, err := helpers.ReadScript(scenario.SetupCards)
+		text, err := ReadScript(scenario.SetupCards)
 		if err != nil {
 			return err
 		}
@@ -335,7 +334,7 @@ func (s *Session) begin() error {
 // See capabilities/the-kit/about.md.
 func setupEnv(scenario project.Scenario, row []runs.Pair) []string {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
-	assert.That(len(row) <= helpers.HelpersMax, "a row stays bounded")
+	assert.That(len(row) <= HelpersMax, "a row stays bounded")
 	env := []string{"GIVENS_QUIET=1", "GIVENS_UI=1", "GIVENS_SCENARIO=" + scenario.Key()}
 	for _, value := range row {
 		env = append(env, "GIVENS_EX_"+value.Name+"="+value.Value)
@@ -480,7 +479,7 @@ func (s *Session) Givens() []string {
 // with them, placeholders filled in: what setup sets up, which the checklist leaves out.
 func givensOf(scenario project.Scenario, row []runs.Pair) []string {
 	assert.That(scenario.Name != "", "the scenario has a name")
-	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	givens := make([]string, 0, len(scenario.Background)+len(scenario.Steps))
 	for _, steps := range [][]project.Step{scenario.Background, scenario.Steps} {
 		kind := "given"
@@ -822,11 +821,11 @@ func (w *Window) fromProblem(scenario project.Scenario) (string, error) {
 		if current.scenario.Setup == "" {
 			continue
 		}
-		text, err := helpers.ReadScript(current.scenario.Setup)
+		text, err := ReadScript(current.scenario.Setup)
 		if err != nil {
 			return "", err
 		}
-		for _, from := range helpers.Froms(text) {
+		for _, from := range FromLines(text) {
 			built, err := w.project.Find(from.Key)
 			if err != nil {
 				return "from " + from.Key + ": there's no scenario with that name", nil
@@ -848,7 +847,7 @@ func (w *Window) fromProblem(scenario project.Scenario) (string, error) {
 // outlineWithoutRow says an outline was named without a row to build on, or "".
 func outlineWithoutRow(built project.Scenario, values []string) string {
 	assert.That(built.Slug != "", "the scenario has a slug")
-	assert.That(len(values) <= helpers.HelpersMax, "values stay bounded")
+	assert.That(len(values) <= HelpersMax, "values stay bounded")
 	if !built.Outline || len(values) > 0 {
 		return ""
 	}
@@ -1268,7 +1267,7 @@ func (a *App) UseURLOpener(opener model.URLOpener) error {
 func (s *Session) addMarkdownCards() error {
 	assert.That(s.scenario.SetupCards != "", "the scenario has a markdown setup")
 	assert.That(s.markdownFrom < 0, "markdown cards are added once")
-	text, err := helpers.ReadScript(s.scenario.SetupCards)
+	text, err := ReadScript(s.scenario.SetupCards)
 	if err != nil {
 		return err
 	}
@@ -1601,7 +1600,7 @@ func (s *Session) writeArguments() ([]string, error) {
 // writeArgument writes a doc string as it is, or a table as CSV.
 func writeArgument(path string, docString string, table [][]string) error {
 	assert.That(filepath.IsAbs(path), "the argument file is absolute")
-	assert.That(len(docString) <= helpers.FileSizeBytesMax, "a doc string stays bounded")
+	assert.That(len(docString) <= ScriptSizeBytesMax, "a doc string stays bounded")
 	if table == nil {
 		return os.WriteFile(path, []byte(docString), 0o644)
 	}
@@ -2956,9 +2955,9 @@ const ChromeHint = "brew install --cask google-chrome"
 // chromeRequired is Chrome as a command a setup needs, and true, when a line of the setup's
 // texts uses the browser: a browser line needs Chrome, as a need line needs its command.
 func chromeRequired(all string) (model.RequiredCommand, bool) {
-	assert.That(len(all) <= helpers.FileSizeBytesMax*helpers.HelpersMax, "texts stay bounded")
+	assert.That(len(all) <= ScriptSizeBytesMax*HelpersMax, "texts stay bounded")
 	assert.That(all == "" || strings.HasSuffix(all, "\n"), "each text ends its line")
-	if !helpers.UsesBrowser(all) {
+	if !UsesBrowser(all) {
 		return model.RequiredCommand{}, false
 	}
 	_, found := browser.Chrome()
@@ -3126,6 +3125,22 @@ func (s *Session) stopBlock() error {
 		return nil
 	}
 	return s.block.process.Stop()
+}
+
+// From internal/helpers: whether a script uses the kit's browser functions.
+
+// browserPattern is a line calling one of the kit's browser functions, before any #.
+// Ref: capabilities/the-kit/about.md, in the Givens repository
+const browserPattern = `(?m)^[^#\n]*\b(browser_open|in_browser|app_action)\b`
+
+var browserLine = regexp.MustCompile(browserPattern) //tiger:allow-global compiled once
+
+// UsesBrowser is true when text calls browser_open, in_browser or app_action, which need
+// Chrome. See capabilities/mix-shell-browser-and-hand-steps.
+func UsesBrowser(text string) bool {
+	assert.That(len(text) <= ScriptSizeBytesMax*HelpersMax, "text stays bounded")
+	assert.That(browserLine != nil, "the pattern is compiled")
+	return browserLine.MatchString(text)
 }
 
 // Feature: Open a project
@@ -4173,7 +4188,7 @@ func (w *Window) indexScript(capability string, path string) (indexedScript, boo
 	if err != nil {
 		return indexedScript{}, false
 	}
-	text, err := helpers.ReadScript(path)
+	text, err := ReadScript(path)
 	if err != nil {
 		return indexedScript{}, false
 	}
@@ -4319,10 +4334,12 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // Feature: Share setup between scenarios
 //
 // capabilities/share-setup-between-scenarios. Helpers are shell functions in _shared folders: the
-// kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
-// internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
-// Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view read
-// it too; so is RequiredCommands, which Drop in's precheck also calls; so are the bash -n limits
+// kit loads them and warns when two shared files define one (internal/kit/givens.sh). Which
+// helpers a script calls, and its need lines, are at this section's end. Reading the helpers
+// (HelpersInFolder, ReadScript) and the from lines is in big_helpers.go, since Copy, Drop in,
+// Search and Write stories read scripts too. Helpers, the Shared list itself, is in
+// big_helpers.go, since Search's findHelpers and Views' Shared view read it too; so is
+// RequiredCommands, which Drop in's precheck also calls; so are the bash -n limits
 // and bashError, which Write stories' shellProblems shares; and so is FingerprintOf, the way in to
 // the setup fingerprint that the four "Changing …" scenarios and "Updating the kit keeps scenarios
 // verified" read, since statusFor (big_helpers.go) and Drop in's RecordRun call it. Code elsewhere:
@@ -4357,7 +4374,7 @@ func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
 			if capability.Slug == scenario.Capability {
 				continue
 			}
-			own, err := helpers.InFolder(w.path, capability.Slug, capability.Slug)
+			own, err := HelpersInFolder(w.path, capability.Slug, capability.Slug)
 			if err != nil {
 				continue
 			}
@@ -4376,10 +4393,10 @@ func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
 // Scenario: Two shared files define the same helper
 
 // listHelpers turns one folder's documented helpers into Shared list entries.
-func (w *Window) listHelpers(found []helpers.Helper, capability string,
-	shared []helpers.Helper) []model.Helper {
+func (w *Window) listHelpers(found []HelperDefinition, capability string,
+	shared []HelperDefinition) []model.Helper {
 	assert.That(w.project != nil, "helpers are listed for a loaded project")
-	assert.That(len(found) <= helpers.HelpersMax, "helpers stay bounded")
+	assert.That(len(found) <= HelpersMax, "helpers stay bounded")
 	listed := make([]model.Helper, 0, len(found))
 	for _, helper := range found {
 		if !helper.Documented() {
@@ -4407,7 +4424,7 @@ func (w *Window) listHelpers(found []helpers.Helper, capability string,
 
 // callersOf lists, sorted, the setup scripts that call a helper by name: every capability's
 // for a shared helper, or only its own capability's.
-func (w *Window) callersOf(helper helpers.Helper) []string {
+func (w *Window) callersOf(helper HelperDefinition) []string {
 	assert.That(w.project != nil, "callers are found in a loaded project")
 	assert.That(helper.Name != "", "a helper has a name")
 	calls := regexp.MustCompile(`(?m)^[^#\n]*\b` + regexp.QuoteMeta(helper.Name) + `\b`)
@@ -4420,7 +4437,7 @@ func (w *Window) callersOf(helper helpers.Helper) []string {
 			if scenario.Setup == "" {
 				continue
 			}
-			text, err := helpers.ReadScript(scenario.Setup)
+			text, err := ReadScript(scenario.Setup)
 			if err != nil || !calls.MatchString(text) {
 				continue
 			}
@@ -4441,7 +4458,7 @@ const helperCodeLinesMax = 200
 func (w *Window) helperCode(file string, line int) string {
 	assert.That(!filepath.IsAbs(file), "a helper's file is relative to the capabilities folder")
 	assert.That(line >= 0, "lines count from 1")
-	text, err := helpers.ReadScript(filepath.Join(w.path, filepath.FromSlash(file)))
+	text, err := ReadScript(filepath.Join(w.path, filepath.FromSlash(file)))
 	if err != nil || line < 1 {
 		return ""
 	}
@@ -4513,7 +4530,7 @@ func setupText(scenario project.Scenario) (string, error) {
 		if path == "" {
 			continue
 		}
-		content, err := helpers.ReadScript(path)
+		content, err := ReadScript(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
@@ -4540,11 +4557,11 @@ func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Sc
 		if current.Setup == "" {
 			continue
 		}
-		text, err := helpers.ReadScript(current.Setup)
+		text, err := ReadScript(current.Setup)
 		if err != nil {
 			return nil, err
 		}
-		for _, from := range helpers.Froms(text) {
+		for _, from := range FromLines(text) {
 			built, err := loaded.Find(from.Key)
 			if err != nil || seen[built.Key()] {
 				continue
@@ -4562,7 +4579,7 @@ func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Sc
 func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]runs.Pair, error) {
 	assert.That(loaded != nil, "the project is loaded")
 	assert.That(len(scenarios) > 0, "there's at least the scenario itself")
-	shared, err := helpers.InFolder(loaded.Root, "", "")
+	shared, err := HelpersInFolder(loaded.Root, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -4571,16 +4588,16 @@ func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]run
 		if scenario.Setup == "" {
 			continue
 		}
-		own, err := helpers.InFolder(loaded.Root, scenario.Capability, scenario.Capability)
+		own, err := HelpersInFolder(loaded.Root, scenario.Capability, scenario.Capability)
 		if err != nil {
 			return nil, err
 		}
-		visible := helpers.Visible(shared, own)
-		text, err := helpers.ReadScript(scenario.Setup)
+		visible := VisibleHelpers(shared, own)
+		text, err := ReadScript(scenario.Setup)
 		if err != nil {
 			return nil, err
 		}
-		for _, name := range helpers.Called(text, visible) {
+		for _, name := range HelpersCalled(text, visible) {
 			bodies[name] = filepath.ToSlash(visible[name].File) + "\n" + visible[name].Body
 		}
 	}
@@ -4590,7 +4607,7 @@ func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]run
 // sortedParts hashes each body, by name, in name order.
 func sortedParts(bodies map[string]string) []runs.Pair {
 	assert.That(bodies != nil, "there's a map of bodies")
-	assert.That(len(bodies) <= helpers.HelpersMax, "helpers stay bounded")
+	assert.That(len(bodies) <= HelpersMax, "helpers stay bounded")
 	names := make([]string, 0, len(bodies))
 	for name := range bodies {
 		names = append(names, name)
@@ -4641,7 +4658,7 @@ func partWords(name string) string {
 func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
 	assert.That(w.project != nil, "setup is read in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
-	shared, err := helpers.InFolder(w.path, "", "")
+	shared, err := HelpersInFolder(w.path, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -4655,20 +4672,20 @@ func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
 		if current.Setup == "" {
 			continue
 		}
-		text, err := helpers.ReadScript(current.Setup)
+		text, err := ReadScript(current.Setup)
 		if err != nil {
 			return nil, err
 		}
-		own, err := helpers.InFolder(w.path, current.Capability, current.Capability)
+		own, err := HelpersInFolder(w.path, current.Capability, current.Capability)
 		if err != nil {
 			return nil, err
 		}
-		visible := helpers.Visible(shared, own)
+		visible := VisibleHelpers(shared, own)
 		texts = append(texts, text)
-		for _, name := range helpers.Called(text, visible) {
+		for _, name := range HelpersCalled(text, visible) {
 			texts = append(texts, visible[name].Body)
 		}
-		for _, from := range helpers.Froms(text) {
+		for _, from := range FromLines(text) {
 			if built, err := w.project.Find(from.Key); err == nil && !seen[built.Key()] {
 				seen[built.Key()] = true
 				queue = append(queue, built)
@@ -4825,8 +4842,8 @@ func (w *Window) SaveHelper(text string) error {
 	if w.editor == nil || filepath.Base(filepath.Dir(w.editor.path)) != sharedFolder {
 		return errors.New("no helper file is open in the editor")
 	}
-	if len(text) > helpers.FileSizeBytesMax {
-		return fmt.Errorf("a helper file is at most %d bytes", helpers.FileSizeBytesMax)
+	if len(text) > ScriptSizeBytesMax {
+		return fmt.Errorf("a helper file is at most %d bytes", ScriptSizeBytesMax)
 	}
 	if err := os.WriteFile(w.editor.path, []byte(text), 0o644); err != nil {
 		return err
@@ -4859,6 +4876,104 @@ func syntaxProblems(path string) ([]model.HelperProblem, error) {
 		}
 	}
 	return problems, nil
+}
+
+// From internal/helpers: which helpers a script calls, for the setup fingerprint's walk and for
+// what a scenario needs installed, and the `need` lines RequiredCommands (big_helpers.go) reads.
+// Reading the helpers themselves is in big_helpers.go.
+
+// shellWord is a word in a line of bash, compiled once.
+var shellWord = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`) //tiger:allow-global
+
+// VisibleHelpers lists the helpers a capability's scripts can call: _shared's, then the
+// capability's own, which win over a shared helper with the same name. The map is by name.
+func VisibleHelpers(shared []HelperDefinition, own []HelperDefinition) map[string]HelperDefinition {
+	assert.That(len(shared) <= HelpersMax, "shared helpers stay bounded")
+	assert.That(len(own) <= HelpersMax, "own helpers stay bounded")
+	visible := make(map[string]HelperDefinition, len(shared)+len(own))
+	for _, helper := range shared {
+		if _, seen := visible[helper.Name]; !seen {
+			visible[helper.Name] = helper
+		}
+	}
+	for _, helper := range own {
+		if existing, seen := visible[helper.Name]; !seen || existing.Capability == "" {
+			visible[helper.Name] = helper
+		}
+	}
+	return visible
+}
+
+// HelpersCalled lists, sorted, the visible helpers text calls, and the helpers those call, and so
+// on. Comment lines don't count.
+func HelpersCalled(text string, visible map[string]HelperDefinition) []string {
+	assert.That(len(text) <= ScriptSizeBytesMax, "text stays bounded")
+	assert.That(len(visible) <= 2*HelpersMax, "visible helpers stay bounded")
+	called := make(map[string]bool, 8)
+	queue := callsIn(text, visible)
+	// bound: each helper joins the queue at most once, and there are len(visible) of them.
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if called[name] {
+			continue
+		}
+		called[name] = true
+		queue = append(queue, callsIn(visible[name].Body, visible)...)
+	}
+	names := make([]string, 0, len(called))
+	for name := range called {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// callsIn lists the visible helper names that appear as words in text's code lines.
+func callsIn(text string, visible map[string]HelperDefinition) []string {
+	assert.That(len(text) <= ScriptSizeBytesMax, "text stays bounded")
+	assert.That(visible != nil, "there's a helper map")
+	names := make([]string, 0, 4)
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for _, token := range shellWord.FindAllString(line, -1) {
+			if _, ok := visible[token]; ok {
+				names = append(names, token)
+			}
+		}
+	}
+	return names
+}
+
+// The pattern for the kit's need lines.
+// Ref: capabilities/the-kit/about.md, in the Givens repository
+const needPattern = `(?m)^\s*need\s+([A-Za-z0-9_.+-]+)(?:\s+"([^"]*)"|\s+'([^']*)')?`
+
+var needLineRegexp = regexp.MustCompile(needPattern) //tiger:allow-global compiled once
+
+// NeedLine is one `need <command> [hint]` line.
+type NeedLine struct {
+	Command string
+	Hint    string
+}
+
+// NeedLines lists the need lines in text, in order, each command once.
+func NeedLines(text string) []NeedLine {
+	assert.That(len(text) <= ScriptSizeBytesMax*HelpersMax, "text stays bounded")
+	matches := needLineRegexp.FindAllStringSubmatch(text, -1)
+	needs := make([]NeedLine, 0, len(matches))
+	seen := make(map[string]bool, len(matches))
+	for _, match := range matches {
+		if seen[match[1]] {
+			continue
+		}
+		seen[match[1]] = true
+		needs = append(needs, NeedLine{Command: match[1], Hint: match[2] + match[3]})
+	}
+	assert.That(len(needs) <= len(matches), "each need comes from a line")
+	return needs
 }
 
 // Feature: Tags
@@ -6270,11 +6385,11 @@ func (w *Window) builtOn(prefix string, skip string) (string, error) {
 			if scenario.Setup == "" {
 				continue
 			}
-			text, err := helpers.ReadScript(scenario.Setup)
+			text, err := ReadScript(scenario.Setup)
 			if err != nil {
 				return "", err
 			}
-			for _, from := range helpers.Froms(text) {
+			for _, from := range FromLines(text) {
 				if from.Key == prefix || (strings.HasSuffix(prefix, "/") &&
 					strings.HasPrefix(from.Key, prefix)) {
 					return scenario.Name, nil

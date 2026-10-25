@@ -665,3 +665,31 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - runref_test.go is internal/app/runref_test.go; two lines the longer timeout name pushed past
   100 columns were rewrapped.
 - big.go 6,731 lines, big_helpers.go 899 (+0).
+
+## internal/helpers folds in (2026-10-25)
+- internal/helpers is gone. Reading the helpers (the limits, `HelperDefinition`,
+  `HelpersInFolder` and its file walk, `ReadScript`) and the from lines (`FromLine`,
+  `FromLines`) are in big_helpers.go after RequiredCommands: Copy, Drop in, Search, Share setup
+  and Write stories call them. Which helpers a script calls (`VisibleHelpers`, `HelpersCalled`,
+  `callsIn`, `shellWord`) and the need lines (`NeedLine`, `NeedLines`) are the end of Share
+  setup's section: their callers are the fingerprint walk, setupTexts' neighbours and
+  RequiredCommands, as `setupTexts` is. `UsesBrowser` is the end of Mix shell's section; its one
+  caller is chromeRequired.
+- The package doc's first paragraph became the big_helpers.go block's comment; the
+  "reads bash by pattern" paragraph moved with it. The const and var blocks were split by where
+  each pattern went.
+- Renames: `Helper` -> `HelperDefinition` (beside model.Helper, the sidebar's view of one),
+  `InFolder` -> `HelpersInFolder`, `inFile` -> `helpersInFile`, `Visible` -> `VisibleHelpers`
+  (Window has a `Visible` method), `Called` -> `HelpersCalled` (not CalledHelpers: Share setup
+  has a `calledHelpers`), `FileSizeBytesMax` -> `ScriptSizeBytesMax`, `KitFile` ->
+  `KitFileName` (Update the kit has `kitFile`, the path), `Need`/`Needs` -> `NeedLine`/`NeedLines`,
+  `From`/`Froms` -> `FromLine`/`FromLines`, and the vars `definition` -> `helperDefinition`,
+  `word` -> `shellWord`, `needLine`/`fromLine` -> `needLineRegexp`/`fromLineRegexp` (they'd
+  differ from the types only by case). `ReadScript`, `HelpersMax`, `UsesBrowser`, `docAbove`,
+  `bodyBelow` and `callsIn` kept theirs. The test `TestInFolderAndCalled` ->
+  `TestHelpersInFolderAndCalled`.
+- The two-regexp block's `//tiger:allow-global` moved to the block's doc comment: the longer
+  name pushed the line past 100 columns.
+- helpers_test.go is internal/app/helpers_test.go; lines_browser_test.go is
+  helpers_browser_test.go. `cmd/givens` calls `app.ReadScript`.
+- big.go 6,846 lines (+115), big_helpers.go 1,084 (+185).

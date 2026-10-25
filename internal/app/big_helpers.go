@@ -19,13 +19,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/helpers"
 	"givens/internal/markdown"
 	"givens/internal/project"
 	"givens/internal/runs"
@@ -180,7 +180,7 @@ func (w *Window) SearchResults() SearchResults {
 // uniqueSteps is a scenario's steps, each text once, so a step it repeats counts as one use.
 func uniqueSteps(scenario project.Scenario) []project.Step {
 	assert.That(scenario.Name != "", "the scenario has a name")
-	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	steps := make([]project.Step, 0, len(scenario.Steps))
 	seen := make(map[string]bool, len(scenario.Steps))
 	for _, step := range scenario.Steps {
@@ -206,13 +206,13 @@ func (w *Window) Helpers() []model.Helper {
 	if w.helpers != nil {
 		return append([]model.Helper{}, w.helpers...)
 	}
-	shared, err := helpers.InFolder(w.path, "", "")
+	shared, err := HelpersInFolder(w.path, "", "")
 	if err != nil {
 		return []model.Helper{}
 	}
 	listed := w.listHelpers(shared, "", nil)
 	for _, capability := range w.project.Capabilities {
-		own, err := helpers.InFolder(w.path, capability.Slug, capability.Slug)
+		own, err := HelpersInFolder(w.path, capability.Slug, capability.Slug)
 		if err != nil {
 			continue
 		}
@@ -254,7 +254,7 @@ func (w *Window) RequiredCommands(scenario string) ([]model.RequiredCommand, err
 	for _, text := range texts {
 		all += text + "\n"
 	}
-	needs := helpers.Needs(all)
+	needs := NeedLines(all)
 	required := make([]model.RequiredCommand, 0, len(needs)+1)
 	if chrome, uses := chromeRequired(all); uses {
 		required = append(required, chrome)
@@ -267,6 +267,191 @@ func (w *Window) RequiredCommands(scenario string) ([]model.RequiredCommand, err
 		})
 	}
 	return required, nil
+}
+
+// From internal/helpers, which reads the shell functions in a capabilities folder's _shared
+// folders: where each is defined and its `# @helper` documentation, and the `from` lines a setup
+// builds on. Copy, Drop in, Search, Share setup and Write stories read scripts with it. Which
+// helpers a script calls, and its `need` lines, are Share setup's, at the end of its section in
+// big.go; the browser lines are Mix shell's.
+//
+// It reads bash by pattern, not by parsing it: a helper is a line `name() {` at the start of a
+// line, ending at the next line that is just `}`. That's the shape GIVENS.md asks for, and what
+// `bash -n` can't tell Givens without running anything.
+// Ref: https://www.gnu.org/software/bash/manual/html_node/Shell-Functions.html
+
+// Limits. Tiger Style: put a limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	// ScriptSizeBytesMax bounds one helper file or setup script.
+	ScriptSizeBytesMax = 1 << 20
+	// HelpersMax bounds the functions one capability can see.
+	HelpersMax = 4096
+	// KitFileName is the kit's file name; the kit isn't a helper file.
+	KitFileName = "givens.sh"
+)
+
+// Patterns, compiled once.
+//
+//tiger:allow-global compiled once
+var (
+	helperDefinition = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{`)
+	helperDoc        = regexp.MustCompile(`^#\s*@helper\s+(\S+.*)$`)
+)
+
+// HelperDefinition is one shell function in a _shared folder.
+type HelperDefinition struct {
+	Name        string
+	Signature   string // the `# @helper` line's text, like "seed_shopper [email]"; "" if none
+	Description string // the comment lines under `# @helper`, joined with spaces
+	Capability  string // the capability slug whose _shared holds it, or "" for _shared
+	File        string // relative to the capabilities folder: "_shared/users.sh"
+	Line        int    // the `name() {` line, counting from 1
+	Body        string // the lines between `name() {` and its closing `}`
+}
+
+// Documented is true for a helper with a `# @helper` comment, which the Shared list shows.
+func (h HelperDefinition) Documented() bool {
+	assert.That(h.Name != "", "a helper has a name")
+	assert.That(h.File != "", "a helper has a file")
+	return h.Signature != ""
+}
+
+// HelpersInFolder reads every function in root/<folder>/_shared/*.sh but the kit, in file name
+// order then line order. folder is "" for root/_shared. capability names what
+// HelperDefinition.Capability says.
+func HelpersInFolder(root string, folder string, capability string) ([]HelperDefinition, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(!strings.Contains(folder, "/"), "folder is a capability's folder or \"\"")
+	// Glob returns names in lexical order. Ref: https://pkg.go.dev/path/filepath#Glob
+	files, err := filepath.Glob(filepath.Join(root, folder, "_shared", "*.sh"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	found := make([]HelperDefinition, 0, 16)
+	for _, path := range files {
+		if filepath.Base(path) == KitFileName {
+			continue
+		}
+		read, err := helpersInFile(root, path, capability)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, read...)
+		if len(found) > HelpersMax {
+			return nil, fmt.Errorf("more than %d helpers in %s", HelpersMax, folder)
+		}
+	}
+	return found, nil
+}
+
+// helpersInFile reads the functions in one file.
+func helpersInFile(root string, path string, capability string) ([]HelperDefinition, error) {
+	assert.That(filepath.IsAbs(path), "path is absolute")
+	assert.That(strings.HasPrefix(path, root), "the file is in the capabilities folder")
+	text, err := ReadScript(path)
+	if err != nil {
+		return nil, err
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(text, "\n")
+	found := make([]HelperDefinition, 0, 8)
+	for index, line := range lines {
+		match := helperDefinition.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		signature, description := docAbove(lines, index)
+		found = append(found, HelperDefinition{
+			Name: match[1], Signature: signature, Description: description,
+			Capability: capability, File: filepath.ToSlash(relative), Line: index + 1,
+			Body: bodyBelow(lines, index),
+		})
+	}
+	return found, nil
+}
+
+// docAbove reads the comment block right above a definition: its `# @helper` line, and the
+// comment lines after it.
+func docAbove(lines []string, definitionIndex int) (string, string) {
+	assert.That(definitionIndex >= 0, "the definition is a line")
+	assert.That(definitionIndex < len(lines), "the definition is in the file")
+	start := definitionIndex
+	for start > 0 && strings.HasPrefix(strings.TrimSpace(lines[start-1]), "#") { // bound: start
+		start--
+	}
+	signature, description := "", make([]string, 0, 4)
+	for _, line := range lines[start:definitionIndex] {
+		trimmed := strings.TrimSpace(line)
+		if match := helperDoc.FindStringSubmatch(trimmed); match != nil {
+			signature = strings.TrimSpace(match[1])
+			continue
+		}
+		if signature != "" {
+			description = append(description, strings.TrimSpace(strings.TrimPrefix(trimmed, "#")))
+		}
+	}
+	return signature, strings.Join(description, " ")
+}
+
+// bodyBelow is the text between a definition line and the next line that's just `}`.
+func bodyBelow(lines []string, definitionIndex int) string {
+	assert.That(definitionIndex >= 0, "the definition is a line")
+	assert.That(definitionIndex < len(lines), "the definition is in the file")
+	body := make([]string, 0, 8)
+	for _, line := range lines[definitionIndex+1:] {
+		if strings.TrimRight(line, " \t") == "}" {
+			break
+		}
+		body = append(body, line)
+	}
+	return strings.Join(body, "\n")
+}
+
+// ReadScript reads a script or helper file, within ScriptSizeBytesMax.
+func ReadScript(path string) (string, error) {
+	assert.That(filepath.IsAbs(path), "path is absolute")
+	assert.That(ScriptSizeBytesMax > 0, "scripts have a size limit")
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if len(text) > ScriptSizeBytesMax {
+		return "", fmt.Errorf("%s is larger than %d bytes", path, ScriptSizeBytesMax)
+	}
+	return string(text), nil
+}
+
+// The pattern for the kit's from lines.
+// Ref: capabilities/the-kit/about.md, in the Givens repository
+const fromPattern = `(?m)^\s*from\s+([^\s/]+/[^\s/]+)((?:[ \t]+[A-Za-z_]\w*=\S*)*)[ \t]*$`
+
+var fromLineRegexp = regexp.MustCompile(fromPattern) //tiger:allow-global compiled once
+
+// FromLine is one `from <capability>/<slug> [column=value …]` line.
+type FromLine struct {
+	Key    string   // "checkout/pay-with-saved-card"
+	Values []string // "card=stolen", in order
+	Line   string   // the line as written, trimmed
+}
+
+// FromLines lists the from lines in a setup script, in order.
+func FromLines(text string) []FromLine {
+	assert.That(len(text) <= ScriptSizeBytesMax, "a script stays bounded")
+	matches := fromLineRegexp.FindAllStringSubmatch(text, -1)
+	froms := make([]FromLine, 0, len(matches))
+	for _, match := range matches {
+		froms = append(froms, FromLine{
+			Key: match[1], Values: strings.Fields(match[2]),
+			Line: strings.TrimSpace(match[0]),
+		})
+	}
+	assert.That(len(froms) == len(matches), "each match is a from line")
+	return froms
 }
 
 // Scenario statuses, as the library shows them.
@@ -730,7 +915,7 @@ func runBlocksIn(path string) []string {
 	if path == "" {
 		return texts
 	}
-	text, err := helpers.ReadScript(path)
+	text, err := ReadScript(path)
 	if err != nil {
 		return texts
 	}
@@ -772,10 +957,10 @@ func (s *Session) scratchDir() (string, error) {
 // kind before them.
 func checklistOf(scenario project.Scenario, row []runs.Pair) []model.CheckItem {
 	assert.That(scenario.Name != "", "the scenario has a name")
-	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	items := make([]model.CheckItem, 0, len(scenario.Steps)+2)
 	if scenario.Setup != "" {
-		if text, err := helpers.ReadScript(scenario.Setup); err == nil {
+		if text, err := ReadScript(scenario.Setup); err == nil {
 			for _, match := range firstYouLine.FindAllStringSubmatch(text, -1) {
 				items = append(items, model.CheckItem{Text: "First, " + unquote(match[1]),
 					Kind: "given"})

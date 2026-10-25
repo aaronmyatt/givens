@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/helpers"
 	"givens/internal/markdown"
 	"givens/internal/project"
 	setupkit "givens/internal/setup"
@@ -83,7 +83,7 @@ func runScript(root string, script string, env ...string) int {
 func walkSteps(root string, path string, input io.Reader) int {
 	assert.That(filepath.IsAbs(path), "the setup is absolute")
 	assert.That(input != nil, "answers come from somewhere")
-	text, err := helpers.ReadScript(path)
+	text, err := app.ReadScript(path)
 	if err != nil {
 		complain(err)
 		return exitProblems
