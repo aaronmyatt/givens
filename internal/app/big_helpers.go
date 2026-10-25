@@ -763,3 +763,6 @@ func (s *Session) restart(skipTeardown bool) error {
 		skipTeardown)
 	return err
 }
+
+// KitSourceLine is the first line of every setup script: it sources the kit.
+const KitSourceLine = `source "$(dirname "${BASH_SOURCE[0]}")/../../_shared/givens.sh"`

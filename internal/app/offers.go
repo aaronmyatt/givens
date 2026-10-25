@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -145,34 +144,6 @@ func scenarioOffers(scenario Scenario) []string {
 		return []string{OfferCopy, OfferDropIn}
 	}
 	return []string{OfferCopy, OfferDropIn}
-}
-
-// KitSourceLine is the first line of every setup script: it sources the kit.
-const KitSourceLine = `source "$(dirname "${BASH_SOURCE[0]}")/../../_shared/givens.sh"`
-
-// addTeardown creates the selected scenario's scripts/<slug>.teardown.sh, sourcing the kit,
-// and opens it in the editor. Givens runs it before every setup run.
-func (w *Window) addTeardown() error {
-	assert.That(w != nil, "add teardown runs on a window")
-	assert.That(w.selectedScenario != "", "a scenario is selected")
-	scenario, ok := w.findScenario(w.selectedScenario)
-	if !ok || scenario.Setup == "" {
-		return fmt.Errorf("%s has no setup to tear down: %w", w.selectedScenario, ErrNotFound)
-	}
-	path := strings.TrimSuffix(scenario.Setup, ".sh") + ".teardown.sh"
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists", filepath.Base(path))
-	}
-	text := KitSourceLine + "\n# Clears what " + scenario.Name +
-		"'s setup leaves behind. It runs before every setup run,\n" +
-		"# so it must cope when there's nothing to clear.\n"
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		return err
-	}
-	if err := w.reload(); err != nil {
-		return err
-	}
-	return w.editFile(path)
 }
 
 // Offers on a scenario with no setup yet, and what the page says in its place.

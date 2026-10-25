@@ -476,4 +476,20 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   project's `createCapabilities` writes; the opening comment says so.
 - Nothing went to big_helpers.go. No seams cut. Keep runs off main's and Share setup's opening
   comments named dropin_record.go; they name `RecordRun` only now.
-- Section +173 lines, 623 in all; big_helpers.go +0. big.go 4,727, big_helpers.go 765.
+- Section +172 lines, 622 in all; big_helpers.go +0. big.go 4,727, big_helpers.go 765.
+- c) Teardown and builds-on. dropin_run.go is gone. After "Attach proof to a run": `addTeardown`
+  (from offers.go) under "Add a teardown"; `fromProblem` and `outlineWithoutRow` under "Builds on
+  a scenario that doesn't exist", "Setups that build on each other in a loop" and "Build on an
+  outline without a row". "Teardown runs before setup" and "The teardown fails" join the stack
+  over `DropIn` … `Note`: `begin` queues the teardown, `start` prints "→ teardown", `poll` says
+  "Teardown failed", and `dropIn`'s skipTeardown is "Run setup anyway".
+- To big_helpers.go: `KitSourceLine`, since Write stories' `NewScenario` and `createSetup` start
+  a setup script with it, as `addTeardown` starts a teardown. offers.go no longer imports os.
+- `addTeardown` came out of offers.go as `createSetup` did: `chooseOnScenarioPage` is its one
+  caller, and it isn't the dispatcher. No seams cut.
+- No heading, the opening comment says why: "A scenario that builds on another", "Each level
+  tears down its own state", "Build on one row of an outline" and "A loop run from the
+  terminal" are the kit's `from` (bash); "Running setup twice gives the same state" is the
+  setup's own idempotency, with "Reset state" in `restart`.
+- Write stories' opening comment said KitSourceLine stays in offers.go; it says big_helpers.go.
+- Section +99 lines, 721 in all; big_helpers.go +3. big.go 4,827, big_helpers.go 768.

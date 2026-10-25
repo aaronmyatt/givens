@@ -131,11 +131,18 @@ func (w *Window) copyFromSearch() error {
 // (Share setup between scenarios) on a failed setup's page. In big_helpers.go: checklistOf,
 // fail and restart, since Mix shell's cards and Trust's "Trust this project" call them too;
 // RequiredCommands, which precheck checks; and scenarioWarning, which shows a @timeout tag
-// that can't be read (MessageTimeoutTag). Read a capability's run history lists a run's files
-// with runFiles. "Runs on two branches merge cleanly" is git's: runs/** merge=union, which Open
-// a project's createCapabilities writes in .gitattributes. Not here yet: the builds-on check in
-// dropin_run.go and addTeardown in offers.go, cards.go and dropin_page.go (cards and the page),
-// rows.go, arguments.go and examples.go (outlines and rows), and leaveSession (selection.go).
+// that can't be read (MessageTimeoutTag); and KitSourceLine, which addTeardown starts a
+// teardown with, as Write stories starts a setup script. Read a capability's run history lists
+// a run's files with runFiles. A from line is the kit's from (internal/kit/givens.sh): it runs
+// the scenario built on, its teardown first, with a row's values, and guards against a loop, so
+// "A scenario that builds on another", "Each level tears down its own state", "Build on one row
+// of an outline" and "A loop run from the terminal" are bash; fromProblem here catches what's
+// wrong before anything runs. "Running setup twice gives the same state" is the setup's own
+// rule; "Reset state" is restart. "Runs on two branches merge cleanly" is git's: runs/**
+// merge=union, which Open a project's createCapabilities writes in .gitattributes. Core glue's
+// chooseOnScenarioPage (offers.go) calls addTeardown. Not here yet: cards.go and dropin_page.go
+// (cards and the page), rows.go, arguments.go and examples.go (outlines and rows), and
+// leaveSession (selection.go).
 
 // Session states.
 const (
@@ -220,6 +227,8 @@ func (w *Window) Session() *Session {
 
 // Scenario: Drop in
 // Scenario: The setup script fails
+// Scenario: Teardown runs before setup
+// Scenario: The teardown fails
 
 // DropIn drops in to a scenario: it runs the setup and opens the Drop in page. Before anything
 // runs it checks the commands the setup needs and the setups it builds on.
@@ -739,6 +748,96 @@ func runFiles(capabilities string, run runs.Run) []string {
 		paths = append(paths, filepath.Join(folder, name))
 	}
 	return paths
+}
+
+// Scenario: Add a teardown
+
+// addTeardown creates the selected scenario's scripts/<slug>.teardown.sh, sourcing the kit,
+// and opens it in the editor. Givens runs it before every setup run.
+func (w *Window) addTeardown() error {
+	assert.That(w != nil, "add teardown runs on a window")
+	assert.That(w.selectedScenario != "", "a scenario is selected")
+	scenario, ok := w.findScenario(w.selectedScenario)
+	if !ok || scenario.Setup == "" {
+		return fmt.Errorf("%s has no setup to tear down: %w", w.selectedScenario, ErrNotFound)
+	}
+	path := strings.TrimSuffix(scenario.Setup, ".sh") + ".teardown.sh"
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", filepath.Base(path))
+	}
+	text := KitSourceLine + "\n# Clears what " + scenario.Name +
+		"'s setup leaves behind. It runs before every setup run,\n" +
+		"# so it must cope when there's nothing to clear.\n"
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.editFile(path)
+}
+
+// Scenario: Builds on a scenario that doesn't exist
+// Scenario: Setups that build on each other in a loop
+// Scenario: Build on an outline without a row
+
+// fromProblem finds what's wrong with the setups a scenario builds on: a from line naming no
+// scenario, an outline named without a row, or setups that build on each other in a loop.
+func (w *Window) fromProblem(scenario project.Scenario) (string, error) {
+	assert.That(w.project != nil, "from lines are read in a loaded project")
+	assert.That(scenario.Setup != "", "the scenario has a setup script")
+	type visit struct {
+		scenario project.Scenario
+		path     []string // slugs from the scenario dropped in to
+	}
+	stack := []visit{{scenario: scenario, path: []string{scenario.Slug}}}
+	visits := 0
+	// A loop is reported the first time a slug repeats on a path.
+	// bound: visits stop at the most scenarios a project can hold.
+	for len(stack) > 0 && visits <= spec.CapabilitiesMax*spec.ScenariosPerFeatureMax {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		visits++
+		if current.scenario.Setup == "" {
+			continue
+		}
+		text, err := helpers.ReadScript(current.scenario.Setup)
+		if err != nil {
+			return "", err
+		}
+		for _, from := range helpers.Froms(text) {
+			built, err := w.project.Find(from.Key)
+			if err != nil {
+				return "from " + from.Key + ": there's no scenario with that name", nil
+			}
+			if problem := outlineWithoutRow(built, from.Values); problem != "" {
+				return problem, nil
+			}
+			path := append(append([]string{}, current.path...), built.Slug)
+			if slices.Contains(current.path, built.Slug) {
+				return "These setups build on each other in a loop: " +
+					strings.Join(path, " → "), nil
+			}
+			stack = append(stack, visit{scenario: built, path: path})
+		}
+	}
+	return "", nil
+}
+
+// outlineWithoutRow says an outline was named without a row to build on, or "".
+func outlineWithoutRow(built project.Scenario, values []string) string {
+	assert.That(built.Slug != "", "the scenario has a slug")
+	assert.That(len(values) <= helpers.HelpersMax, "values stay bounded")
+	if !built.Outline || len(values) > 0 {
+		return ""
+	}
+	example := ""
+	for _, block := range built.Examples {
+		if len(block.Header) > 0 && len(block.Rows) > 0 && example == "" {
+			example = ", like " + block.Header[0] + "=" + block.Rows[0][0]
+		}
+	}
+	return built.Slug + " is an outline: pick a row" + example
 }
 
 // Feature: Gherkin files
@@ -3560,8 +3659,9 @@ func (w *Window) emptyView() string {
 // input.go), closes the editor before selecting (closeEditor in Select, selection.go), and shows it
 // (Snapshot, snapshot.go). It also offers aboutOffers and runs editAbout (allOffers and Choose),
 // and the scenario page offers and runs "Create script" and "Write setup steps" (scenarioPageOffers
-// and chooseOnScenarioPage, offers.go), whose labels stay there with KitSourceLine; createSetup
-// opens its new file with Drop in's editFile (dropin_page.go). Editor, the drafts, marks,
+// and chooseOnScenarioPage, offers.go), whose labels stay there; a new setup script starts with
+// KitSourceLine (big_helpers.go), as Drop in's teardown does; createSetup opens its new file
+// with Drop in's editFile (dropin_page.go). Editor, the drafts, marks,
 // suggestions and preview lines, and the editing limits are types in edit.go; EditorSnapshot is in
 // snapshot.go. The terminal edits in the developer's editor: `givens new` and `givens edit`
 // (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui) hand the text over
