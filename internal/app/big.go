@@ -49,6 +49,7 @@ import (
 	"givens/internal/assert"
 	"givens/internal/branch"
 	"givens/internal/browser"
+	"givens/internal/fingerprint"
 	"givens/internal/helpers"
 	"givens/internal/kit"
 	"givens/internal/markdown"
@@ -130,10 +131,11 @@ func (w *Window) copyFromSearch() error {
 // (Share setup between scenarios) on a failed setup's page. In big_helpers.go: checklistOf,
 // fail and restart, since Mix shell's cards and Trust's "Trust this project" call them too;
 // RequiredCommands, which precheck checks; and scenarioWarning, which shows a @timeout tag
-// that can't be read (MessageTimeoutTag). Not here yet: dropin_record.go and dropin_files.go
-// (record and attach), the builds-on check in dropin_run.go and addTeardown in offers.go,
-// cards.go and dropin_page.go (cards and the page), rows.go, arguments.go and examples.go
-// (outlines and rows), and leaveSession (selection.go).
+// that can't be read (MessageTimeoutTag). Read a capability's run history lists a run's files
+// with runFiles. "Runs on two branches merge cleanly" is git's: runs/** merge=union, which Open
+// a project's createCapabilities writes in .gitattributes. Not here yet: the builds-on check in
+// dropin_run.go and addTeardown in offers.go, cards.go and dropin_page.go (cards and the page),
+// rows.go, arguments.go and examples.go (outlines and rows), and leaveSession (selection.go).
 
 // Session states.
 const (
@@ -568,6 +570,177 @@ func unquote(word string) string {
 	return word
 }
 
+// Scenario: Record a run
+// Scenario: Record a run before marking every check
+// Scenario: Record a run with a note in Markdown
+// Scenario: A run records who ran it
+
+// Marks.
+const (
+	MarkDone = "done"
+	MarkPass = "pass"
+	MarkFail = "fail"
+	// MarkClear takes a mark off, like unticking a When step.
+	MarkClear = "clear"
+)
+
+// MessageMarkEachCheck is shown when "Record run" comes before every check is marked.
+const MessageMarkEachCheck = "Mark each check first"
+
+// Mark marks a checklist item: "done" for Givens and Whens, "pass" or "fail" for Thens.
+func (s *Session) Mark(item string, mark string) error {
+	assert.That(s != nil, "mark runs on a session")
+	assert.That(mark == MarkDone || mark == MarkPass || mark == MarkFail || mark == MarkClear,
+		"a mark is done, pass, fail or clear")
+	s.poll()
+	for index := range s.checklist {
+		if s.checklist[index].Text != item {
+			continue
+		}
+		// A changed mark is a checklist that "Record run" hasn't saved yet.
+		if mark == MarkClear {
+			s.checklist[index].Mark, s.recorded = "", false
+			return nil
+		}
+		then := s.checklist[index].Kind == "then"
+		if then == (mark == MarkDone) {
+			return fmt.Errorf("%q can't be marked %q", item, mark)
+		}
+		s.checklist[index].Mark, s.recorded = mark, false
+		return nil
+	}
+	return fmt.Errorf("the checklist has no %q: %w", item, ErrNotFound)
+}
+
+// SetRunNote sets the note that "Record run" saves with the run. Needed by "Record a run".
+func (s *Session) SetRunNote(note string) error {
+	assert.That(s != nil, "set note runs on a session")
+	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
+	s.note = note
+	return nil
+}
+
+// RecordRun records the run with note, which may be "": one line in today's file in runs/,
+// passing when every Then step passed. A note of more than one line is kept whole as note.md
+// in the run's folder, and the line keeps its first line. Until every check is marked it
+// records nothing and shows MessageMarkEachCheck instead.
+func (s *Session) RecordRun(note string) error {
+	assert.That(s != nil, "record run runs on a session")
+	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
+	if s.Status() != SessionReady {
+		return errors.New("setup hasn't finished, so there's no run to record")
+	}
+	if warning := examplesWarning(s.scenario); warning != "" {
+		return errors.New(warning)
+	}
+	result := runs.ResultPass
+	for _, item := range s.checklist {
+		if item.Mark == "" {
+			s.message = MessageMarkEachCheck
+			return nil
+		}
+		if item.Mark == MarkFail {
+			result = runs.ResultFail
+		}
+	}
+	if note == "" {
+		note = s.note
+	}
+	window := s.window
+	parts, err := fingerprint.Of(window.project, s.scenario, s.row)
+	if err != nil {
+		return err
+	}
+	run := runs.Run{
+		Time: window.app.config.Clock.Now(), Key: s.key(), Result: result,
+		Author: runs.Author(filepath.Dir(window.path)), Values: s.row,
+		Fingerprint: parts, Note: note,
+	}
+	// Where the run goes is Keep runs off main's: the ref, or capabilities/runs.
+	err = window.keepRun(run, s.attachments, note)
+	if err != nil {
+		return err
+	}
+	s.message, s.recorded = "", true
+	return nil
+}
+
+// key is the run key this Drop in records against.
+func (s *Session) key() string {
+	assert.That(s.scenario.Slug != "", "the scenario has a slug")
+	assert.That(s.scenario.Capability != "", "the scenario belongs to a capability")
+	return runs.Key(s.scenario.Key(), s.examples)
+}
+
+// Scenario: Attach proof to a run
+
+// Files attached to a Drop in: proof, like a screenshot, that "Record run" copies into the
+// run's own folder in runs/. See internal/runs/files.go for where they go.
+
+// Attach adds the file at path to the files "Record run" keeps with the run. A file with the
+// same name as one already attached takes its place. Needed by "Attach proof to a run".
+func (s *Session) Attach(path string) error {
+	assert.That(s != nil, "attach runs on a session")
+	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("an attached file needs an absolute path, not %q", path)
+	}
+	if err := runs.CheckFile(path); err != nil {
+		return err
+	}
+	name := filepath.Base(path)
+	if name == runs.NoteFileName {
+		return fmt.Errorf("%s is the run note's own name; rename the file to attach it", name)
+	}
+	kept := slices.DeleteFunc(s.attachments, func(attached string) bool {
+		return filepath.Base(attached) == name
+	})
+	if len(kept) >= runs.FilesPerRunMax {
+		return fmt.Errorf("a run keeps at most %d files", runs.FilesPerRunMax)
+	}
+	s.attachments = append(kept, path)
+	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	return nil
+}
+
+// Detach takes the attached file called name off again.
+func (s *Session) Detach(name string) error {
+	assert.That(s != nil, "detach runs on a session")
+	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	before := len(s.attachments)
+	s.attachments = slices.DeleteFunc(s.attachments, func(attached string) bool {
+		return filepath.Base(attached) == name
+	})
+	if len(s.attachments) == before {
+		return fmt.Errorf("no file called %q is attached: %w", name, ErrNotFound)
+	}
+	return nil
+}
+
+// Attachments lists the paths of the attached files, in the order they were attached.
+func (s *Session) Attachments() []string {
+	assert.That(s != nil, "attachments runs on a session")
+	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	return append(make([]string, 0, len(s.attachments)), s.attachments...)
+}
+
+// runFiles lists the paths of the files kept with run, for its line in the history. A folder
+// that can't be read lists none: the run itself still shows.
+func runFiles(capabilities string, run runs.Run) []string {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	assert.That(run.Key != "", "a run has a key")
+	names, err := runs.Files(capabilities, run)
+	if err != nil {
+		return []string{}
+	}
+	folder := runs.FolderOf(capabilities, run)
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		paths = append(paths, filepath.Join(folder, name))
+	}
+	return paths
+}
+
 // Feature: Gherkin files
 //
 // capabilities/gherkin-files. Givens reads each capability's one .feature file with the
@@ -733,7 +906,7 @@ func (w *Window) moveToOwnCapability() error {
 //
 // capabilities/keep-runs-off-main. In a git repository with an origin remote, runs go to the
 // git ref refs/givens/runs, which Givens fetches, merges and pushes itself; without one, they go
-// in capabilities/runs. Code elsewhere: Drop in's RecordRun (dropin_record.go) records through
+// in capabilities/runs. Code elsewhere: Drop in's RecordRun records through
 // keepRun; Open a project's Open calls openRunStore, and its OpenBranch links a branch's copy to
 // the ref (runs.LinkRefCopy), which is "Another branch shows runs kept off main"; refresh
 // (big_helpers.go) calls pollRunsSync. Core glue shows runsMessages (Snapshot, snapshot.go),
@@ -2349,7 +2522,7 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // and so are the bash -n limits and bashError, which Write stories' shellProblems
 // shares. The four "Changing …" scenarios and "Updating the kit keeps
 // scenarios verified" are internal/fingerprint, which statusFor (big_helpers.go) and Drop in's
-// record (dropin_record.go) call. Code elsewhere: Drop in's page shows elsewhere's message
+// RecordRun call. Code elsewhere: Drop in's page shows elsewhere's message
 // (messages, dropin_page.go); core glue offers OfferEdit and runs editHelper (allOffers and
 // Choose, offers.go), selects a helper (selectNow, selection.go), and shows a helper and a
 // scenario's requirements (helperLabels and requirementLabels, snapshot.go). Helper and its

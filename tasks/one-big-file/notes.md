@@ -462,3 +462,18 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Mix shell's and Share setup's opening comments pointed at dropin_run.go and session.go; they
   name the functions only now.
 - Section 450 lines, big_helpers.go +49. big.go 4,554, big_helpers.go 765.
+- b) Record and attach. dropin_record.go and dropin_files.go are gone. After "Steps done by
+  hand come first": the marks, `MessageMarkEachCheck`, `Mark`, `SetRunNote`, `RecordRun` and
+  `key` under "Record a run", "Record a run before marking every check", "Record a run with a
+  note in Markdown" and "A run records who ran it"; dropin_files.go's intro, `Attach`, `Detach`,
+  `Attachments` and `runFiles` under "Attach proof to a run". big.go imports
+  internal/fingerprint now.
+- `runFiles` stays in the section, though its one caller is Read a capability's `historyOf`:
+  it's this story's "the run, in the scenario's run history, lists declined.png", the same call
+  as `elsewhere` (Share's, called only from Drop in).
+- `MarkDone` stays with the marks, though Mix shell's `runState` and `pollBlock` read it.
+- "Runs on two branches merge cleanly" has no heading: it's git's merge=union, which Open a
+  project's `createCapabilities` writes; the opening comment says so.
+- Nothing went to big_helpers.go. No seams cut. Keep runs off main's and Share setup's opening
+  comments named dropin_record.go; they name `RecordRun` only now.
+- Section +173 lines, 623 in all; big_helpers.go +0. big.go 4,727, big_helpers.go 765.
