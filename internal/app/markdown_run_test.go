@@ -1,9 +1,9 @@
-package markdown
+package app
 
 import "testing"
 
 func TestRunBlocks(t *testing.T) {
-	setup, err := Parse("1. Seed\n   ```bash run\n   ok seeded\n   ```\n" +
+	setup, err := ParseMarkdownSetup("1. Seed\n   ```bash run\n   ok seeded\n   ```\n" +
 		"2. Look\n   ```js\n   1\n   ```\n3. Order\n   ```js run extra\n   2\n   ```\n")
 	if err != nil {
 		t.Fatal(err)

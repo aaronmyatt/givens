@@ -12,7 +12,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/markdown"
 	"givens/internal/project"
 	setupkit "givens/internal/setup"
 )
@@ -88,13 +87,13 @@ func walkSteps(root string, path string, input io.Reader) int {
 		complain(err)
 		return exitProblems
 	}
-	setup, err := markdown.Parse(text)
+	setup, err := app.ParseMarkdownSetup(text)
 	if err != nil {
 		complain(err)
 		return exitProblems
 	}
 	if setup.Intro != "" {
-		fmt.Printf("%s\n\n", markdown.Plain(setup.Intro))
+		fmt.Printf("%s\n\n", app.PlainMarkdown(setup.Intro))
 	}
 	answers := bufio.NewReaderSize(input, answerBytesMax)
 	for _, step := range setup.Steps {
@@ -125,7 +124,7 @@ func walkSteps(root string, path string, input io.Reader) int {
 
 // runBlocks runs a step's run blocks in order, as Drop in does, and says whether it had any
 // and the exit code of the first that failed.
-func runBlocks(root string, path string, step markdown.Step) (bool, int) {
+func runBlocks(root string, path string, step app.MarkdownStep) (bool, int) {
 	assert.That(filepath.IsAbs(root), "root is absolute")
 	assert.That(strings.HasSuffix(path, ".md"), "a markdown setup is read")
 	ran := false
@@ -157,10 +156,10 @@ func runBlocks(root string, path string, step markdown.Step) (bool, int) {
 
 // printStep prints one step: its number and plain text, then each code block exactly as it
 // should be pasted, set apart by blank lines.
-func printStep(step markdown.Step) {
+func printStep(step app.MarkdownStep) {
 	assert.That(step.Number > 0, "steps count from 1")
-	assert.That(len(step.Blocks) <= markdown.StepsMax, "blocks stay bounded")
-	fmt.Printf("\n%d. %s\n", step.Number, markdown.Plain(step.Text))
+	assert.That(len(step.Blocks) <= app.MarkdownStepsMax, "blocks stay bounded")
+	fmt.Printf("\n%d. %s\n", step.Number, app.PlainMarkdown(step.Text))
 	for _, block := range step.Blocks {
 		fmt.Printf("\n%s\n\n", block.Code)
 	}

@@ -1,4 +1,4 @@
-package markdown
+package app
 
 import "testing"
 
@@ -10,8 +10,8 @@ const payInApp = "You'll need the TestFlight build of the shop app.\n\n" +
 	"   ![Wallet screen](../images/wallet.png)\n\n" +
 	"   ```js\n   localStorage.removeItem(\"cart\")\n"
 
-func TestParse(t *testing.T) {
-	setup, err := Parse(payInApp)
+func TestParseMarkdownSetup(t *testing.T) {
+	setup, err := ParseMarkdownSetup(payInApp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,8 +31,8 @@ func TestParse(t *testing.T) {
 		third.Blocks[0].Line != 14 {
 		t.Errorf("step 3 = %+v", third)
 	}
-	if got := Plain(first.Text); got !=
+	if got := PlainMarkdown(first.Text); got !=
 		"Install it on your phone: Shop beta (https://testflight.apple.com/join/abc)" {
-		t.Errorf("Plain = %q", got)
+		t.Errorf("PlainMarkdown = %q", got)
 	}
 }

@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, setup, tags, slug, markdown, kit and starter:
+//   - internal/spec, project, runs, setup, tags, slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -61,7 +61,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/browser"
 	"givens/internal/kit"
-	"givens/internal/markdown"
 	"givens/internal/project"
 	"givens/internal/runs"
 	"givens/internal/setup"
@@ -147,10 +146,11 @@ func (w *Window) copyFromSearch() error {
 // files open and start with, as addTeardown's teardown does; outlineRow, rowsOf, rowStatus and
 // rowName, since Views' unverifiedRows lists an outline's rows with them; removeArguments,
 // which Open a project's CloseWindow calls, and scratchDir, the folder it removes, which Mix
-// shell's run blocks share; RequiredCommands, which precheck checks; and scenarioWarning, which
-// shows examplesWarning and a @timeout tag that can't be read (MessageTimeoutTag). StatusOf
-// (big_helpers.go) sums up an outline with outlineStatus. Read a capability's run history lists
-// a run's files with runFiles.
+// shell's run blocks share; ParseMarkdownSetup, which reads a setup done by hand for the cards,
+// as runBlocksIn and `givens run` do; RequiredCommands, which precheck checks; and
+// scenarioWarning, which shows examplesWarning and a @timeout tag that can't be read
+// (MessageTimeoutTag). StatusOf (big_helpers.go) sums up an outline with outlineStatus. Read a
+// capability's run history lists a run's files with runFiles.
 //
 // A from line is the kit's from (internal/kit/givens.sh): it runs the scenario built on, its
 // teardown first, with a row's values, and guards against a loop, so "A scenario that builds on
@@ -1271,7 +1271,7 @@ func (s *Session) addMarkdownCards() error {
 	if err != nil {
 		return err
 	}
-	parsed, err := markdown.Parse(text)
+	parsed, err := ParseMarkdownSetup(text)
 	if err != nil {
 		return err
 	}
@@ -1286,7 +1286,7 @@ func (s *Session) addMarkdownCards() error {
 	s.intro, s.markdownFrom = parsed.Intro, len(s.cards)
 	for _, step := range parsed.Steps {
 		card := model.SetupCard{
-			Kind: model.CardMarkdown, Text: markdown.Rendered(step.Text),
+			Kind: model.CardMarkdown, Text: RenderedMarkdown(step.Text),
 			Links:  append([]string{}, step.Links...),
 			Images: append([]string{}, step.Images...), Blocks: make([]model.CodeBlock, 0, 2),
 			Offers: []string{OfferDone, OfferFailed}, Inline: step.Inline,
@@ -1632,6 +1632,25 @@ func examplesWarning(scenario project.Scenario) string {
 		return MessageNameExamples
 	}
 	return ""
+}
+
+// From internal/markdown: a markdown step's text as a card shows it.
+
+// RenderedMarkdown is markdown as the Drop in page shows it: links as their text (their targets
+// are in MarkdownStep.Links), images left out (they're in MarkdownStep.Images), and no code or
+// bold marks.
+func RenderedMarkdown(text string) string {
+	assert.That(len(text) <= MarkdownSetupBytesMax, "the text stays bounded")
+	shown := markdownLink.ReplaceAllStringFunc(text, func(found string) string {
+		match := markdownLink.FindStringSubmatch(found)
+		if match[1] == "!" {
+			return ""
+		}
+		return match[2]
+	})
+	shown = strings.ReplaceAll(strings.ReplaceAll(shown, "`", ""), "**", "")
+	assert.That(!strings.Contains(shown, "]("), "no link markup is left")
+	return strings.TrimSpace(shown)
 }
 
 // Feature: Gherkin files
@@ -2990,8 +3009,8 @@ func (w *Window) openLink(link string) error {
 // timed like setup. See capabilities/mix-shell-browser-and-hand-steps.
 
 // runLanguage says how a run block runs: "bash", "js", or "" when it doesn't run.
-func runLanguage(block markdown.Block) string {
-	assert.That(len(block.Code) <= markdown.TextBytesMax, "a block stays bounded")
+func runLanguage(block FencedBlock) string {
+	assert.That(len(block.Code) <= MarkdownSetupBytesMax, "a block stays bounded")
 	assert.That(block.Line >= 0, "a block has a line")
 	return setup.BlockLanguage(block.Language, block.Run, block.Closed)
 }
@@ -5427,10 +5446,29 @@ func (w *Window) restoreKit() {
 // Feature: Use Givens from the terminal
 //
 // capabilities/use-givens-from-the-terminal. A pointer: the commands are cmd/givens, an edge
-// that imports this package, so none of their code is here. list and check are
-// cmd/givens/list.go (runList, runCheck); run, with steps by hand and code blocks in a
-// terminal, is cmd/givens/run.go (runSetup, runBlocks); main.go routes each command. "List by
-// tag" parses its expression with internal/tags.
+// that imports this package, so their code isn't here, except PlainMarkdown at the end. list
+// and check are cmd/givens/list.go (runList, runCheck); run, with steps by hand and code blocks
+// in a terminal, is cmd/givens/run.go (runSetup, runBlocks); main.go routes each command. "List
+// by tag" parses its expression with internal/tags.
+
+// From internal/markdown: a markdown step's text as `givens run` prints it (printStep,
+// cmd/givens/run.go).
+
+// PlainMarkdown is markdown as a terminal shows it: links as their text with the target after it,
+// images as "Image: <alt> (<path>)", inline code and bold without their marks.
+func PlainMarkdown(text string) string {
+	assert.That(len(text) <= MarkdownSetupBytesMax, "the text stays bounded")
+	plain := markdownLink.ReplaceAllStringFunc(text, func(found string) string {
+		match := markdownLink.FindStringSubmatch(found)
+		if match[1] == "!" {
+			return "Image: " + match[2] + " (" + match[3] + ")"
+		}
+		return match[2] + " (" + match[3] + ")"
+	})
+	plain = strings.ReplaceAll(strings.ReplaceAll(plain, "`", ""), "**", "")
+	assert.That(!strings.Contains(plain, "`"), "no inline code marks are left")
+	return plain
+}
 
 // Feature: Views
 //

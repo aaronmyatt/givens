@@ -26,7 +26,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/markdown"
 	"givens/internal/project"
 	"givens/internal/runs"
 	"givens/internal/slug"
@@ -906,11 +905,170 @@ func (a *App) withoutTrashed(loaded *project.Project) {
 	loaded.Capabilities = kept
 }
 
+// From internal/markdown, which reads a setup done by hand, scripts/<slug>.md: the text before
+// the first numbered item, and each top-level numbered item as one step, with its fenced code
+// blocks, inline code, links and images. It reads only what setups use, not all of CommonMark.
+// Drop in's cards and runBlocksIn read it, and `givens run` (cmd/givens/run.go) prints it.
+// Drop in renders a step's text with RenderedMarkdown, in its section of big.go, and `givens
+// run` with PlainMarkdown, in Use Givens from the terminal's.
+// Ref: https://spec.commonmark.org/0.31.2/#ordered-list
+// Ref: https://spec.commonmark.org/0.31.2/#fenced-code-blocks
+
+// Limits. Tiger Style: put a limit on everything.
+const (
+	// MarkdownSetupBytesMax bounds one setup file.
+	MarkdownSetupBytesMax = 1 << 20
+	// MarkdownStepsMax bounds the numbered items in one file.
+	MarkdownStepsMax = 256
+)
+
+// Patterns, compiled once.
+const (
+	markdownItemPattern   = `^(\d+)\.\s+(.*)$`
+	markdownLinkPattern   = `(!?)\[([^\]]*)\]\(([^)\s]*)\)`
+	markdownInlinePattern = "`([^`]+)`"
+	// A fence's info string: its language, then any other words, like "run".
+	// Ref: https://spec.commonmark.org/0.31.2/#info-string
+	markdownFencePattern = "^\\s*(```+|~~~+)\\s*([A-Za-z0-9_+-]*)((?:[ \\t]+[^\\s`]+)*)\\s*$"
+)
+
+var (
+	markdownItem   = regexp.MustCompile(markdownItemPattern)   //tiger:allow-global compiled once
+	markdownLink   = regexp.MustCompile(markdownLinkPattern)   //tiger:allow-global compiled once
+	markdownInline = regexp.MustCompile(markdownInlinePattern) //tiger:allow-global compiled once
+	markdownFence  = regexp.MustCompile(markdownFencePattern)  //tiger:allow-global compiled once
+)
+
+// FencedBlock is one fenced code block.
+type FencedBlock struct {
+	Language string // the info string's first word: "bash", "js", or ""
+	Run      bool   // the info string's next word is "run": Givens runs the block itself
+	Code     string // exactly the code: no fences, no list indent
+	Closed   bool   // false when the fence never closes
+	Line     int    // the opening fence's line, counting from 1
+}
+
+// MarkdownStep is one top-level numbered item.
+type MarkdownStep struct {
+	Number int
+	Text   string        // the item's markdown, list number taken off, code blocks left out
+	Blocks []FencedBlock // its fenced code blocks, in order
+	Links  []string      // link targets, in order
+	Images []string      // image paths, in order
+	Inline []string      // inline code spans, in order
+}
+
+// MarkdownSetup is a whole markdown setup.
+type MarkdownSetup struct {
+	Intro string // the text before the first numbered item, trimmed
+	Steps []MarkdownStep
+}
+
+// ParseMarkdownSetup reads a markdown setup.
+func ParseMarkdownSetup(text string) (MarkdownSetup, error) {
+	assert.That(len(text) <= MarkdownSetupBytesMax*2, "the text stays bounded")
+	if len(text) > MarkdownSetupBytesMax {
+		return MarkdownSetup{}, fmt.Errorf("a markdown setup is at most %d bytes",
+			MarkdownSetupBytesMax)
+	}
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	setup := MarkdownSetup{Steps: make([]MarkdownStep, 0, 8)}
+	intro := make([]string, 0, 4)
+	var current *MarkdownStep
+	var open *FencedBlock
+	indent := 0
+	for index, line := range lines {
+		if open != nil {
+			open, indent = closeOrAdd(current, open, line, indent)
+			continue
+		}
+		if match := markdownItem.FindStringSubmatch(line); match != nil {
+			if len(setup.Steps) >= MarkdownStepsMax {
+				return MarkdownSetup{}, fmt.Errorf("a markdown setup has at most %d steps",
+					MarkdownStepsMax)
+			}
+			setup.Steps = append(setup.Steps, MarkdownStep{Number: len(setup.Steps) + 1,
+				Text: match[2]})
+			current = &setup.Steps[len(setup.Steps)-1]
+			continue
+		}
+		if current == nil {
+			intro = append(intro, line)
+			continue
+		}
+		if match := markdownFence.FindStringSubmatch(line); match != nil {
+			words := strings.Fields(match[3])
+			current.Blocks = append(current.Blocks, FencedBlock{Language: match[2],
+				Run: len(words) > 0 && words[0] == "run", Line: index + 1})
+			open, indent = &current.Blocks[len(current.Blocks)-1], leadingSpaces(line)
+			continue
+		}
+		current.Text += "\n" + strings.TrimSpace(line)
+	}
+	setup.Intro = strings.TrimSpace(strings.Join(intro, "\n"))
+	for index := range setup.Steps {
+		finishMarkdownStep(&setup.Steps[index])
+	}
+	assert.That(len(setup.Steps) <= MarkdownStepsMax, "steps stay bounded")
+	return setup, nil
+}
+
+// closeOrAdd ends an open code block at its closing fence, or adds a line to it with the
+// fence's indent taken off. It returns the block still open, or nil.
+func closeOrAdd(step *MarkdownStep, open *FencedBlock, line string,
+	indent int) (*FencedBlock, int) {
+	assert.That(step != nil, "a code block is inside a step")
+	assert.That(open != nil, "a block is open")
+	// A closing fence is three or more backticks or tildes, and nothing else.
+	if bare := strings.TrimSpace(line); len(bare) >= 3 && strings.Trim(bare, "`~") == "" {
+		open.Closed = true
+		return nil, 0
+	}
+	trimmed := strings.TrimLeft(line, " ")
+	if leadingSpaces(line) >= indent {
+		trimmed = line[indent:]
+	}
+	if open.Code == "" {
+		open.Code = trimmed
+	} else {
+		open.Code += "\n" + trimmed
+	}
+	return open, indent
+}
+
+// leadingSpaces counts the spaces a line starts with.
+func leadingSpaces(line string) int {
+	assert.That(len(line) <= MarkdownSetupBytesMax, "a line stays bounded")
+	count := len(line) - len(strings.TrimLeft(line, " "))
+	assert.That(count >= 0 && count <= len(line), "spaces are part of the line")
+	return count
+}
+
+// finishMarkdownStep trims a step's text and reads its links, images and inline code.
+func finishMarkdownStep(step *MarkdownStep) {
+	assert.That(step != nil, "there's a step to finish")
+	assert.That(step.Number > 0, "steps count from 1")
+	step.Text = strings.TrimSpace(step.Text)
+	for index := range step.Blocks {
+		step.Blocks[index].Code = strings.TrimRight(step.Blocks[index].Code, "\n")
+	}
+	for _, match := range markdownLink.FindAllStringSubmatch(step.Text, -1) {
+		if match[1] == "!" {
+			step.Images = append(step.Images, match[3])
+		} else {
+			step.Links = append(step.Links, match[3])
+		}
+	}
+	for _, match := range markdownInline.FindAllStringSubmatch(step.Text, -1) {
+		step.Inline = append(step.Inline, match[1])
+	}
+}
+
 // runBlocksIn reads a markdown setup's run blocks' code, a js block as the in_browser line it
 // runs as, so Drop in's checks read them as a script's lines. Empty when nothing runs.
 func runBlocksIn(path string) []string {
 	assert.That(path == "" || filepath.IsAbs(path), "a setup file is absolute")
-	assert.That(markdown.StepsMax > 0, "steps have a limit")
+	assert.That(MarkdownStepsMax > 0, "steps have a limit")
 	texts := make([]string, 0, 2)
 	if path == "" {
 		return texts
@@ -919,7 +1077,7 @@ func runBlocksIn(path string) []string {
 	if err != nil {
 		return texts
 	}
-	parsed, err := markdown.Parse(text)
+	parsed, err := ParseMarkdownSetup(text)
 	if err != nil {
 		return texts
 	}

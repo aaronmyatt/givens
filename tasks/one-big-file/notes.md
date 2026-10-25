@@ -693,3 +693,22 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - helpers_test.go is internal/app/helpers_test.go; lines_browser_test.go is
   helpers_browser_test.go. `cmd/givens` calls `app.ReadScript`.
 - big.go 6,846 lines (+115), big_helpers.go 1,084 (+185).
+
+## internal/markdown folds in (2026-10-25)
+- internal/markdown is gone. The reader (limits, patterns, `FencedBlock`, `MarkdownStep`,
+  `MarkdownSetup`, `ParseMarkdownSetup` and its three helpers) is in big_helpers.go before
+  runBlocksIn, under the package doc: Drop in's addMarkdownCards, runBlocksIn (Drop in, Share
+  setup, Mix shell) and `givens run` call it. `RenderedMarkdown` is the end of Drop in's
+  section (addMarkdownCards is its one caller); `PlainMarkdown` is the end of Use Givens from
+  the terminal's pointer section (printStep in cmd/givens/run.go is its one caller). Drop in's
+  and the pointer's opening comments say so.
+- Renames: `Parse` -> `ParseMarkdownSetup`, `Setup` -> `MarkdownSetup`, `Step` ->
+  `MarkdownStep` (beside project.Step), `Block` -> `FencedBlock` (model has CodeBlock, the card's
+  view), `Plain` -> `PlainMarkdown`, `Rendered` -> `RenderedMarkdown`, `TextBytesMax` ->
+  `MarkdownSetupBytesMax`, `StepsMax` -> `MarkdownStepsMax`, `finish` -> `finishMarkdownStep`,
+  and the patterns and regexps `item`, `link`, `inline`, `fence` get a `markdown` prefix. The
+  test `TestParse` -> `TestParseMarkdownSetup`. `closeOrAdd` and `leadingSpaces` kept theirs.
+- Three lines the longer names pushed past 100 columns were wrapped (closeOrAdd's signature and
+  two errors in ParseMarkdownSetup).
+- markdown_test.go is internal/app/markdown_test.go; run_test.go is markdown_run_test.go.
+- big.go 6,884 lines (+38), big_helpers.go 1,242 (+158).
