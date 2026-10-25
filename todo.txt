@@ -48,7 +48,6 @@ x 2026-10-25 2026-10-25 One big file: decide whether to grow the pilot to trust-
 2026-10-25 One big file: move Gherkin files into big.go ref:one-big-file
 2026-10-25 One big file: move Open a project into big.go ref:one-big-file
 2026-10-25 One big file: move Keep runs off main into big.go ref:one-big-file
-2026-10-25 One big file: move Share setup between scenarios into big.go ref:one-big-file
 2026-10-25 One big file: move Write stories and scenarios into big.go, in 3 commits ref:one-big-file
 2026-10-25 One big file: move Mix shell, browser and hand steps into big.go ref:one-big-file
 2026-10-25 One big file: move Drop into a scenario into big.go, in 5 commits ref:one-big-file
@@ -58,3 +57,4 @@ x 2026-10-25 2026-10-25 One big file: move Tags into big.go ref:one-big-file —
 x 2026-10-25 2026-10-25 One big file: pointer sections for The kit, Use Givens from the terminal, Work in the terminal ref:one-big-file — done: three pointer sections, no code moved; install.go and InstallCommand serve only the archived Mac app, so stayed out — see tasks/one-big-file/notes.md
 2026-10-25 Remove dead install code left from the archived Mac app: install.go, InstallCommand in windows.go, and the writableFolders test; only _archive/ calls them — found by the one-big-file pointer slice
 x 2026-10-25 2026-10-25 One big file: move Update the kit and Search everything in parallel worktrees, count conflicts ref:one-big-file — done: both slices moved at once in two worktrees; big.go and big_helpers.go merged by themselves, only notes.md clashed; Update the kit e8f1c83 (kitOffers seam), Search f253d32 (SearchResults, uniqueSteps to helpers) — see tasks/one-big-file/notes.md
+x 2026-10-25 2026-10-25 One big file: move Share setup between scenarios into big.go ref:one-big-file — done: shared.go, helper_edit.go, needs.go into the section; Helpers, RequiredCommands and the bash syntax-check limits to big_helpers.go (Drop in, Search, Views, Write stories use them); be17b0b — see tasks/one-big-file/notes.md
