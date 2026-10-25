@@ -45,12 +45,13 @@ type Window struct {
 	selectedStep       string   // the step result on show, as its text, or ""
 	folderPicker       bool     // "Open folder…" showed the folder picker
 
-	// A branch's window shows a read-only copy of another branch's capabilities; see branch.go.
+	// A branch's window shows a read-only copy of another branch's capabilities; see Open a
+	// project in big.go.
 	branch        string // the branch on show, or "" for the checked-out folder
 	branchOrigin  string // the capabilities folder the branch's copy came from, or ""
 	branchProblem string // why the last OpenBranch opened nothing, or ""
 
-	// Runs kept off main, in refs/givens/runs; see runs_off_main.go.
+	// Runs kept off main, in refs/givens/runs; see Keep runs off main in big.go.
 	runStore     *runref.Store // the repository's runs ref, or nil without git and a remote
 	runsUnshared int           // runs recorded here that the remote doesn't have yet
 	runsNote     string        // said once after the runs moved, until the next Select

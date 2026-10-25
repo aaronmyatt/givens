@@ -306,3 +306,28 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   `Launch`); nothing live opens the welcome window, so its "Open folder…" and Recents are
   reached only from there. They moved in as the plan says, with the opening comment saying so.
   Deleting them with `InstallCommand` is the developer's call.
+
+## Keep runs off main moves in (2026-10-25)
+- runs_off_main.go is gone. All of it is the section, between Gherkin files and Open a project:
+  the offers, messages, `ErrRunsOnMain` and `offMainText` at the top; `keepRun`, `writeRun`,
+  `KeepsRunsOffMain`, `keepsRunsOffMain` and `afterRunsChange` under the recording scenarios
+  (kept off main by default, without a remote, two devices, remote can't be reached, old runs
+  dropped); the sync on open and `runsMessages` under "Runs show up on another device" and
+  "Open a project whose remote doesn't answer"; `runsOffers`, `SyncRuns` and `syncRuns` under
+  "Share runs once the remote is back"; `runsOnMain`, `askMoveRunsOffMain` and `moveRunsOffMain`
+  under "Move runs off main"; `RunLimits` and `SetRunLimits` under "Change the limits".
+  runs_off_main_test.go stays.
+- Seam cut: Drop in's `RecordRun` (dropin_record.go) chose where a run goes in an if/else. It's
+  now `keepRun` in the section, which `RecordRun` calls; dropin_record.go no longer imports
+  runref. With the whole choice in the seam, `writeRun`, `keepsRunsOffMain` and
+  `afterRunsChange` have no caller outside the section, so nothing went to big_helpers.go.
+- Not cut: `openRunStore` in Open a project's `Open`, `runs.LinkRefCopy` in its `OpenBranch`
+  ("Another branch shows runs kept off main", which has no heading here), `pollRunsSync` in
+  `refresh`, and core glue's calls; the opening comment names them.
+- window.go's field comments pointed at branch.go and runs_off_main.go; they now point at the
+  sections.
+- Section 342 lines, big_helpers.go +0. big.go 2,659, big_helpers.go 561. 14 of 17.
+- Surprise: `writeRun` writes Drop in's note and attached files as well as the run line, so
+  it's Drop in's record as much as this story's. It sits here because `keepRun` is its only
+  caller; the narrower seam (only the off-main branch) would have sent it, `keepsRunsOffMain`
+  and `afterRunsChange` to big_helpers.go.
