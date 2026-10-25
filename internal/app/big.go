@@ -24,8 +24,11 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,11 +41,13 @@ import (
 	"unicode/utf8"
 
 	"givens/internal/assert"
+	"givens/internal/branch"
 	"givens/internal/helpers"
 	"givens/internal/kit"
 	"givens/internal/project"
 	"givens/internal/runs"
 	"givens/internal/slug"
+	"givens/internal/starter"
 	"givens/internal/tags"
 )
 
@@ -261,6 +266,464 @@ func (w *Window) moveToOwnCapability() error {
 		return err
 	}
 	return w.reload()
+}
+
+// Feature: Open a project
+//
+// capabilities/open-a-project. Opening a folder finds its capabilities folder, reads it into a
+// window and watches it; nothing is copied, so files other tools write show up. The loading
+// every story reads through is in big_helpers.go: findCapabilities, reload, refresh (which
+// "Files written by other tools appear" runs on), findCapability and findScenario; so is
+// writable, which every change asks of a branch's window. Code elsewhere: core glue shows
+// MessageNoCapabilities, Recents and branchMessages (Snapshot, snapshot.go), and offers and
+// runs "Create capabilities folder" and "Open folder…" and cuts a branch's offers with readOnly
+// (allOffers and Choose, offers.go). createCapabilities writes with writeNew, Write stories'
+// (authoring.go). Open starts Keep runs off main's sync (openRunStore), and OpenBranch links a
+// branch's copy to the ref the project keeps runs in (runs.LinkRefCopy). App's picker and
+// Window's branch fields are in app.go and window.go's types; internal/branch copies a branch
+// out of git. The terminal scenarios are openFolder in cmd/givens/main.go and the TUI. Launch,
+// OpenRecent, OpenDropped and UseFolderPicker served the archived Mac app: only
+// _archive/internal/serve (and branch_test.go, for Launch) calls them, and no scenario does.
+
+// Limits for Open a project.
+const (
+	// RecentsMax bounds the welcome window's "Recent" list.
+	RecentsMax = 16
+	// DroppedPathsMax bounds how many folders one drop on the Dock icon can open.
+	DroppedPathsMax = WindowsMax
+)
+
+// Recents lists the projects opened before, newest first, as the capabilities folder paths
+// they were opened with. It's read from AppDataDir, so it survives a quit and never lives in a
+// project. Needed by "Reopen a recent project" in capabilities/open-a-project.
+func (a *App) Recents() []string {
+	assert.That(a != nil, "recents runs on an app")
+	assert.That(a.config.AppDataDir != "", "recents live in the app's data folder")
+	recents, err := a.folders(recentsFileName)
+	if err != nil {
+		return []string{}
+	}
+	return recents
+}
+
+// recentsFileName holds Recents, newest first.
+const recentsFileName = "recents.txt"
+
+// rememberRecent puts a folder first in Recents, keeping RecentsMax.
+func (a *App) rememberRecent(folder string) error {
+	assert.That(a != nil, "remember recent runs on an app")
+	assert.That(filepath.IsAbs(folder), "a recent folder is absolute")
+	recents := slices.DeleteFunc(a.Recents(), func(other string) bool { return other == folder })
+	recents = append([]string{folder}, recents...)
+	return a.writeFolders(recentsFileName, recents[:min(len(recents), RecentsMax)])
+}
+
+// Launch starts Givens: it reopens the windows open at the last quit, or shows the welcome
+// window. See capabilities/open-a-project.
+func (a *App) Launch() error {
+	assert.That(a != nil, "launch runs on an app")
+	assert.That(a.config.AppDataDir != "", "the app knows where its data lives")
+	// Branch windows aren't reopened after quitting, so every copy left from before is stale.
+	if err := os.RemoveAll(filepath.Join(a.config.AppDataDir, branchesDirName)); err != nil {
+		return err
+	}
+	open, err := a.folders(openWindowsFileName)
+	if err != nil {
+		return err
+	}
+	// Reopen back to front, so the window in front at the quit ends up in front again.
+	for index := len(open) - 1; index >= 0; index-- {
+		if _, err := os.Stat(open[index]); err != nil {
+			continue
+		}
+		if _, err := a.Open(open[index]); err != nil {
+			return err
+		}
+	}
+	if len(a.windows) == 0 {
+		a.showWelcome()
+	}
+	return nil
+}
+
+// Welcome window text and action.
+const (
+	OfferOpenFolder = "Open folder…"
+	LabelRecent     = "Recent"
+)
+
+// showWelcome opens the welcome window, unless one is open.
+func (a *App) showWelcome() {
+	assert.That(a != nil, "show welcome runs on an app")
+	assert.That(len(a.windows) < WindowsMax, "there's room for a window")
+	for _, window := range a.windows {
+		if window.kind == WindowWelcome {
+			return
+		}
+	}
+	a.windowsEver++
+	a.windows = append([]*Window{{app: a, id: a.windowsEver, kind: WindowWelcome}}, a.windows...)
+}
+
+// closeWelcome closes the welcome window once a project opens.
+func (a *App) closeWelcome() {
+	assert.That(a != nil, "close welcome runs on an app")
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
+	a.windows = slices.DeleteFunc(a.windows, func(window *Window) bool {
+		return window.kind == WindowWelcome
+	})
+}
+
+// OpenRecent opens one of Recents from the welcome window, like clicking it under "Recent".
+// path is an entry of Recents. Needed by "Reopen a recent project".
+func (w *Window) OpenRecent(path string) (*Window, error) {
+	assert.That(w != nil, "open recent runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	assert.That(filepath.IsAbs(path), "a recent project has an absolute path")
+	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
+	return w.app.Open(path)
+}
+
+// FolderPickerShown is true while the folder picker that "Open folder…" shows is up. The Swift
+// UI draws the real NSOpenPanel for it. Needed by "Start with nothing open".
+// Ref: https://developer.apple.com/documentation/appkit/nsopenpanel
+func (w *Window) FolderPickerShown() bool {
+	assert.That(w != nil, "folder picker runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	return w.folderPicker
+}
+
+// FolderPicker shows the system's folder picker. The Swift UI's draws NSOpenPanel; under
+// serve it's an effect the app carries out.
+type FolderPicker interface {
+	ShowFolderPicker() error
+}
+
+// UseFolderPicker sets what shows the folder picker for "Open folder…".
+func (a *App) UseFolderPicker(picker FolderPicker) error {
+	assert.That(a != nil, "use folder picker runs on an app")
+	assert.That(picker != nil, "a picker is given")
+	a.picker = picker
+	return nil
+}
+
+// openFolder is "Open folder…": it shows the folder picker.
+func (w *Window) openFolder() error {
+	assert.That(w != nil, "open folder runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	w.folderPicker = true
+	if w.app.picker == nil {
+		return nil
+	}
+	return w.app.picker.ShowFolderPicker()
+}
+
+// CloseWindow closes this window. Closing the last project window leaves nothing to reopen
+// at the next launch. A branch's window takes its copy with it. Needed by "Reopen a recent
+// project", whose last quit had nothing open.
+func (w *Window) CloseWindow() error {
+	assert.That(w != nil, "close runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.session != nil {
+		w.session.removeArguments()
+	}
+	w.app.windows = slices.DeleteFunc(w.app.windows, func(other *Window) bool {
+		return other == w
+	})
+	if w.branch != "" {
+		return w.removeBranchCopy()
+	}
+	return nil
+}
+
+// OpenDropped opens folders dropped on Givens's Dock icon, launching first if needed. Each
+// folder opens like Open does. The Swift UI calls it from application(_:open:).
+// Needed by "Drop a folder on Givens".
+// Ref: https://developer.apple.com/documentation/appkit/nsapplicationdelegate/application(_:open:)
+func (a *App) OpenDropped(paths []string) error {
+	assert.That(a != nil, "open dropped runs on an app")
+	assert.That(len(paths) > 0, "a drop holds at least one folder")
+	assert.That(len(paths) <= DroppedPathsMax, "a drop fits DroppedPathsMax")
+	if len(a.windows) == 0 {
+		if err := a.Launch(); err != nil {
+			return err
+		}
+	}
+	for _, path := range paths {
+		if _, err := a.Open(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Scenario: Open a documented project
+// Scenario: Open the project folder instead
+// Scenario: Open a folder with no capabilities
+
+// Open opens a capabilities folder, or a project folder holding one, in a window. Opening a
+// project that's already open brings its window to the front instead.
+func (a *App) Open(path string) (*Window, error) {
+	assert.That(a != nil, "open runs on an app")
+	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
+	folder, found, err := findCapabilities(path)
+	if err != nil {
+		return nil, err
+	}
+	for _, window := range a.windows {
+		if window.kind == WindowProject && window.path == folder {
+			a.toFront(window)
+			return window, window.reload()
+		}
+	}
+	if len(a.windows) >= WindowsMax {
+		return nil, fmt.Errorf("%d windows are open, the most Givens keeps", WindowsMax)
+	}
+	a.windowsEver++
+	window := &Window{app: a, id: a.windowsEver, kind: WindowProject, path: folder, found: found}
+	if err := window.reload(); err != nil {
+		return nil, err
+	}
+	window.openRunStore()
+	if err := a.rememberRecent(folder); err != nil {
+		return nil, err
+	}
+	a.closeWelcome()
+	a.windows = append([]*Window{window}, a.windows...)
+	assert.That(a.windows[0] == window, "an opened window is in front")
+	return window, nil
+}
+
+// toFront moves an open window to the front.
+func (a *App) toFront(window *Window) {
+	assert.That(window != nil, "a window is given")
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
+	others := make([]*Window, 0, len(a.windows))
+	for _, other := range a.windows {
+		if other != window {
+			others = append(others, other)
+		}
+	}
+	a.windows = append([]*Window{window}, others...)
+}
+
+// Scenario: Create a capabilities folder
+
+// A project window with no capabilities folder says so and offers to make one.
+const (
+	MessageNoCapabilities = "No capabilities here yet"
+	OfferCreateFolder     = "Create capabilities folder"
+	// gitattributes keeps both branches' run lines in a merge.
+	// Ref: https://git-scm.com/docs/gitattributes#_built_in_merge_drivers
+	gitattributes = "runs/** merge=union\n"
+)
+
+// createCapabilities makes the window's project a capabilities folder: GIVENS.md, the kit,
+// the "Add a story" starter with its setup scripts, and .gitattributes for runs/. It writes
+// nothing over a file that's there. See "Create a capabilities folder".
+func (w *Window) createCapabilities() error {
+	assert.That(w != nil, "create runs on a window")
+	assert.That(!w.found, "the window has no capabilities folder yet")
+	root := filepath.Join(w.path, capabilitiesFolderName)
+	if _, err := os.Stat(root); err == nil {
+		return errors.New("there's already a capabilities folder here")
+	}
+	files := map[string]string{
+		"GIVENS.md":         starter.Guide(),
+		"_shared/givens.sh": kit.Script,
+		".gitattributes":    gitattributes,
+	}
+	for relative, text := range files {
+		if err := writeNew(filepath.Join(root, relative), text); err != nil {
+			return err
+		}
+	}
+	// Ref: https://pkg.go.dev/io/fs#WalkDir
+	err := fs.WalkDir(starter.Files(), "add-a-story", func(path string, entry fs.DirEntry,
+		err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		text, err := fs.ReadFile(starter.Files(), path)
+		if err != nil {
+			return err
+		}
+		return writeNew(filepath.Join(root, filepath.FromSlash(path)), string(text))
+	})
+	if err != nil {
+		return err
+	}
+	w.path, w.found = root, true
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.app.rememberRecent(root)
+}
+
+// Scenario: Read capabilities from another branch
+// Scenario: Open a branch that doesn't exist
+
+// Another branch's capabilities, read without checking that branch out. internal/branch copies
+// the folder out of git into Givens's data folder; the window that shows the copy is read
+// only, since its setup scripts belong to code that isn't checked out.
+
+// Messages about branches.
+const (
+	// MessageNoBranch starts the message for a branch the repository doesn't have.
+	MessageNoBranch = "No branch called "
+	// messageReadOnly starts the message across the top of a branch's window.
+	messageReadOnly = "Read only: "
+)
+
+// readOnlyOffers are the only offers a branch's window keeps: none of them writes a file or
+// runs a script.
+func readOnlyOffers() []string { return []string{OfferCopy, OfferCopySteps, OfferCancel} }
+
+// Branches lists the branches of the git repository holding this window's project: local ones
+// first, then remote ones. Needed by "Read capabilities from another branch".
+func (w *Window) Branches() ([]string, error) {
+	assert.That(w != nil, "branches runs on a window")
+	assert.That(w.kind == WindowProject, "only a project window has branches")
+	if w.project == nil {
+		return []string{}, nil
+	}
+	return branch.List(w.origin())
+}
+
+// OpenBranch opens this project's capabilities folder as it is on name, read only, in a new
+// window in front. A branch the repository doesn't have, or one without the folder, is said
+// in this window instead, and no window opens. Needed by "Read capabilities from another
+// branch" and "Open a branch that doesn't exist".
+func (w *Window) OpenBranch(name string) (*Window, error) {
+	assert.That(w != nil, "open branch runs on a window")
+	assert.That(w.kind == WindowProject, "only a project window has branches")
+	w.branchProblem = ""
+	key := slug.Of(name)
+	if key == "" || len(name) > branch.NameLengthMax {
+		w.branchProblem = MessageNoBranch + name
+		return nil, nil
+	}
+	copied, err := branch.Extract(w.origin(), name, w.app.branchCopy(w.origin(), name))
+	switch {
+	case errors.Is(err, branch.ErrNoBranch):
+		w.branchProblem = MessageNoBranch + name
+		return nil, nil
+	case errors.Is(err, branch.ErrNoCapabilities):
+		w.branchProblem = fmt.Sprintf("%s has no capabilities folder on %s", w.origin(), name)
+		return nil, nil
+	case err != nil:
+		return nil, err
+	}
+	// Runs aren't kept per branch: the branch's window reads the ref this project keeps.
+	if err := runs.LinkRefCopy(copied, w.origin()); err != nil {
+		return nil, err
+	}
+	return w.app.openBranchWindow(copied, w.origin(), name)
+}
+
+// openBranchWindow shows a branch's copied capabilities folder in a read-only window in front,
+// or brings its window forward if it's already open. It isn't added to Recents: the copy is
+// throwaway.
+func (a *App) openBranchWindow(folder string, origin string, name string) (*Window, error) {
+	assert.That(filepath.IsAbs(folder), "the copy is at an absolute path")
+	assert.That(name != "", "a branch has a name")
+	for _, window := range a.windows {
+		if window.kind == WindowProject && window.path == folder {
+			a.toFront(window)
+			return window, window.reload()
+		}
+	}
+	if len(a.windows) >= WindowsMax {
+		return nil, fmt.Errorf("%d windows are open, the most Givens keeps", WindowsMax)
+	}
+	a.windowsEver++
+	window := &Window{
+		app: a, id: a.windowsEver, kind: WindowProject, path: folder, found: true,
+		branchOrigin: origin, branch: name,
+	}
+	if err := window.reload(); err != nil {
+		return nil, err
+	}
+	a.closeWelcome()
+	a.windows = append([]*Window{window}, a.windows...)
+	assert.That(a.windows[0] == window, "an opened window is in front")
+	return window, nil
+}
+
+// branchesDirName is the folder under Givens's data folder that holds branch copies.
+const branchesDirName = "branches"
+
+// branchCopy is where a branch's capabilities are copied to:
+// <app data>/branches/<hash of origin>/<branch slug>-<hash of name>. The name's own hash keeps
+// "a/b" and "a-b", which slug the same, in different folders.
+func (a *App) branchCopy(origin string, name string) string {
+	assert.That(filepath.IsAbs(origin), "the origin is an absolute path")
+	assert.That(slug.Of(name) != "", "a branch's name has letters or digits")
+	return filepath.Join(a.config.AppDataDir, branchesDirName, shortHash(origin),
+		slug.Of(name)+"-"+shortHash(name))
+}
+
+// removeBranchCopy deletes a closed branch window's copy, and its origin's folder once that's
+// empty. The copy is never reopened: opening the branch again copies it afresh.
+func (w *Window) removeBranchCopy() error {
+	assert.That(w.branch != "", "only a branch's window has a copy")
+	assert.That(w.branchOrigin != "", "a branch's window knows its origin")
+	copied := w.app.branchCopy(w.branchOrigin, w.branch)
+	if err := os.RemoveAll(copied); err != nil {
+		return err
+	}
+	// Remove fails on a folder that still holds another branch's copy, which is meant.
+	// Ref: https://pkg.go.dev/os#Remove
+	_ = os.Remove(filepath.Dir(copied))
+	return nil
+}
+
+// origin is the capabilities folder this window's project lives in: for a branch's window,
+// the folder it was copied from.
+func (w *Window) origin() string {
+	assert.That(w != nil, "origin runs on a window")
+	assert.That(w.branch == "" || w.branchOrigin != "", "a branch's window knows its origin")
+	if w.branch != "" {
+		return w.branchOrigin
+	}
+	return w.path
+}
+
+// branchMessages say a branch's window is read only, and why a branch didn't open.
+func (w *Window) branchMessages() []string {
+	assert.That(w != nil, "branch messages runs on a window")
+	messages := make([]string, 0, 2)
+	if w.branch != "" {
+		messages = append(messages, messageReadOnly+w.branch+" isn't checked out, so its "+
+			"setup scripts don't run here")
+	}
+	if w.branchProblem != "" {
+		messages = append(messages, w.branchProblem)
+	}
+	assert.That(len(messages) <= 2, "branch messages stay bounded")
+	return messages
+}
+
+// readOnly cuts offers down to readOnlyOffers in a branch's window.
+func (w *Window) readOnly(offers []string) []string {
+	assert.That(w != nil, "read only runs on a window")
+	assert.That(len(offers) <= NameLengthMax, "offers stay bounded")
+	if w.branch == "" {
+		return offers
+	}
+	return slices.DeleteFunc(offers, func(offer string) bool {
+		return !slices.Contains(readOnlyOffers(), offer)
+	})
+}
+
+// shortHash names a folder after text, briefly: the first 12 hex digits of its SHA-256.
+// Ref: https://pkg.go.dev/crypto/sha256#Sum256
+func shortHash(text string) string {
+	assert.That(text != "", "something is hashed")
+	sum := sha256.Sum256([]byte(text))
+	short := hex.EncodeToString(sum[:])[:12]
+	assert.That(len(short) == 12, "the hash is 12 digits")
+	return short
 }
 
 // Feature: Read a capability
@@ -1474,9 +1937,9 @@ func (s *Session) trustThisProject() error {
 //
 // capabilities/update-the-kit. Givens ships the kit (internal/kit) and keeps a project's
 // capabilities/_shared/givens.sh in step with it by its version line. Code elsewhere: core
-// glue shows kitMessages under the list (Snapshot, snapshot.go), adds kitOffers and runs
-// updateKit on "Update kit" (allOffers and Choose, offers.go), and calls restoreKit whenever
-// the project is read (reload and refresh, project.go). App's kits field is in app.go and
+// glue shows kitMessages under the list (Snapshot, snapshot.go), and adds kitOffers and runs
+// updateKit on "Update kit" (allOffers and Choose, offers.go); reload and refresh
+// (big_helpers.go) call restoreKit whenever the project is read. App's kits field is in app.go and
 // Window's kitProblem in window.go; internal/kit reads a kit's version; "Compare" opens the
 // kit in Write stories' editor (Edit, editor.go); the TUI's "u" key is internal/tui/browse.go.
 

@@ -275,3 +275,34 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   function the scenario page shares; the opening comment points at it.
 - No file deleted. Section 163 lines, big_helpers.go +30. big.go 1477, big_helpers.go 325.
   11 of 17.
+
+## Open a project moves in (2026-10-25)
+- create.go and branch.go are gone. The section, between Gherkin files and Read a capability,
+  holds at its top windows.go's limits, `Recents` and `rememberRecent`, then the windows
+  Givens keeps (`Launch`, the welcome window, `OpenRecent`, the folder picker, `CloseWindow`,
+  `OpenDropped`); `Open` and `toFront` from app.go under "Open a documented project", "Open the
+  project folder instead" and "Open a folder with no capabilities"; create.go under "Create a
+  capabilities folder"; and branch.go, bar `writable`, under "Read capabilities from another
+  branch" and "Open a branch that doesn't exist".
+- To big_helpers.go: project.go's loading (`capabilitiesFolderName`, `findCapabilities`,
+  `reload`, `refresh`, `findCapability`, `findScenario`, `findIn`), which every story reads
+  through, and `writable`, which Share setup's and Write stories' changes call.
+- No seams cut. One-line calls into other stories stay where they are and the opening comment
+  names them: `openRunStore` in `Open` and `runs.LinkRefCopy` in `OpenBranch` (Keep runs off
+  main), `writeNew` in `createCapabilities` (Write stories' authoring.go), and core glue's calls
+  (snapshot.go, offers.go).
+- Stayed put: `New`, `Windows`, `Front`, `Quit` and `openWindowsFileName` in app.go, the App
+  API every story's steps use; project.go's warnings (Gherkin files') and `capabilityOf` and
+  `scenarioOf`, which turn a loaded capability into what a window shows and call those
+  warnings. windows.go keeps `InstallCommand`, dead as noted above, and `givensCommand`, Drop
+  in's.
+- `OpenBranch` stays in the section: Keep runs off main reaches it only from its steps
+  ("Another branch shows runs kept off main"), and test callers don't count.
+- Update the kit's opening comment called reload and refresh core glue in project.go; it now
+  says big_helpers.go.
+- Section 458 lines, big_helpers.go +150. big.go 2,316, big_helpers.go 561. 13 of 17.
+- Surprise: much of windows.go has no live scenario. `Launch`, `OpenRecent`, `OpenDropped` and
+  `UseFolderPicker` are called only by `_archive/internal/serve` (and branch_test.go calls
+  `Launch`); nothing live opens the welcome window, so its "Open folder…" and Recents are
+  reached only from there. They moved in as the plan says, with the opening comment saying so.
+  Deleting them with `InstallCommand` is the developer's call.

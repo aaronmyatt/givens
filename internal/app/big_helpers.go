@@ -26,7 +26,9 @@ import (
 	"givens/internal/helpers"
 	"givens/internal/project"
 	"givens/internal/runs"
+	"givens/internal/slug"
 	"givens/internal/spec"
+	"givens/internal/watch"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -408,4 +410,152 @@ func slugClash(capability project.Capability, scenario project.Scenario) string 
 		}
 	}
 	return ""
+}
+
+// capabilitiesFolderName is the folder Open looks for inside a project folder.
+const capabilitiesFolderName = "capabilities"
+
+// findCapabilities resolves what Open was given to a capabilities folder: the folder itself
+// when it holds capabilities or is named "capabilities", else its "capabilities" subfolder.
+// found is false when neither is there; path is then the absolute folder given.
+func findCapabilities(path string) (string, bool, error) {
+	assert.That(path != "", "a path is given")
+	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", false, err
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return "", false, err
+	}
+	if !info.IsDir() {
+		return "", false, errors.New(absolute + " isn't a folder")
+	}
+	inside := filepath.Join(absolute, capabilitiesFolderName)
+	if info, err := os.Stat(inside); err == nil && info.IsDir() {
+		return inside, true, nil
+	}
+	if filepath.Base(absolute) == capabilitiesFolderName {
+		return absolute, true, nil
+	}
+	loaded, err := project.Load(absolute)
+	if err != nil {
+		return "", false, err
+	}
+	return absolute, len(loaded.Capabilities) > 0, nil
+}
+
+// reload reads the window's capabilities folder again and starts watching it. A window with
+// no capabilities folder has no project.
+func (w *Window) reload() error {
+	assert.That(w != nil, "reload runs on a window")
+	assert.That(w.kind == WindowProject, "only a project window has a project")
+	if !w.found {
+		w.project, w.watcher = nil, nil
+		return nil
+	}
+	w.restoreKit()
+	// The watcher's first look comes before the load, so a write in between is seen next time.
+	watcher, err := watch.New(w.path, time.Now())
+	if err != nil {
+		return err
+	}
+	loaded, err := project.Load(w.path)
+	if err != nil {
+		return err
+	}
+	w.app.withoutTrashed(loaded)
+	w.project, w.watcher, w.statuses, w.helpers = loaded, watcher, nil, nil
+	w.histories, w.index, w.searchMemo = nil, nil, nil
+	return nil
+}
+
+// refresh reloads the project when another tool changed its files. Givens keeps no copy of
+// its own, so every read of a window starts here, and looks at the files each time: a step
+// that writes a file and reads the window at once must see the write. While a snapshot is
+// being built it looks once, not once per part. A folder that can't be read keeps showing what
+// was last read.
+func (w *Window) refresh() {
+	assert.That(w != nil, "refresh runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	w.pollRunsSync()
+	if w.watcher == nil || w.holdRefresh {
+		return
+	}
+	changed, err := w.watcher.Look(time.Now())
+	if err != nil || !changed {
+		return
+	}
+	w.statuses, w.helpers, w.histories, w.index, w.searchMemo = nil, nil, nil, nil, nil
+	w.restoreKit()
+	if loaded, err := project.Load(w.path); err == nil {
+		w.app.withoutTrashed(loaded)
+		w.project = loaded
+	}
+}
+
+// findCapability finds a capability by its name or slug.
+func (w *Window) findCapability(name string) (project.Capability, bool) {
+	assert.That(w != nil, "find runs on a window")
+	assert.That(name != "", "a capability has a name")
+	w.refresh()
+	if w.project == nil {
+		return project.Capability{}, false
+	}
+	for _, capability := range w.project.Capabilities {
+		if capability.Name == name || capability.Slug == name {
+			return capability, true
+		}
+	}
+	return project.Capability{}, false
+}
+
+// findScenario finds a scenario by its name, "Capability/Scenario", or its run key. An exact
+// name wins over a slug, so two names with the same slug can still each be found.
+func (w *Window) findScenario(name string) (project.Scenario, bool) {
+	assert.That(w != nil, "find runs on a window")
+	assert.That(name != "", "a scenario has a name")
+	w.refresh()
+	if w.project == nil {
+		return project.Scenario{}, false
+	}
+	if capabilityName, scenarioName, ok := strings.Cut(name, "/"); ok && scenarioName != "" {
+		if found, ok := w.findIn(capabilityName, scenarioName); ok {
+			return found, true
+		}
+	}
+	return w.findIn("", name)
+}
+
+// findIn finds a scenario by exact name, then by slug, in one capability or, for "", in any.
+func (w *Window) findIn(capabilityName string, name string) (project.Scenario, bool) {
+	assert.That(w.project != nil, "find in runs on a loaded project")
+	assert.That(name != "", "a scenario has a name")
+	want := slug.Of(name)
+	for _, bySlug := range []bool{false, true} {
+		for _, capability := range w.project.Capabilities {
+			if capabilityName != "" && capability.Name != capabilityName &&
+				capability.Slug != capabilityName {
+				continue
+			}
+			for _, scenario := range capability.Scenarios {
+				if (!bySlug && scenario.Name == name) || (bySlug && scenario.Slug == want) {
+					return scenario, true
+				}
+			}
+		}
+	}
+	return project.Scenario{}, false
+}
+
+// writable refuses a change in a branch's window. The UI doesn't offer one there; this stops
+// a Needs call or a CLI one that asks anyway.
+func (w *Window) writable() error {
+	assert.That(w != nil, "writable runs on a window")
+	assert.That(w.branch == "" || w.branchOrigin != "", "a branch's window knows its origin")
+	if w.branch != "" {
+		return fmt.Errorf("%s @ %s: %w", filepath.Base(w.branchOrigin), w.branch, ErrReadOnly)
+	}
+	return nil
 }

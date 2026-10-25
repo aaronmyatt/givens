@@ -10,7 +10,6 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"givens/internal/assert"
@@ -93,52 +92,6 @@ func New(config Config) (*App, error) {
 	assert.That(config.Trash != nil, "the app has a trash")
 	assert.That(config.Clock != nil, "the app has a clock")
 	return &App{config: config, windows: make([]*Window, 0, WindowsMax)}, nil
-}
-
-// Open opens a capabilities folder, or a project folder holding one, in a window. Opening a
-// project that's already open brings its window to the front instead.
-func (a *App) Open(path string) (*Window, error) {
-	assert.That(a != nil, "open runs on an app")
-	assert.That(len(path) <= PathLengthMax, "the path fits PathLengthMax")
-	folder, found, err := findCapabilities(path)
-	if err != nil {
-		return nil, err
-	}
-	for _, window := range a.windows {
-		if window.kind == WindowProject && window.path == folder {
-			a.toFront(window)
-			return window, window.reload()
-		}
-	}
-	if len(a.windows) >= WindowsMax {
-		return nil, fmt.Errorf("%d windows are open, the most Givens keeps", WindowsMax)
-	}
-	a.windowsEver++
-	window := &Window{app: a, id: a.windowsEver, kind: WindowProject, path: folder, found: found}
-	if err := window.reload(); err != nil {
-		return nil, err
-	}
-	window.openRunStore()
-	if err := a.rememberRecent(folder); err != nil {
-		return nil, err
-	}
-	a.closeWelcome()
-	a.windows = append([]*Window{window}, a.windows...)
-	assert.That(a.windows[0] == window, "an opened window is in front")
-	return window, nil
-}
-
-// toFront moves an open window to the front.
-func (a *App) toFront(window *Window) {
-	assert.That(window != nil, "a window is given")
-	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
-	others := make([]*Window, 0, len(a.windows))
-	for _, other := range a.windows {
-		if other != window {
-			others = append(others, other)
-		}
-	}
-	a.windows = append([]*Window{window}, others...)
 }
 
 // Windows lists the open windows, front first.
