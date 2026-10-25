@@ -14,7 +14,15 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # Direct dependencies allowed in go.mod. Tiger Style: "a zero dependencies policy"; adding one
 # means adding it here, on purpose, in review.
 # Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#dependencies-and-tooling
-allowed_dependencies='^(github\.com/cucumber/godog|github\.com/cucumber/gherkin/go/v[0-9]+|github\.com/cucumber/messages/go/v[0-9]+|golang\.org/x/tools)$'
+# chromedp and cdproto: the kit's browser functions drive Chrome over the DevTools Protocol, a
+# WebSocket protocol the standard library has no client for (capabilities/
+# mix-shell-browser-and-hand-steps). chromedp's only other dependency is go-json-experiment.
+# Ref: https://github.com/chromedp/chromedp
+# bubbletea, bubbles and lipgloss (v2, at charm.land): the givens command's TUI, where a Drop
+# in shows live output, cards, offers and a checklist at once; by hand, that's a terminal
+# state machine of our own (capabilities/work-in-the-terminal).
+# Ref: https://github.com/charmbracelet/bubbletea
+allowed_dependencies='^(charm\.land/(bubbletea|bubbles|lipgloss)/v2|github\.com/cucumber/godog|github\.com/cucumber/gherkin/go/v[0-9]+|github\.com/cucumber/messages/go/v[0-9]+|golang\.org/x/tools|github\.com/chromedp/chromedp|github\.com/chromedp/cdproto)$'
 
 check_fmt() {
   local unformatted
