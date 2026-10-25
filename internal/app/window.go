@@ -54,6 +54,7 @@ type Window struct {
 	runStore     *runref.Store // the repository's runs ref, or nil without git and a remote
 	runsUnshared int           // runs recorded here that the remote doesn't have yet
 	runsNote     string        // said once after the runs moved, until the next Select
+	runsSync     chan error    // the sync on open's result, until it's taken in; nil after
 }
 
 // SidebarItem is one line in a project window's sidebar.
@@ -81,7 +82,7 @@ type Scenario struct {
 	Capability string   `json:"capability"` // the capability's name
 	Rule       string   `json:"rule"`       // the Rule: block it's under, or ""
 	Error      bool     `json:"error"`      // tagged @error
-	Todo       bool     `json:"todo"`       // tagged @todo: drawn with a red flag
+	Todo       bool     `json:"todo"`       // tagged @todo: flagged ⚑ in the TUI's list
 	Tags       []string `json:"tags"`       // every tag, Feature tags included
 	Steps      []string `json:"steps"`      // "Given …", "When …", "Then …", Background first
 	Setup      string   `json:"setup"`      // the setup script's text, or ""

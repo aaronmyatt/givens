@@ -154,6 +154,8 @@ func (w *Window) Choose(action string) error {
 		return w.askMoveRunsOffMain()
 	case OfferShareRuns:
 		return w.syncRuns(runref.NetworkTimeout)
+	case OfferChangeRunLimits:
+		return nil // the dialog opens; SetRunLimits takes what's filled in
 	}
 	if w.session != nil {
 		return w.session.choose(action)

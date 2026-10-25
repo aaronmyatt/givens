@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/runref"
 	"givens/internal/runs"
@@ -63,7 +64,24 @@ func (s *state) gitWithRemote() error {
 	s.Window, s.Session = nil, nil
 	window, err := s.App.Open(s.Capabilities())
 	s.Window = window
-	return err
+	if err != nil {
+		return err
+	}
+	return world.WaitForRunsSync(window)
+}
+
+// remoteSilent makes the shop a git repository whose remote takes the connection and never
+// answers: git's ext transport runs a command that only sleeps.
+// Ref: https://git-scm.com/docs/git-remote-ext
+// Ref: https://git-scm.com/docs/git-config#Documentation/git-config.txt-protocolallow
+func (s *state) remoteSilent() error {
+	if err := s.gitWithRemote(); err != nil {
+		return err
+	}
+	return gitAll(s.Project,
+		[]string{"config", "protocol.ext.allow", "always"},
+		[]string{"remote", "set-url", "origin", "ext::sh -c sleep% 30"},
+	)
 }
 
 // gitWithoutRemote makes the sample shop a git repository, committed on main.
@@ -157,6 +175,9 @@ func (s *state) cloneOther() error {
 	}
 	window, err := core.Open(capabilities)
 	if err != nil {
+		return err
+	}
+	if err := world.WaitForRunsSync(window); err != nil {
 		return err
 	}
 	s.other = &device{app: core, window: window, capabilities: capabilities}

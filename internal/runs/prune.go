@@ -30,8 +30,8 @@ const (
 	PruneToPercent = 80
 	// limitsBytesMax bounds the limits file: two short lines.
 	limitsBytesMax = 1024
-	// limitMax bounds either limit.
-	limitMax = 1_000_000
+	// LimitMax bounds either limit: a million runs, or a million MB.
+	LimitMax = 1_000_000
 )
 
 // Limits bound what the ref keeps: the newest Runs runs, or Megabytes MB of them, whichever
@@ -76,8 +76,8 @@ func ReadLimits(root string) (Limits, error) {
 		if name == "" {
 			continue
 		}
-		if err != nil || number < 1 || number > limitMax {
-			return Limits{}, fmt.Errorf("%s: %q isn't a limit from 1 to %d", path, line, limitMax)
+		if err != nil || number < 1 || number > LimitMax {
+			return Limits{}, fmt.Errorf("%s: %q isn't a limit from 1 to %d", path, line, LimitMax)
 		}
 		switch name {
 		case "runs":
@@ -93,8 +93,8 @@ func ReadLimits(root string) (Limits, error) {
 
 // WriteLimits writes root/limits.
 func WriteLimits(root string, limits Limits) error {
-	assert.That(limits.Runs > 0 && limits.Runs <= limitMax, "a run limit is in range")
-	assert.That(limits.Megabytes > 0 && limits.Megabytes <= limitMax, "a MB limit is in range")
+	assert.That(limits.Runs > 0 && limits.Runs <= LimitMax, "a run limit is in range")
+	assert.That(limits.Megabytes > 0 && limits.Megabytes <= LimitMax, "a MB limit is in range")
 	text := fmt.Sprintf("runs %d\nmegabytes %d\n", limits.Runs, limits.Megabytes)
 	return os.WriteFile(filepath.Join(root, LimitsFileName), []byte(text), 0o644)
 }

@@ -165,12 +165,12 @@ the main branch, but still carried across devices".
 
 ## Known gaps
 - The sync on open blocks the window for up to 8 s when the remote can't be reached: serve
-  answers one call at a time. Added to todo.txt.
+  answers one call at a time. Added to todo.txt. Fixed 2026-10-24, see below.
 - The remote must be called `origin`.
 - No way to change the limits but writing `.git/givens/tree/limits` and choosing "Share
-  runs". Added to todo.txt.
+  runs". Added to todo.txt. Done 2026-10-24, see below.
 - A branch's window doesn't show runs kept off main: its copy isn't in a repository. Added to
-  todo.txt.
+  todo.txt. Done 2026-10-24, see below.
 - The host keeps a trimmed ref's old objects until its own garbage collection runs; the
   reachable size is what the limits bound.
 - `givens list` shows what this device last fetched; it doesn't sync.
@@ -199,3 +199,59 @@ the main branch, but still carried across devices".
   with a remote". 8 of 8 in Go and Swift.
 - Known gap, now wider: the fetch on open waits up to 8 s for a remote that can't be reached,
   for every git project with a remote.
+
+## Sync on open in the background (2026-10-24)
+- `App.Open` no longer waits for the sync. `openRunStore` starts `Store.Change(nil,
+  OpenTimeout)` on a goroutine, with a buffered channel for its result. The window takes the
+  result in on its next `refresh` (every snapshot), so serve's pusher shows it within 250 ms.
+- Chosen over fetching in the background and merging on the main thread: `Store` keeps no
+  state in memory, and its lock file already keeps a Record run's change from running beside
+  the sync. Simpler, and nothing new to get wrong.
+- While it runs, the window says "Syncing runs with origin". An error that isn't
+  `ErrUnreachable` goes in `runsNote` ("Runs couldn't be synced: …"), as there's no caller
+  to return it to now.
+- `OpenTimeout` stays 8 s: a Record run or "Share runs" right after opening waits on the
+  lock meanwhile, holding serve, so the sync stays short.
+- runref's git calls set `WaitDelay` (1 s). Without it, a timed-out git whose helper (ssh, or
+  ext's sh) kept the output pipes open held the call until that helper ended, so the timeout
+  didn't hold. Ref: https://pkg.go.dev/os/exec#Cmd.WaitDelay
+- `Window.WaitForRunsSync(limit)`: the steps wait with it after opening (Go's
+  `world.WaitForRunsSync`, and `World.waitForRunsSync` in Swift, which polls until the
+  message goes).
+- Spec: "Open a project whose remote doesn't answer", @error. The remote is `ext::sh -c
+  sleep% 30` with `protocol.ext.allow always` in the repository's config. It costs 8 s a run,
+  in Go and in Swift. 9 of 9 in both.
+- Known gap: a Record run in the first 8 s after opening, with a remote that doesn't answer,
+  still holds the window while it waits for the lock.
+
+## Change the limits from Givens (2026-10-24)
+- Core: `Window.RunLimits()` reads the copy's limits file (defaults until one is written);
+  `Window.SetRunLimits(runs.Limits)` writes it through `Store.Change` and shares it, so
+  lower limits trim at once. Each limit is 1 to `runs.LimitMax` (was `limitMax`); outside
+  that is a returned error. Outside a repository with a remote: `ErrRunsOnMain`.
+- Offer: "Change run limits", whenever runs are kept off main. Choosing it does nothing in
+  the core; the dialog opens, as "New story" does.
+- Serve: `window.runLimits` (value `{runs, megabytes}`) and `window.setRunLimits` (both
+  numbers as strings, as every param is).
+- Chosen over opening `tree/limits` in Givens's editor: the editor's save doesn't share, and
+  a typo there makes every later sync fail on `ReadLimits`.
+- Mac: a toolbar button (gauge) opens `RunLimitsSheet`: two number fields, filled from
+  `runLimits()`, and Save. Builds; not eyeballed. To check: open a project with an origin
+  remote, press the gauge button, see 1000 and 250, set 3 and 100, Save; then
+  `git show origin/refs/givens/runs:limits` (after `git fetch origin refs/givens/runs`) says
+  `runs 3` and `megabytes 100`.
+- Spec: "Change the limits", in Go and Swift. 10 of 10 in both.
+
+## A branch's window shows the ref's runs (2026-10-24)
+- Runs aren't kept per branch, so a branch's window reads the ref the checked-out project
+  keeps. `OpenBranch` writes `runs/.givens-ref-copy` into the branch's copy, naming the
+  origin's `<git common dir>/givens/tree`; `runs.RefCopy` reads that link first. Status,
+  history, notes and files all go through `RefCopy`, so they all see it.
+- Chosen over passing the ref's copy through `StatusOf`, history and `FolderOf`: those are
+  shared with the givens command, and the link is one stat at a fixed place. Rejected: a
+  `.git` file in the copy pointing at the origin's git dir; git itself would then treat the
+  copy as a work tree of the real repository.
+- The link is taken only when it's absolute and ends in `tree`.
+- Spec: "A branch's window shows runs kept off main", Go and Swift. 11 of 11 in both.
+- Known gap: a branch's window keeps the statuses it worked out until a file in its copy
+  changes or the day turns, so a sync in the main window doesn't show there at once.

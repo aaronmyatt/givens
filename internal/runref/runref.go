@@ -40,9 +40,11 @@ const (
 	localTimeout = 20 * time.Second
 	// NetworkTimeout bounds a fetch or push: room to send 250 MB the first time.
 	NetworkTimeout = 120 * time.Second
-	// OpenTimeout bounds the fetch when a project opens, so a remote that can't be reached
-	// doesn't hold the window up for long.
+	// OpenTimeout bounds the sync a project's opening starts. It runs in the background, but
+	// a Record run waits on the store's lock meanwhile, so it stays short.
 	OpenTimeout = 8 * time.Second
+	// waitDelay bounds how long a git that timed out may hold its output pipes open.
+	waitDelay = time.Second
 	// syncTriesMax bounds how often a sync starts over after another device pushed first.
 	syncTriesMax = 3
 	// treeFilesMax bounds the files in the ref: 1000 runs of 33 files would be 33 000.
@@ -140,6 +142,10 @@ func (s Store) gitWith(index string, timeout time.Duration, stdin string,
 		"GIT_INDEX_FILE="+index,
 		"GIT_AUTHOR_NAME="+committerName, "GIT_AUTHOR_EMAIL="+committerEmail,
 		"GIT_COMMITTER_NAME="+committerName, "GIT_COMMITTER_EMAIL="+committerEmail)
+	// A timed-out git is killed, but a helper it started, like ssh, can keep the output pipes
+	// open; WaitDelay stops waiting for them, so the timeout holds.
+	// Ref: https://pkg.go.dev/os/exec#Cmd.WaitDelay
+	command.WaitDelay = waitDelay
 	command.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr

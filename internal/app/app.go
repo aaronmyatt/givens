@@ -67,6 +67,10 @@ type Config struct {
 	// Command is the givens command that "Install givens command" links to; "" means the
 	// running program, which is the givens binary under serve.
 	Command string
+	// NoSyncOnOpen leaves runs kept off main unsynced when a project opens. The givens
+	// command's own commands set it: they open a project for a moment, and one that ended
+	// mid-sync would leave the runs store's lock behind. `givens sync` syncs when asked.
+	NoSyncOnOpen bool
 }
 
 // App is one running Givens. It isn't safe for concurrent use: `givens serve` and the steps
@@ -114,9 +118,7 @@ func (a *App) Open(path string) (*Window, error) {
 	if err := window.reload(); err != nil {
 		return nil, err
 	}
-	if err := window.openRunStore(); err != nil {
-		return nil, err
-	}
+	window.openRunStore()
 	if err := a.rememberRecent(folder); err != nil {
 		return nil, err
 	}

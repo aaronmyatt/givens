@@ -40,11 +40,16 @@ type device struct {
 // state is what this capability's steps keep between steps of one scenario.
 type state struct {
 	*world.World
-	remote  string      // the bare remote the shop pushes to
-	other   *device     // the other device, once cloned
-	times   []time.Time // the runs a Given step recorded, oldest first
-	dropped []time.Time // those a trim was expected to drop
+	remote  string        // the bare remote the shop pushes to
+	other   *device       // the other device, once cloned
+	times   []time.Time   // the runs a Given step recorded, oldest first
+	dropped []time.Time   // those a trim was expected to drop
+	opening time.Duration // how long the last timed open took
 }
+
+// openWithinMax is how long opening may take while the remote doesn't answer: the sync on
+// open runs in the background.
+const openWithinMax = 2 * time.Second
 
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
@@ -86,6 +91,21 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^the remote's refs/givens/runs holds the newest (\d+) runs of "([^"]*)"$`,
 			s.remoteHoldsNewest),
 		world.Def(`^its history holds none of the older runs' screenshots$`, s.historyDropped),
+		world.Def(`^the sample shop is a git repository with a remote that doesn't answer$`,
+			s.remoteSilent),
+		world.Def(`^a developer opens it in Givens$`, s.openTimed),
+		world.Def(`^it opens within two seconds, showing "([^"]*)"$`, s.openedQuickly),
+		world.Def(`^once the sync gives up, they don't see "([^"]*)"$`, s.afterGivingUp),
+		world.Def(`^a developer sets the run limits to (\d+) runs and (\d+) MB$`,
+			func(count string, megabytes string) error { return s.setLimits(count, megabytes) }),
+		world.Def(`^the remote's refs/givens/runs has a limit of (\d+) runs and (\d+) MB$`,
+			s.remoteLimits),
+		world.Def(`^it holds (\d+) runs of "([^"]*)"$`, s.remoteHoldsCount),
+		world.Def(`^it has a branch "([^"]*)"$`, func(name string) error {
+			_, err := git(s.Project, "branch", name)
+			return err
+		}),
+		world.Def(`^they open the branch "([^"]*)"$`, s.openBranch),
 	}
 }
 
@@ -248,5 +268,119 @@ func (s *state) historyDropped() error {
 			return fmt.Errorf("the ref's history still holds %s", filepath.Base(folder))
 		}
 	}
+	return nil
+}
+
+// openTimed opens the shop as a developer would, timing it, and doesn't wait for the sync.
+func (s *state) openTimed() error {
+	if err := s.StartApp(); err != nil {
+		return err
+	}
+	if err := s.App.MarkTrusted(s.Capabilities()); err != nil {
+		return err
+	}
+	start := time.Now()
+	window, err := s.App.Open(s.Capabilities())
+	s.opening = time.Since(start)
+	s.Window = window
+	return err
+}
+
+func (s *state) openedQuickly(text string) error {
+	if s.opening > openWithinMax {
+		return fmt.Errorf("opening took %s, more than %s", s.opening, openWithinMax)
+	}
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	return world.Expect(window.Visible(), text, "the window")
+}
+
+// afterGivingUp waits for the sync on open to give up, then expects text gone.
+func (s *state) afterGivingUp(text string) error {
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	if !window.WaitForRunsSync(runref.OpenTimeout + world.RunsSyncWaitMax) {
+		return fmt.Errorf("the sync on open was still going after %s",
+			runref.OpenTimeout+world.RunsSyncWaitMax)
+	}
+	return s.notSee(text)
+}
+
+// setLimits writes the ref's limits as the core takes them: "Change run limits" is offered
+// wherever runs are kept off main, choosing it asks for them, and SetRunLimits writes them.
+func (s *state) setLimits(count string, megabytes string) error {
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	if err := world.Expect(window.Offers(), app.OfferChangeRunLimits, "the offers"); err != nil {
+		return err
+	}
+	if err := window.Choose(app.OfferChangeRunLimits); err != nil {
+		return err
+	}
+	limits := runs.Limits{}
+	if limits.Runs, err = strconv.Atoi(count); err != nil {
+		return err
+	}
+	if limits.Megabytes, err = strconv.Atoi(megabytes); err != nil {
+		return err
+	}
+	return window.SetRunLimits(limits)
+}
+
+// remoteLimits expects the remote's ref to hold a limits file with these limits.
+func (s *state) remoteLimits(count string, megabytes string) error {
+	text, err := git(s.remote, "show", runref.Ref+":"+runs.LimitsFileName)
+	if err != nil {
+		return err
+	}
+	want := "runs " + count + "\nmegabytes " + megabytes
+	if strings.TrimSpace(text) != want {
+		return fmt.Errorf("the ref's limits file says %q, not %q", text, want)
+	}
+	return nil
+}
+
+// remoteHoldsCount expects count runs of the scenario in the remote's ref.
+func (s *state) remoteHoldsCount(count string, name string) error {
+	key, err := s.runKey(name)
+	if err != nil {
+		return err
+	}
+	held, err := s.remoteRuns()
+	if err != nil {
+		return err
+	}
+	found := 0
+	for _, run := range held {
+		if run.Key == key {
+			found++
+		}
+	}
+	if strconv.Itoa(found) != count {
+		return fmt.Errorf("the remote holds %d runs of %s, not %s", found, key, count)
+	}
+	return nil
+}
+
+// openBranch opens the branch's read-only window, which the next steps look at.
+func (s *state) openBranch(name string) error {
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	opened, err := window.OpenBranch(name)
+	if err != nil {
+		return err
+	}
+	if opened == nil {
+		return fmt.Errorf("no window opened for %s: %v", name, window.Visible())
+	}
+	s.Window, s.Session = opened, nil
 	return nil
 }

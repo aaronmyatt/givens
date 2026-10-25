@@ -24,6 +24,11 @@ const (
 	gitFileBytesMax = 4096
 )
 
+// RefCopyLinkName is a file in a branch window's copied runs/ that names the checked-out
+// project's ref copy. The branch's copy isn't in a repository, so RefCopy can't find the ref
+// by walking up from it.
+const RefCopyLinkName = ".givens-ref-copy"
+
 // OffMainFileName is the file left in capabilities/runs/ once its runs moved to the ref: it
 // says where they went, for anyone who looks.
 const OffMainFileName = "off-main.md"
@@ -33,12 +38,32 @@ const OffMainFileName = "off-main.md"
 // without running git, so reading runs stays a few file reads.
 func RefCopy(capabilities string) string {
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	linked := readSmall(filepath.Join(Dir(capabilities), RefCopyLinkName))
+	if filepath.IsAbs(linked) && filepath.Base(linked) == refTreeName {
+		return filepath.Clean(linked)
+	}
 	common := GitCommonDir(capabilities)
 	if common == "" {
 		return ""
 	}
 	assert.That(filepath.IsAbs(common), "the git dir is absolute")
 	return filepath.Join(common, RefDirName, refTreeName)
+}
+
+// LinkRefCopy writes the link file into copied, a branch's copy of the capabilities folder at
+// origin, so the branch's window reads the runs origin keeps off main. Nothing is written when
+// origin isn't in a git repository.
+func LinkRefCopy(copied string, origin string) error {
+	assert.That(filepath.IsAbs(copied), "the copy is absolute")
+	assert.That(filepath.IsAbs(origin), "the origin is absolute")
+	tree := RefCopy(origin)
+	if tree == "" {
+		return nil
+	}
+	if err := os.MkdirAll(Dir(copied), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(Dir(copied), RefCopyLinkName), []byte(tree+"\n"), 0o644)
 }
 
 // GitCommonDir is the .git folder of the repository holding start, or "" when there's none.

@@ -11,6 +11,7 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/branch"
+	"givens/internal/runs"
 	"givens/internal/slug"
 )
 
@@ -63,6 +64,10 @@ func (w *Window) OpenBranch(name string) (*Window, error) {
 		w.branchProblem = fmt.Sprintf("%s has no capabilities folder on %s", w.origin(), name)
 		return nil, nil
 	case err != nil:
+		return nil, err
+	}
+	// Runs aren't kept per branch: the branch's window reads the ref this project keeps.
+	if err := runs.LinkRefCopy(copied, w.origin()); err != nil {
 		return nil, err
 	}
 	return w.app.openBranchWindow(copied, w.origin(), name)

@@ -6,7 +6,7 @@ Feature: Keep runs off main
   In a git repository with an origin remote, Givens keeps runs off main by default: in
   refs/givens/runs on the remote, which it fetches and pushes itself. A plain git clone
   doesn't fetch it, and it's never in a pull request. Without a remote, runs go in
-  capabilities/runs.
+  capabilities/runs. `givens sync` shares runs waiting to go and fetches other devices'.
 
   Scenario: Runs are kept off main by default
     Given the sample shop is a git repository with a remote
@@ -33,6 +33,22 @@ Feature: Keep runs off main
     Given the sample shop is a git repository with a remote, with a passing run of "Card declined"
     When a developer clones it on another device and opens it in Givens
     Then "Card declined" shows "Verified today"
+
+  # Runs aren't kept per branch, so another branch, opened to read, reads the same ref.
+  Scenario: Another branch shows runs kept off main
+    Given the sample shop is a git repository with a remote, with a passing run of "Card declined"
+    And it has a branch "gift-cards"
+    When they open the branch "gift-cards"
+    Then "Card declined" shows "Verified today"
+
+  # Opening a project syncs its runs in the background, so a remote that doesn't answer
+  # doesn't hold the project up. The sync gives up after 8 seconds; the next one tries again.
+  @error
+  Scenario: Open a project whose remote doesn't answer
+    Given the sample shop is a git repository with a remote that doesn't answer
+    When a developer opens it in Givens
+    Then it opens within two seconds, showing "Syncing runs with origin"
+    And once the sync gives up, they don't see "Syncing runs with origin"
 
   Scenario: Two devices record at the same time
     Given the sample shop is a git repository with a remote, cloned on another device
@@ -65,3 +81,12 @@ Feature: Keep runs off main
     When a developer records a passing run of "Empty cart"
     Then the remote's refs/givens/runs holds the newest 4 runs of "Empty cart"
     And its history holds none of the older runs' screenshots
+
+  # The limits are in the ref's limits file, so every device trims the same way. Lower limits
+  # trim the ref at once, down to 80% as above.
+  Scenario: Change the limits
+    Given the sample shop is a git repository with a remote
+    And "Empty cart" has 5 runs recorded, each with a screenshot
+    When a developer sets the run limits to 3 runs and 100 MB
+    Then the remote's refs/givens/runs has a limit of 3 runs and 100 MB
+    And it holds 2 runs of "Empty cart"

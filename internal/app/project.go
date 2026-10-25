@@ -82,6 +82,7 @@ func (w *Window) reload() error {
 func (w *Window) refresh() {
 	assert.That(w != nil, "refresh runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	w.pollRunsSync()
 	if w.watcher == nil || w.holdRefresh {
 		return
 	}

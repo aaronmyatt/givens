@@ -20,17 +20,20 @@ const (
 	checkoutFeature = "capabilities/checkout/checkout.feature"
 )
 
-// branchSteps cover reading another branch's capabilities without checking it out.
+// branchSteps cover reading another branch's capabilities without checking it out. The core
+// opens the branch's copy in a window of its own, beside the project's.
 func branchSteps(s *state) []world.Step {
 	return []world.Step{
 		world.Def(`^the sample shop is a git repository with a branch "([^"]*)" that adds the `+
 			`scenario "([^"]*)" to Checkout$`, s.branchAddsScenario),
 		world.Def(`^they open the branch "([^"]*)"$`, s.openBranch),
-		world.Def(`^a second window opens, its title ending "([^"]*)"$`, s.secondWindowTitled),
+		world.Def(`^Givens opens a read-only copy of it, its title ending "([^"]*)"$`,
+			s.branchCopyTitled),
 		world.Def(`^it lists "([^"]*)" under "([^"]*)"$`, s.listsUnder),
 		world.Def(`^the sample shop's own checkout\.feature doesn't have "([^"]*)"$`,
 			s.ownFeatureLacks),
 		world.Def(`^"Drop in" isn't offered for "([^"]*)"$`, s.noDropIn),
+		world.Def(`^no copy of a branch opens$`, s.noBranchCopy),
 	}
 }
 
@@ -96,7 +99,9 @@ func (s *state) openBranch(name string) error {
 	return err
 }
 
-func (s *state) secondWindowTitled(suffix string) error {
+// branchCopyTitled expects the branch's copy in a window of its own, in front, beside the
+// project's.
+func (s *state) branchCopyTitled(suffix string) error {
 	if count := len(s.App.Windows()); count != 2 {
 		return fmt.Errorf("%d windows are open, not 2", count)
 	}

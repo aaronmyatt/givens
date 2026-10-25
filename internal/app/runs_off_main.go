@@ -21,13 +21,24 @@ import (
 const (
 	OfferMoveRunsOffMain = "Move runs off main"
 	OfferShareRuns       = "Share runs"
+	// OfferChangeRunLimits opens the dialog that takes the ref's limits for SetRunLimits.
+	OfferChangeRunLimits = "Change run limits"
 	// messageMoveOffMain asks before runs already in capabilities/runs are moved.
 	messageMoveOffMain = "Move the runs in capabilities/runs to refs/givens/runs on " +
 		runref.Remote + "? They go to the Trash here, and new runs already go to the ref."
+	// MessageSyncingRuns shows while the sync a project's opening started is going.
+	MessageSyncingRuns = "Syncing runs with " + runref.Remote
+	// messageRunsNotSynced starts what the window says when the sync on open went wrong.
+	messageRunsNotSynced = "Runs couldn't be synced: "
 	// MessageRunsMoved says what's left for the developer to do: commit the change.
 	MessageRunsMoved = "Runs moved off main. Commit the change to capabilities/runs: the " +
 		"old run files went to the Trash, and off-main.md says where runs are."
 )
+
+// ErrRunsOnMain is returned by the limits calls in a project whose runs are in
+// capabilities/runs, which has no limits.
+var ErrRunsOnMain = errors.New("runs are kept off main only in a git repository with a " +
+	"remote, and only there do they have limits")
 
 // offMainText is capabilities/runs/off-main.md: what anyone looking in runs/ reads.
 const offMainText = `# Runs are kept off main
@@ -43,17 +54,80 @@ To look by hand:
 `
 
 // openRunStore finds the window's runs store when its project is in a git repository with a
-// remote, and syncs it, so another device's runs show up. With nothing here and nothing on
-// the remote, the sync makes nothing.
-func (w *Window) openRunStore() error {
+// remote, and starts a sync, so another device's runs show up. The sync runs on a goroutine
+// of its own, so a remote that can't be reached doesn't hold the window up: Store keeps no
+// state in memory, and the lock in its folder holds a Record run's change until the sync is
+// done. With nothing here and nothing on the remote, the sync makes nothing.
+// Ref: https://go.dev/ref/spec#Go_statements
+func (w *Window) openRunStore() {
 	assert.That(w != nil, "open run store runs on a window")
 	assert.That(w.branch == "", "a branch's window keeps no runs of its own")
 	store, ok := runref.Open(w.path)
 	if !ok || !w.found || !store.HasRemote() {
-		return nil
+		return
 	}
 	w.runStore = &store
-	return w.syncRuns(runref.OpenTimeout)
+	if w.app.config.NoSyncOnOpen {
+		return
+	}
+	// Buffered, so the goroutine ends even when the window closes before the result is read.
+	done := make(chan error, 1)
+	w.runsSync = done
+	go func() { done <- store.Change(nil, runref.OpenTimeout) }()
+}
+
+// pollRunsSync picks up the sync on open's result once it's done, without waiting for it.
+// Ref: https://go.dev/ref/spec#Select_statements
+func (w *Window) pollRunsSync() {
+	assert.That(w != nil, "poll runs sync runs on a window")
+	assert.That(w.runsSync == nil || w.runStore != nil, "only a runs store syncs")
+	if w.runsSync == nil {
+		return
+	}
+	select {
+	case changed := <-w.runsSync:
+		w.runsSynced(changed)
+	default:
+	}
+}
+
+// WaitForRunsSync waits up to limit for the sync on open to finish, and says whether it did.
+// A window with no sync going returns true at once. The acceptance steps wait with it, as a
+// developer waits for "Syncing runs with origin" to go.
+func (w *Window) WaitForRunsSync(limit time.Duration) bool {
+	assert.That(w != nil, "wait for runs sync runs on a window")
+	assert.That(limit > 0, "a wait has a limit")
+	if w.runsSync == nil {
+		return true
+	}
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case changed := <-w.runsSync:
+		w.runsSynced(changed)
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+// runsSynced takes in the sync on open's result. It has no caller to return an error to, so
+// one is said in the window.
+func (w *Window) runsSynced(changed error) {
+	assert.That(w.runsSync != nil, "a sync was going")
+	assert.That(w.runStore != nil, "runs are kept in a store")
+	w.runsSync = nil
+	if err := w.afterRunsChange(changed); err != nil {
+		w.runsNote = messageRunsNotSynced + err.Error()
+	}
+}
+
+// KeepsRunsOffMain is true when the window's runs go to refs/givens/runs. `givens sync`
+// says so when they don't.
+func (w *Window) KeepsRunsOffMain() bool {
+	assert.That(w != nil, "keeps runs off main runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	return w.keepsRunsOffMain()
 }
 
 // keepsRunsOffMain is true when the window's runs go to the ref: in a git repository with a
@@ -112,8 +186,8 @@ func (w *Window) afterRunsChange(changed error) error {
 	return changed
 }
 
-// runsOffers is "Move runs off main" while capabilities/runs still holds runs, and "Share
-// runs" while runs wait to be shared; both only when runs are kept off main.
+// runsOffers is "Move runs off main" while capabilities/runs still holds runs, "Share runs"
+// while runs wait to be shared, and "Change run limits"; all only when runs are kept off main.
 func (w *Window) runsOffers() []string {
 	assert.That(w != nil, "runs offers run on a window")
 	assert.That(w.runsUnshared >= 0, "a count isn't negative")
@@ -127,14 +201,45 @@ func (w *Window) runsOffers() []string {
 	if w.runsUnshared > 0 {
 		offers = append(offers, OfferShareRuns)
 	}
-	return offers
+	return append(offers, OfferChangeRunLimits)
 }
 
-// runsMessages say how many runs wait to be shared, and what's left after moving them.
+// RunLimits are how many runs, and MB of them, the ref keeps: its limits file, or the
+// defaults until one is written. Needed by "Change the limits".
+func (w *Window) RunLimits() (runs.Limits, error) {
+	assert.That(w != nil, "run limits run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if !w.keepsRunsOffMain() {
+		return runs.Limits{}, ErrRunsOnMain
+	}
+	return runs.ReadLimits(w.runStore.Tree())
+}
+
+// SetRunLimits writes the ref's limits and shares them, so every device trims the same way.
+// Lower limits trim the ref at once. Needed by "Change the limits".
+func (w *Window) SetRunLimits(limits runs.Limits) error {
+	assert.That(w != nil, "set run limits runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if !w.keepsRunsOffMain() {
+		return ErrRunsOnMain
+	}
+	if limits.Runs < 1 || limits.Runs > runs.LimitMax || limits.Megabytes < 1 ||
+		limits.Megabytes > runs.LimitMax {
+		return fmt.Errorf("each limit is a whole number from 1 to %d", runs.LimitMax)
+	}
+	write := func(tree string) error { return runs.WriteLimits(tree, limits) }
+	return w.afterRunsChange(w.runStore.Change(write, runref.NetworkTimeout))
+}
+
+// runsMessages say a sync on open is going, how many runs wait to be shared, and what's left
+// after moving them.
 func (w *Window) runsMessages() []string {
 	assert.That(w != nil, "runs messages run on a window")
 	assert.That(w.runsUnshared >= 0, "a count isn't negative")
-	messages := make([]string, 0, 2)
+	messages := make([]string, 0, 3)
+	if w.runsSync != nil {
+		messages = append(messages, MessageSyncingRuns)
+	}
 	if w.runsUnshared == 1 {
 		messages = append(messages, "1 run not shared yet")
 	} else if w.runsUnshared > 1 {
