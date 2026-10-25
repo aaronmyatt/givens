@@ -89,7 +89,7 @@ did.
 | 0 | (commit Trust a project) | — | what's in the working tree | the suites pass first |
 | 1 | Views | 4 | views.go (223) | `tagViews` and `isViewTag` are tags' too, so they go to big_helpers.go |
 | 2 | Tags | 11 | todo.go (102), the tag parts of views.go and search.go | "flag to do" is also used by Write stories (new scenario starts flagged) |
-| 3 | Edge pointers: The kit, Use Givens from the terminal, Work in the terminal | 12 + 8 + 43 | install.go (95), `InstallCommand` and `givensCommand` from windows.go | sections with no functions; `--debug` says "no functions to stop in" |
+| 3 | Edge pointers: The kit, Use Givens from the terminal, Work in the terminal | 12 + 8 + 43 | nothing: install.go and `InstallCommand` are dead (only `_archive/` calls them; backlog line to delete) | sections with no functions; `--debug` says "no functions to stop in" |
 | 4 | Update the kit **and** Search everything, as two worktrees at once | 5 + 6 | kitupdate.go (152); search.go, search_find.go, search_index.go (426) | the clash experiment: count merge conflicts; both touch the import block |
 | 5 | Read a capability | 6 | history.go (120), copy_steps.go (36), story and scenario parts of selection.go | `status.go` is used by 4 files, so it goes to big_helpers.go |
 | 6 | Gherkin files | 7 | examples.go (26), warnings from project.go, `moveToOwnCapability`, `RuleGroups` | the parser stays in `internal/spec` |
@@ -98,7 +98,7 @@ did.
 | 9 | Share setup between scenarios | 12 | shared.go (174), helper_edit.go (197), needs.go (94) | `RequiredCommands` is also used by Drop in and snapshot: the shared-code test |
 | 10 | Write stories and scenarios, in 3 commits | 27 | a) authoring.go, editor.go, the editor parts of editor_more.go, preview.go; b) rename.go, delete.go; c) about_edit.go, `setupFile` and `deleteFile` | editor_more.go (402) mixes all three; `Rename` and `Delete` are called from manage.go and fakes.go |
 | 11 | Mix shell, browser and hand steps | 19 | cards_run.go (179), run-block parts of cards.go | it lives inside Drop in's `startSession`: cut seams |
-| 12 | Drop into a scenario, in 5 commits | 47 | a) run and timeouts: dropin_run.go, session.go; b) record and attach: dropin_record.go, dropin_files.go; c) teardown and builds-on; d) cards, steps by hand and asks: cards.go; e) outlines and rows: rows.go, arguments.go | the biggest host, about 1,600 lines; by now its guests are gone |
+| 12 | Drop into a scenario, in 5 commits | 47 | a) run and timeouts: dropin_run.go, session.go, `givensCommand` from windows.go; b) record and attach: dropin_record.go, dropin_files.go; c) teardown and builds-on; d) cards, steps by hand and asks: cards.go; e) outlines and rows: rows.go, arguments.go | the biggest host, about 1,600 lines; by now its guests are gone |
 | 13 | Finish | — | whatever is left that isn't core | see below |
 
 Sizes are line counts of the files today.
