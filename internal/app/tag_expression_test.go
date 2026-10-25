@@ -1,8 +1,8 @@
-package tags
+package app
 
 import "testing"
 
-func TestMatch(t *testing.T) {
+func TestTagExpressionMatch(t *testing.T) {
 	cases := []struct {
 		expression string
 		tags       []string
@@ -19,9 +19,9 @@ func TestMatch(t *testing.T) {
 		{"not (@a or @b)", []string{"@c"}, true},
 	}
 	for _, c := range cases {
-		expression, err := Parse(c.expression)
+		expression, err := ParseTagExpression(c.expression)
 		if err != nil {
-			t.Fatalf("Parse(%q): %v", c.expression, err)
+			t.Fatalf("ParseTagExpression(%q): %v", c.expression, err)
 		}
 		if got := expression.Match(c.tags); got != c.want {
 			t.Errorf("%q on %q = %v, want %v", c.expression, c.tags, got, c.want)
@@ -29,17 +29,17 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-func TestParseErrors(t *testing.T) {
+func TestParseTagExpressionErrors(t *testing.T) {
 	for _, text := range []string{"@a and", "and @a", "@a @b", "(@a", "@a)", "error", "not"} {
-		if _, err := Parse(text); err == nil {
-			t.Errorf("Parse(%q) parsed", text)
+		if _, err := ParseTagExpression(text); err == nil {
+			t.Errorf("ParseTagExpression(%q) parsed", text)
 		}
 	}
 }
 
-func TestParseErrorMessage(t *testing.T) {
-	_, err := Parse("@error and")
+func TestParseTagExpressionErrorMessage(t *testing.T) {
+	_, err := ParseTagExpression("@error and")
 	if err == nil || err.Error() != "not a tag expression: expected a tag after 'and'" {
-		t.Errorf("Parse(\"@error and\") = %v", err)
+		t.Errorf("ParseTagExpression(\"@error and\") = %v", err)
 	}
 }

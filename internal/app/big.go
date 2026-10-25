@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, tags, slug, kit and starter:
+//   - internal/spec, project, runs, slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -66,7 +66,6 @@ import (
 	"givens/internal/slug"
 	"givens/internal/spec"
 	"givens/internal/starter"
-	"givens/internal/tags"
 )
 
 // Feature: Copy a setup script
@@ -4081,7 +4080,7 @@ type search struct {
 
 // query is a search box's text split into a tag expression and words.
 type query struct {
-	expression tags.Expression
+	expression TagExpression
 	tagged     bool   // the text holds a tag expression
 	words      string // what's left, lower case, trimmed
 	problem    string // why the tag expression doesn't parse, or ""
@@ -5052,12 +5051,13 @@ func NeedLines(text string) []NeedLine {
 //
 // capabilities/tags. Kinds, timeouts, groups and to do flags are plain Gherkin tags, so a test
 // runner filters on the ones Givens uses. internal/project reads a scenario's tags, the
-// Feature's and Rule's included, and internal/tags parses Cucumber's tag expressions. Each tag
-// is a view: the Views section lists and selects them, through tagViews and isViewTag in
-// big_helpers.go, and "An error state", "A tag view" and "A tag on the Feature" land there.
-// The Search everything section's readQuery splits a search into words and a tag expression,
-// which its findScenarios matches. "A runner filters on the same tags" is cucumber-js's, and
-// the ⚑ on a flagged scenario is internal/tui's.
+// Feature's and Rule's included, and ParseTagExpression parses Cucumber's tag expressions: it
+// is in big_helpers.go, since Search matches them and `givens list --tags` reads them too.
+// Each tag is a view: the Views section lists and selects them, through tagViews and
+// isViewTag in big_helpers.go, and "An error state", "A tag view" and "A tag on the Feature"
+// land there. The Search everything section's readQuery splits a search into words and a tag
+// expression, which its findScenarios matches. "A runner filters on the same tags" is
+// cucumber-js's, and the ⚑ on a flagged scenario is internal/tui's.
 
 // Scenario: Search by tag
 // Scenario: Search with a tag expression
@@ -5067,15 +5067,15 @@ func NeedLines(text string) []NeedLine {
 // parseTags reads a search's tag expression, such as "@error and not @slow", and says why it
 // doesn't parse, as the search shows it ("Not a tag expression: …"), or "".
 // Ref: https://cucumber.io/docs/cucumber/api/#tag-expressions
-func parseTags(expression []string) (tags.Expression, string) {
+func parseTags(expression []string) (TagExpression, string) {
 	assert.That(len(expression) <= NameLengthMax*4, "an expression stays bounded")
-	parsed, err := tags.Parse(strings.Join(expression, " "))
+	parsed, err := ParseTagExpression(strings.Join(expression, " "))
 	if err != nil {
 		problem := "Not" + strings.TrimPrefix(err.Error(), "not")
-		if !errors.Is(err, tags.ErrSyntax) {
+		if !errors.Is(err, ErrTagSyntax) {
 			problem = err.Error()
 		}
-		return tags.Expression{}, problem
+		return TagExpression{}, problem
 	}
 	assert.That(err == nil, "a parsed query has no problem")
 	return parsed, ""
@@ -5502,7 +5502,7 @@ func (w *Window) restoreKit() {
 // that imports this package, so their code isn't here, except PlainMarkdown at the end. list
 // and check are cmd/givens/list.go (runList, runCheck); run, with steps by hand and code blocks
 // in a terminal, is cmd/givens/run.go (runSetup, runBlocks); main.go routes each command. "List
-// by tag" parses its expression with internal/tags.
+// by tag" parses its expression with ParseTagExpression (big_helpers.go).
 
 // From internal/markdown: a markdown step's text as `givens run` prints it (printStep,
 // cmd/givens/run.go).

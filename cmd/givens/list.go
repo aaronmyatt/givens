@@ -13,7 +13,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/project"
 	"givens/internal/spec"
-	"givens/internal/tags"
 )
 
 // listed is one line of `givens list`, and one object of `givens list --json`.
@@ -40,7 +39,7 @@ func runList(args []string) int {
 			return exitUsage
 		}
 	}
-	filter, err := tags.Parse(expression)
+	filter, err := app.ParseTagExpression(expression)
 	if err != nil {
 		complain(err)
 		return exitUsage
@@ -68,7 +67,7 @@ func runList(args []string) int {
 
 // listScenarios loads the project around the working folder and lists the scenarios filter
 // matches, in capability then file order.
-func listScenarios(filter tags.Expression) ([]listed, error) {
+func listScenarios(filter app.TagExpression) ([]listed, error) {
 	assert.That(spec.ScenariosPerFeatureMax > 0, "scenarios are bounded")
 	root, err := findCapabilities(".")
 	if err != nil {

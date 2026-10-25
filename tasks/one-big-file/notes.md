@@ -734,3 +734,21 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - setup_test.go is internal/app/setup_process_test.go. Two lines the longer names pushed past
   100 columns were wrapped.
 - big.go 6,937 lines (+53), big_helpers.go 1,522 (+280).
+
+## internal/tags folds in (2026-10-25)
+- internal/tags is gone. All of it is in big_helpers.go after tagViews and isViewTag, under
+  the package doc: Tags' parseTags and `givens list --tags` (cmd/givens/list.go, Use Givens
+  from the terminal) parse an expression, and Search's findScenarios matches one, so three
+  stories use it. parseTags stays in Tags' section, where the search-by-tag scenarios start.
+- Renames: `Expression` -> `TagExpression`, `Parse` -> `ParseTagExpression`, `ErrSyntax` ->
+  `ErrTagSyntax`, `TokensMax` -> `TagExpressionTokensMax`, and the unexported `tokenize` ->
+  `tokenizeTagExpression`, `precedence` -> `tagPrecedence`, `contains` -> `hasTag`, the
+  operator constants get a `tag` prefix (`tagOperatorNot` …). `shunt` and the methods kept
+  theirs. Tests: `TestMatch`, `TestParseErrors` and `TestParseErrorMessage` ->
+  `TestTagExpressionMatch`, `TestParseTagExpressionErrors` and
+  `TestParseTagExpressionErrorMessage`.
+- Tags' opening comment, the terminal pointer's "List by tag" and big.go's header list
+  updated; the header's domain packages are now spec, project, runs, slug, kit and starter.
+- tags_test.go is internal/app/tag_expression_test.go. Two errors the longer names pushed past
+  100 columns were wrapped.
+- big.go 6,937 lines (+0), big_helpers.go 1,718 (+196), 25% of big.go.
