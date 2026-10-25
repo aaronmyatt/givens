@@ -19,6 +19,8 @@
 //     moving them in would make it depend on Bubble Tea; their stories have pointer sections.
 //   - helpers.go: Share setup's types (Helper, RequiredCommand, HelperProblem, HelperEdit). A
 //     data model with no code, so it stays a file of its own.
+//   - edit.go: Write stories' types (Editor, StoryDraft, ScenarioDraft, EditorMark,
+//     StepSuggestion, PreviewLine) and the editing limits. A data model, so it stays apart too.
 
 package app
 
@@ -48,6 +50,7 @@ import (
 	"givens/internal/runref"
 	"givens/internal/runs"
 	"givens/internal/slug"
+	"givens/internal/spec"
 	"givens/internal/starter"
 	"givens/internal/tags"
 )
@@ -120,8 +123,8 @@ func (w *Window) copyFromSearch() error {
 // (project.go) and Sidebar (window.go) show the warnings; core glue's allOffers and Choose
 // (offers.go) call gherkinOffers, editBrokenFeature and moveToOwnCapability, and
 // OfferMoveToOwnCapability is with the page offers there. "Comments are kept" is Write
-// stories' editor (Edit, editor.go), "Step definitions are left alone" is internal/project's
-// loader, and "A test runner reads the same files" is cucumber-js.
+// stories' editor (Save, and Edit in big_helpers.go), "Step definitions are left alone" is
+// internal/project's loader, and "A test runner reads the same files" is cucumber-js.
 
 // Scenario: Rules group scenarios
 
@@ -620,9 +623,10 @@ func (w *Window) SetRunLimits(limits runs.Limits) error {
 // writable, which every change asks of a branch's window. Code elsewhere: core glue shows
 // MessageNoCapabilities, Recents and branchMessages (Snapshot, snapshot.go), and offers and
 // runs "Create capabilities folder" and "Open folder…" and cuts a branch's offers with readOnly
-// (allOffers and Choose, offers.go). createCapabilities writes with writeNew, Write stories'
-// (authoring.go). Open starts Keep runs off main's sync (openRunStore), and OpenBranch links a
-// branch's copy to the ref the project keeps runs in (runs.LinkRefCopy). App's picker and
+// (allOffers and Choose, offers.go). createCapabilities writes with writeNew (big_helpers.go),
+// which Write stories' NewScenario uses too. Open starts Keep runs off main's sync
+// (openRunStore), and OpenBranch links a branch's copy to the ref the project keeps runs in
+// (runs.LinkRefCopy). App's picker and
 // Window's branch fields are in app.go and window.go's types; internal/branch copies a branch
 // out of git. The terminal scenarios are openFolder in cmd/givens/main.go and the TUI. Launch,
 // OpenRecent, OpenDropped and UseFolderPicker served the archived Mac app: only
@@ -1634,8 +1638,8 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
 // Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view
 // read it too; so is RequiredCommands, which Drop in's precheck (dropin_run.go) also calls,
-// and so are the bash -n limits and bashError, which the editor's shellProblems
-// (editor_more.go) shares. The four "Changing …" scenarios and "Updating the kit keeps
+// and so are the bash -n limits and bashError, which Write stories' shellProblems
+// shares. The four "Changing …" scenarios and "Updating the kit keeps
 // scenarios verified" are internal/fingerprint, which statusFor (big_helpers.go) and Drop in's
 // record (dropin_record.go) call. Code elsewhere: Drop in's page shows elsewhere's message
 // (messages, dropin_page.go); core glue offers OfferEdit and runs editHelper (allOffers and
@@ -2284,7 +2288,7 @@ func (s *Session) trustThisProject() error {
 // updateKit on "Update kit" (allOffers and Choose, offers.go); reload and refresh
 // (big_helpers.go) call restoreKit whenever the project is read. App's kits field is in app.go and
 // Window's kitProblem in window.go; internal/kit reads a kit's version; "Compare" opens the
-// kit in Write stories' editor (Edit, editor.go); the TUI's "u" key is internal/tui/browse.go.
+// kit in the editor (Edit, big_helpers.go); the TUI's "u" key is internal/tui/browse.go.
 
 // Limits for Update the kit.
 const (
@@ -2657,3 +2661,684 @@ func (w *Window) emptyView() string {
 // the developer's editor through internal/termedit. cmd/givens starts it (tui.go) and runs the
 // terminal commands (edit.go, new.go, manage.go, panels.go). What each screen does is the
 // other stories' code, here and in internal/app, read through snapshot.go.
+
+// Feature: Write stories and scenarios
+//
+// capabilities/write-stories-and-scenarios. Givens writes stories, scenarios and setup as plain
+// files: a new story or scenario goes straight into its .feature file, and the editor holds one
+// file's whole text, checks it, and writes back only what changed. Code elsewhere: Edit and
+// readEditable, which open and read a file for the editor, are in big_helpers.go, since Gherkin
+// files, Share setup, Update the kit and Drop in open files in the editor too, and Tags'
+// flagTodo reads with readEditable; so is writeNew, which Open a project's createCapabilities
+// writes with too. The suggestions count steps with uniqueSteps, and shellProblems shares the
+// bash -n limits and bashError with Share setup (both big_helpers.go). Core glue offers
+// OfferNewStory, OfferNewScenario (with the page offers) and editorOffers and runs
+// chooseInEditor (allOffers and Choose, offers.go), types into the editor (Type, input.go),
+// calls editShown on KeyEdit (Press, input.go), closes the editor before selecting
+// (closeEditor in Select, selection.go), and shows it (Snapshot, snapshot.go). Editor, the
+// drafts, marks, suggestions and preview lines, and the editing limits are types in edit.go;
+// EditorSnapshot is in snapshot.go. The terminal edits in the developer's editor: `givens new`
+// and `givens edit` (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui)
+// hand the text over through internal/termedit.
+
+// Authoring offers.
+const (
+	OfferNewStory = "New story"
+)
+
+// Editor actions.
+const (
+	OfferPreview   = "Preview"
+	OfferKeepMine  = "Keep mine"
+	OfferUseTheirs = "Use theirs"
+	OfferCompare   = "Compare"
+	// OfferCloseEditor closes the editor; with unsaved changes it asks first.
+	OfferCloseEditor = "Close"
+	// OfferDiscardChanges answers that question: close, losing what wasn't saved.
+	OfferDiscardChanges = "Discard changes"
+	// OfferDeleteFile moves a setup file open in the editor to the Trash, after asking.
+	OfferDeleteFile = "Delete file"
+	// SuggestionsMax bounds the steps offered while typing.
+	SuggestionsMax = 20
+)
+
+// MessageChangedOnDisk is shown instead of saving over another tool's changes.
+const MessageChangedOnDisk = "This file changed on disk"
+
+// Scenario: Write a new story
+
+// NewStory creates a capability from the New story dialog: <slug>/<slug>.feature with
+// "Feature: <Name>" and the story as its description, then lists it in the sidebar.
+// Needed by "Write a new story" in capabilities/write-stories-and-scenarios.
+func (w *Window) NewStory(draft StoryDraft) error {
+	assert.That(w != nil, "new story runs on a window")
+	assert.That(utf8.ValidString(draft.Name), "the story's name is text")
+	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
+	assert.That(len(draft.SoThat) <= StorySentenceLengthMax, "each story line stays bounded")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	name := slug.Of(draft.Name)
+	if name == "" || w.project == nil {
+		return errors.New("a story needs a name with letters or digits, in an open project")
+	}
+	for _, part := range []string{draft.Name, draft.AsA, draft.IWant, draft.SoThat} {
+		if strings.TrimSpace(part) == "" || strings.Contains(part, "\n") {
+			return errors.New("each line of the story is one line of text")
+		}
+	}
+	dir := filepath.Join(w.path, name)
+	if _, err := os.Stat(dir); err == nil {
+		return fmt.Errorf("there's already a %s folder", name)
+	}
+	text := "Feature: " + draft.Name + "\n  As a " + draft.AsA + "\n  I want " + draft.IWant +
+		"\n  So that " + draft.SoThat + "\n"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, name+".feature"), []byte(text), 0o644); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.Select(draft.Name)
+}
+
+// Scenario: Add a scenario to a capability
+// Scenario: A new scenario starts flagged to do
+
+// NewScenario adds a scenario to the selected capability from the New scenario dialog: a
+// "Scenario:" block tagged @todo (and @error for an error state) and scripts/<slug>.sh sourcing
+// the kit, then opens the scenario in the editor. Needed by "Add a scenario to a capability",
+// "A new scenario starts flagged to do" and "Reuse an existing step" in
+// capabilities/write-stories-and-scenarios.
+func (w *Window) NewScenario(draft ScenarioDraft) error {
+	assert.That(w != nil, "new scenario runs on a window")
+	assert.That(utf8.ValidString(draft.Name), "the scenario's name is text")
+	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	capability, ok := w.findCapability(w.selectedCapability)
+	if w.selectedCapability == "" || !ok {
+		return errors.New("select a capability to add a scenario to")
+	}
+	key := slug.Of(draft.Name)
+	if key == "" || strings.Contains(draft.Name, "\n") {
+		return errors.New("a scenario needs a one-line name with letters or digits")
+	}
+	if _, exists := w.findIn(capability.Slug, draft.Name); exists {
+		return fmt.Errorf("%s already has a scenario called %q", capability.Name, draft.Name)
+	}
+	text, err := readEditable(capability.FeaturePath)
+	if err != nil {
+		return err
+	}
+	// A new scenario isn't built yet, so it starts flagged @todo.
+	tags := project.TagTodo
+	if draft.Error {
+		tags = project.TagError + " " + tags
+	}
+	block := "\n  " + tags + "\n  Scenario: " + draft.Name + "\n"
+	updated := strings.TrimRight(text, "\n") + "\n" + block
+	if err := os.WriteFile(capability.FeaturePath, []byte(updated), 0o644); err != nil {
+		return err
+	}
+	script := filepath.Join(capability.Dir, "scripts", key+".sh")
+	if err := writeNew(script, KitSourceLine+"\n"); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	_, err = w.Edit(capability.Slug + "/" + draft.Name)
+	return err
+}
+
+// blockEnd is the line after a scenario's block: past its indented lines, from the line
+// holding "Scenario:" (counting from 0).
+func blockEnd(lines []string, start int) int {
+	assert.That(start >= 0, "a block starts on a line")
+	assert.That(len(lines) <= EditorTextBytesMax, "lines stay bounded")
+	end := start + 1
+	// bound: end only grows, up to len(lines).
+	for end < len(lines) && strings.HasPrefix(lines[end], "    ") {
+		end++
+	}
+	return min(end, len(lines))
+}
+
+// Scenario: Reuse an existing step
+
+// stepKeywords start a step line.
+func stepKeywords() []string {
+	keywords := []string{"Given", "When", "Then", "And", "But", "*"}
+	assert.That(len(keywords) == 6, "Gherkin has six step keywords")
+	assert.That(keywords[5] == "*", "the bullet is a keyword too")
+	return keywords
+}
+
+// typeText types into the editor: the first text starts a new line at the cursor, as a step
+// in the scenario's block; more text adds to that line.
+func (e *Editor) typeText(text string) error {
+	assert.That(e != nil, "type runs on an editor")
+	assert.That(!strings.Contains(text, "\n"), "typing adds to one line")
+	lines := strings.Split(e.text, "\n")
+	if e.typing < 0 || e.typing >= len(lines) {
+		at := min(max(e.cursor, 0), len(lines))
+		lines = append(lines[:at], append([]string{"    " + text}, lines[at:]...)...)
+		e.typing = at
+	} else {
+		lines[e.typing] += text
+	}
+	joined := strings.Join(lines, "\n")
+	if len(joined) > EditorTextBytesMax {
+		return errors.New("the file is full")
+	}
+	e.text = joined
+	return nil
+}
+
+// typedStep splits the line being typed into its keyword and the start of its text.
+func (e *Editor) typedStep() (string, string, bool) {
+	assert.That(e != nil, "typed step runs on an editor")
+	assert.That(e.typing < len(strings.Split(e.text, "\n")) || e.typing < 0, "typing is a line")
+	if e.typing < 0 {
+		return "", "", false
+	}
+	line := strings.TrimSpace(strings.Split(e.text, "\n")[e.typing])
+	keyword, partial, _ := strings.Cut(line, " ")
+	return keyword, partial, partial != ""
+}
+
+// Suggestions lists the steps offered for the step being typed, drawn from the project's
+// steps: those starting with what's typed, most used first, each with "used in N". Needed by
+// "Reuse an existing step".
+func (e *Editor) Suggestions() []StepSuggestion {
+	assert.That(e != nil, "suggestions runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	_, partial, ok := e.typedStep()
+	if !ok {
+		return []StepSuggestion{}
+	}
+	return e.suggestionsFor(partial)
+}
+
+// SuggestionsFor lists the steps offered for a step line as the Mac editor holds it: "Given a
+// card" offers steps starting "a card". A line that isn't a step, or a step already written
+// out word for word, offers none.
+func (e *Editor) SuggestionsFor(line string) []StepSuggestion {
+	assert.That(e != nil, "suggestions runs on an editor")
+	assert.That(!strings.Contains(line, "\n"), "suggestions are for one line")
+	keyword, partial, _ := strings.Cut(strings.TrimSpace(line), " ")
+	if !isStepKeyword(keyword) || strings.TrimSpace(partial) == "" {
+		return []StepSuggestion{}
+	}
+	offered := e.suggestionsFor(partial)
+	if len(offered) == 1 && offered[0].Text == partial {
+		return []StepSuggestion{}
+	}
+	return offered
+}
+
+// suggestionsFor lists the project's steps starting with partial, most used first.
+func (e *Editor) suggestionsFor(partial string) []StepSuggestion {
+	assert.That(e.window != nil, "an editor belongs to a window")
+	assert.That(partial != "", "suggestions start from what's typed")
+	if e.window.project == nil {
+		return []StepSuggestion{}
+	}
+	uses := make(map[string]int, 32)
+	for _, capability := range e.window.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			for _, step := range uniqueSteps(scenario) {
+				if strings.HasPrefix(strings.ToLower(step.Text), strings.ToLower(partial)) {
+					uses[step.Text]++
+				}
+			}
+		}
+	}
+	texts := make([]string, 0, len(uses))
+	for text := range uses {
+		texts = append(texts, text)
+	}
+	sort.Slice(texts, func(a, b int) bool {
+		return uses[texts[a]] > uses[texts[b]] ||
+			(uses[texts[a]] == uses[texts[b]] && texts[a] < texts[b])
+	})
+	suggestions := make([]StepSuggestion, 0, min(len(texts), SuggestionsMax))
+	for _, text := range texts[:min(len(texts), SuggestionsMax)] {
+		suggestions = append(suggestions, StepSuggestion{
+			Text: text, Label: fmt.Sprintf("used in %d", uses[text]),
+		})
+	}
+	return suggestions
+}
+
+// ChooseSuggestion replaces the step being typed with an offered step, word for word.
+func (e *Editor) ChooseSuggestion(text string) error {
+	assert.That(e != nil, "choose suggestion runs on an editor")
+	assert.That(text != "", "a suggestion has text")
+	assert.That(!strings.Contains(text, "\n"), "a suggestion is one step")
+	keyword, _, ok := e.typedStep()
+	if !ok {
+		return errors.New("no step is being typed")
+	}
+	for _, suggestion := range e.Suggestions() {
+		if suggestion.Text != text {
+			continue
+		}
+		lines := strings.Split(e.text, "\n")
+		lines[e.typing] = "    " + keyword + " " + text
+		e.text, e.typing = strings.Join(lines, "\n"), -1
+		return nil
+	}
+	return fmt.Errorf("%q isn't offered", text)
+}
+
+// Scenario: Saving changes only what was changed
+// Scenario: The file changes on disk while it's being edited
+
+// Save writes the editor's text to its file. The text is the whole file as edited, so only
+// the lines that were changed differ. When the file changed on disk since it was opened, it
+// shows MessageChangedOnDisk instead and writes nothing. Needed by "Saving changes only what
+// was changed" and "The file changes on disk while it's being edited".
+func (e *Editor) Save() error {
+	assert.That(e != nil, "save runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	onDisk, err := readEditable(e.path)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	if onDisk != e.opened {
+		e.problems = []string{MessageChangedOnDisk}
+		return nil
+	}
+	if err := os.WriteFile(e.path, []byte(e.text), 0o644); err != nil {
+		return err
+	}
+	e.opened, e.problems = e.text, []string{}
+	e.markParseErrors()
+	return e.window.reload()
+}
+
+// conflict is true while the file on disk differs from the one the editor opened: another
+// tool saved it.
+func (e *Editor) conflict() bool {
+	assert.That(e != nil, "conflict runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	onDisk, err := os.ReadFile(e.path)
+	return err == nil && string(onDisk) != e.opened
+}
+
+// ChangedOnDisk is true while another tool has saved the file since the editor opened it, so
+// Save would write nothing.
+func (e *Editor) ChangedOnDisk() bool {
+	assert.That(e != nil, "changed on disk runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	return e.conflict()
+}
+
+// editorOffers are what the editor offers: the ways out of a conflict, or "Preview".
+func (e *Editor) editorOffers() []string {
+	assert.That(e != nil, "editor offers run on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	if e.conflict() {
+		return []string{OfferKeepMine, OfferUseTheirs, OfferCompare}
+	}
+	if e.previewable() {
+		return []string{OfferPreview, OfferCloseEditor}
+	}
+	if e.setupFile() {
+		return []string{OfferDeleteFile, OfferCloseEditor}
+	}
+	return []string{OfferCloseEditor}
+}
+
+// chooseInEditor takes one of the editor's offers.
+func (e *Editor) chooseInEditor(action string) error {
+	assert.That(e != nil, "choose runs on an editor")
+	assert.That(action != "", "an action has a label")
+	switch action {
+	case OfferKeepMine:
+		if err := os.WriteFile(e.path, []byte(e.text), 0o644); err != nil {
+			return err
+		}
+		e.opened, e.problems = e.text, []string{}
+		return e.window.reload()
+	case OfferUseTheirs:
+		theirs, err := readEditable(e.path)
+		if err != nil {
+			return err
+		}
+		e.text, e.opened, e.problems = theirs, theirs, []string{}
+		return nil
+	case OfferCompare:
+		theirs, err := readEditable(e.path)
+		if err != nil {
+			return err
+		}
+		e.problems = []string{MessageChangedOnDisk, "Theirs:\n" + theirs}
+		return nil
+	case OfferPreview:
+		// Preview toggles: chosen again, it hides.
+		e.previewing = !e.previewing
+		return nil
+	case OfferCloseEditor:
+		return e.window.closeEditor(func() error { return nil })
+	case OfferDeleteFile:
+		return e.window.deleteFile()
+	}
+	return ErrNotImplemented
+}
+
+// Scenario: A line that isn't a step
+
+// Marks lists the problems marked in the editor's text, by line: what the parser couldn't
+// read at the last save.
+func (e *Editor) Marks() []EditorMark {
+	assert.That(e != nil, "marks runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	return append([]EditorMark{}, e.marks...)
+}
+
+// markParseErrors reads a saved .feature file and marks the line the parser stops at.
+func (e *Editor) markParseErrors() {
+	assert.That(e != nil, "mark runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	e.marks = []EditorMark{}
+	if !strings.HasSuffix(e.path, ".feature") {
+		return
+	}
+	if _, err := spec.ParseFeature(e.path); err != nil {
+		line, message := spec.Explain(err)
+		e.marks = append(e.marks, EditorMark{Line: int(line), Message: capitalized(message)})
+	}
+}
+
+// capitalized starts a message with a capital letter, as a mark shows it.
+func capitalized(message string) string {
+	assert.That(len(message) <= NameLengthMax*4, "a message stays bounded")
+	if message == "" {
+		return message
+	}
+	return strings.ToUpper(message[:1]) + message[1:]
+}
+
+// Problems are what the parser can't read in the editor's text as it is now, unsaved: the
+// marks a save would leave. Only a .feature file has them. The givens command checks them
+// before it saves an edit made in $EDITOR. See capabilities/work-in-the-terminal.
+func (e *Editor) Problems() []EditorMark {
+	assert.That(e != nil, "problems runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	if strings.HasSuffix(e.path, ".sh") {
+		return shellProblems(e.text)
+	}
+	if !strings.HasSuffix(e.path, ".feature") {
+		return []EditorMark{}
+	}
+	if _, err := spec.ParseFeatureText(e.text); err != nil {
+		line, message := spec.Explain(err)
+		return []EditorMark{{Line: int(line), Message: capitalized(message)}}
+	}
+	return []EditorMark{}
+}
+
+// shellProblems are the lines `bash -n` reports in a setup script or helper file's text, so a
+// script that doesn't parse isn't saved from the developer's editor, as a .feature file that
+// doesn't parse isn't. A check that can't run reports nothing: the file is saved as typed.
+// Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html (-n)
+func shellProblems(text string) []EditorMark {
+	assert.That(utf8.ValidString(text), "a script is text")
+	assert.That(syntaxCheckTimeout > 0, "the check has a limit")
+	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "bash", "-n")
+	command.Stdin = strings.NewReader(text)
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	if err != nil && !errors.As(err, &exit) {
+		return []EditorMark{}
+	}
+	marks := make([]EditorMark, 0, 2)
+	for _, match := range bashError.FindAllStringSubmatch(string(output), helperProblemsMax) {
+		// bash quotes the line it stopped on after its message, as a line of its own.
+		line, convertErr := strconv.Atoi(match[1])
+		if convertErr == nil && !strings.HasPrefix(match[2], "`") {
+			marks = append(marks, EditorMark{Line: line, Message: capitalized(match[2])})
+		}
+	}
+	return marks
+}
+
+// Scenario: Preview a scenario while editing
+// Scenario: Preview a story with an image
+// Scenario: Preview a line that isn't a step
+
+// previewable is true for what Preview can show: a scenario's block, or about.md.
+func (e *Editor) previewable() bool {
+	assert.That(e != nil, "previewable runs on an editor")
+	assert.That(e.path != "", "an editor holds a file")
+	return e.scenario != "" || filepath.Base(e.path) == "about.md"
+}
+
+// Preview is what "Preview" shows for the editor's text, unsaved changes included: a
+// scenario as it reads in the library, keywords lined up, with any line that isn't a step
+// marked with the parser's message; or about.md as the library renders it. Needed by the
+// preview scenarios in capabilities/write-stories-and-scenarios.
+func (e *Editor) Preview() []PreviewLine {
+	assert.That(e != nil, "preview runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	if filepath.Base(e.path) == "about.md" {
+		rendered := withImagePlaceholders(e.text, filepath.Dir(e.path))
+		lines := make([]PreviewLine, 0, 16)
+		for _, line := range strings.Split(rendered, "\n") {
+			lines = append(lines, PreviewLine{Text: line})
+		}
+		return lines
+	}
+	if e.scenario == "" {
+		return []PreviewLine{}
+	}
+	return previewScenario(strings.Split(e.text, "\n"), e.scenario)
+}
+
+// previewScenario shows one scenario's block from the editor's lines: its name, then its
+// steps lined up. A line that isn't a step, a tag or a comment is marked.
+func previewScenario(lines []string, name string) []PreviewLine {
+	assert.That(name != "", "a scenario has a name")
+	assert.That(len(lines) <= EditorTextBytesMax, "lines stay bounded")
+	start := -1
+	for index, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "Scenario: "+name || trimmed == "Scenario Outline: "+name {
+			start = index
+		}
+	}
+	if start < 0 {
+		return []PreviewLine{}
+	}
+	preview := []PreviewLine{{Text: strings.TrimSpace(lines[start])}}
+	steps, marked := make([]string, 0, 8), make(map[int]string, 1)
+	for _, line := range lines[start+1 : blockEnd(lines, start)] {
+		trimmed := strings.TrimSpace(line)
+		keyword, _, _ := strings.Cut(trimmed, " ")
+		switch {
+		case trimmed == "" || strings.HasPrefix(trimmed, "#"):
+		case isStepKeyword(keyword):
+			steps = append(steps, trimmed)
+		default:
+			marked[len(steps)] = trimmed
+			steps = append(steps, trimmed)
+		}
+	}
+	plain := make([]string, 0, len(steps))
+	for index, step := range steps {
+		if _, bad := marked[index]; !bad {
+			plain = append(plain, step)
+		}
+	}
+	aligned := linedUp(plain)
+	for index, step := range steps {
+		if text, bad := marked[index]; bad {
+			preview = append(preview, PreviewLine{Text: text, Mark: MessageNotAStep})
+			continue
+		}
+		preview = append(preview, PreviewLine{Text: aligned[0]})
+		aligned = aligned[1:]
+		assert.That(step != "", "a step has text")
+	}
+	return preview
+}
+
+// MessageNotAStep marks a line among a scenario's steps that the parser can't read.
+const MessageNotAStep = "Expected a step, a tag, a comment or a new scenario"
+
+// isStepKeyword is true for a word that starts a step.
+func isStepKeyword(word string) bool {
+	assert.That(!strings.Contains(word, " "), "a keyword is one word")
+	assert.That(len(word) <= NameLengthMax, "a word stays bounded")
+	for _, keyword := range stepKeywords() {
+		if word == keyword {
+			return true
+		}
+	}
+	return false
+}
+
+// Scenario: Press e to edit a scenario
+// Scenario: Edit the story on show
+
+// editShown opens the editor at the scenario on show, at its block, or else at the top of the
+// .feature file of the story on show. With the editor, a Drop in or search already open, the
+// key is typed there instead, so it does nothing here. Needed by "Press e to edit a scenario"
+// and "Press e to edit a story".
+func (w *Window) editShown() error {
+	assert.That(w != nil, "edit shown runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.editor != nil || w.session != nil || w.search != nil || w.prompt != nil {
+		return nil
+	}
+	if w.selectedScenario != "" {
+		_, err := w.Edit(w.selectedScenario)
+		return err
+	}
+	capability, ok := w.storyCapability()
+	if !ok {
+		return nil
+	}
+	_, err := w.Edit(filepath.Join(capability.Slug, filepath.Base(capability.FeaturePath)))
+	return err
+}
+
+// Editor is the editor open in the window, or nil when nothing is being edited.
+func (w *Window) Editor() *Editor {
+	assert.That(w != nil, "editor runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	return w.editor
+}
+
+// Editing is the path of the file open in the window's editor, or "".
+func (w *Window) Editing() string {
+	assert.That(w != nil, "editing runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.editor == nil {
+		return ""
+	}
+	return w.editor.path
+}
+
+// Path is the absolute path of the file the editor holds.
+func (e *Editor) Path() string {
+	assert.That(e != nil, "path runs on an editor")
+	assert.That(e.path == "" || filepath.IsAbs(e.path), "an editor's path is absolute")
+	return e.path
+}
+
+// Scenario is the scenario the editor opened at, its block, or "" for a whole file.
+func (e *Editor) Scenario() string {
+	assert.That(e != nil, "scenario runs on an editor")
+	assert.That(e.scenario == "" || e.line > 0, "a scenario's block has a line")
+	return e.scenario
+}
+
+// Line is the line the editor opened at, counting from 1, or 0 for the top of the file.
+func (e *Editor) Line() int {
+	assert.That(e != nil, "line runs on an editor")
+	assert.That(e.line >= 0, "a line isn't negative")
+	return e.line
+}
+
+// Text is the editor's text, unsaved changes included.
+func (e *Editor) Text() string {
+	assert.That(e != nil, "text runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	return e.text
+}
+
+// SetText replaces the editor's text without saving, as typing would.
+func (e *Editor) SetText(text string) error {
+	assert.That(e != nil, "set text runs on an editor")
+	assert.That(utf8.ValidString(text), "the editor holds text")
+	assert.That(len(text) <= EditorTextBytesMax, "the text fits EditorTextBytesMax")
+	e.text = text
+	return nil
+}
+
+// dirty is true while the editor holds changes that aren't saved.
+func (e *Editor) dirty() bool {
+	assert.That(e != nil, "dirty runs on an editor")
+	assert.That(len(e.text) <= EditorTextBytesMax, "the text stays bounded")
+	return e.text != e.opened
+}
+
+// closeEditor closes the editor and then runs next, asking first when changes aren't saved.
+func (w *Window) closeEditor(next func() error) error {
+	assert.That(w.editor != nil, "there's an editor to close")
+	assert.That(next != nil, "something runs after closing")
+	if !w.editor.dirty() {
+		w.editor = nil
+		return next()
+	}
+	question := "Close " + filepath.Base(w.editor.path) + "? Your changes aren't saved"
+	w.ask(question, OfferDiscardChanges, func() error {
+		w.editor = nil
+		return next()
+	})
+	return nil
+}
+
+// CloseEditor closes the editor without asking, whatever it holds unsaved: the givens
+// command's own editing ends in the developer's editor, which saved or kept the text.
+func (w *Window) CloseEditor() {
+	assert.That(w != nil, "close editor runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	w.editor = nil
+}
+
+// snapshot is the editor as the window shows it.
+func (e *Editor) snapshot() *EditorSnapshot {
+	assert.That(e != nil, "snapshot runs on an editor")
+	assert.That(e.problems != nil, "problems is a list")
+	problems := append([]string{}, e.problems...)
+	if e.conflict() && !slices.Contains(problems, MessageChangedOnDisk) {
+		problems = append(problems, MessageChangedOnDisk)
+	}
+	for _, problem := range e.helperProblems {
+		problems = append(problems, fmt.Sprintf("line %d: %s", problem.Line, problem.Message))
+	}
+	for _, mark := range e.marks {
+		problems = append(problems, fmt.Sprintf("line %d: %s", mark.Line, mark.Message))
+	}
+	preview := make([]string, 0, 16)
+	if e.previewing {
+		for _, line := range e.Preview() {
+			preview = append(preview, strings.TrimSpace(line.Text+" "+line.Mark))
+		}
+	}
+	return &EditorSnapshot{
+		Path: e.path, Text: e.text, Problems: problems, Preview: preview, Dirty: e.dirty(),
+		Scenario: e.scenario,
+	}
+}

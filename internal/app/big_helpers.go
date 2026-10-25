@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"givens/internal/assert"
 	"givens/internal/browser"
@@ -558,4 +559,70 @@ func (w *Window) writable() error {
 		return fmt.Errorf("%s @ %s: %w", filepath.Base(w.branchOrigin), w.branch, ErrReadOnly)
 	}
 	return nil
+}
+
+// Edit opens a scenario, by name, at its block in its .feature file, or a file, by its path
+// relative to the capabilities folder ("checkout/about.md"), in the editor. The editor holds
+// the file's whole text, comments and all, so saving writes back only what was typed.
+// Needed by the editing, saving and preview scenarios in capabilities/write-stories-and-scenarios.
+func (w *Window) Edit(target string) (*Editor, error) {
+	assert.That(w != nil, "edit runs on a window")
+	assert.That(target != "", "edit names a scenario or a file")
+	assert.That(!filepath.IsAbs(target), "a file is named relative to the capabilities folder")
+	if err := w.writable(); err != nil {
+		return nil, err
+	}
+	if w.project == nil {
+		return nil, fmt.Errorf("%s: %w", target, ErrNotFound)
+	}
+	path := filepath.Join(w.path, target)
+	if scenario, ok := w.findScenario(target); ok {
+		capability, _ := w.findCapability(scenario.Capability)
+		path = capability.FeaturePath
+	}
+	if !strings.HasPrefix(path, w.path+string(filepath.Separator)) {
+		return nil, fmt.Errorf("%s is outside the capabilities folder: %w", target, ErrNotFound)
+	}
+	text, err := readEditable(path)
+	if err != nil {
+		return nil, err
+	}
+	w.editor = &Editor{window: w, path: path, text: text, opened: text, problems: []string{},
+		typing: -1, marks: []EditorMark{}}
+	if scenario, ok := w.findScenario(target); ok {
+		w.editor.scenario = scenario.Name
+		w.editor.line = int(scenario.Line)
+		w.editor.cursor = blockEnd(strings.Split(text, "\n"), int(scenario.Line)-1)
+	}
+	return w.editor, nil
+}
+
+// readEditable reads a file the editor can hold: text, within EditorTextBytesMax.
+func readEditable(path string) (string, error) {
+	assert.That(filepath.IsAbs(path), "the path is absolute")
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("%s: %w", filepath.Base(path), ErrNotFound)
+	}
+	if err != nil {
+		return "", err
+	}
+	if len(content) > EditorTextBytesMax || !utf8.Valid(content) {
+		return "", fmt.Errorf("%s isn't a text file Givens can edit", filepath.Base(path))
+	}
+	assert.That(len(content) <= EditorTextBytesMax, "editable text stays bounded")
+	return string(content), nil
+}
+
+// writeNew writes a new file, making its folder, unless one is already there.
+func writeNew(path string, text string) error {
+	assert.That(filepath.IsAbs(path), "the path is absolute")
+	assert.That(utf8.ValidString(text), "the file is text")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(text), 0o644)
 }

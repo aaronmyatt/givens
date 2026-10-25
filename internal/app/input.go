@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"path/filepath"
 	"unicode/utf8"
 
 	"givens/internal/assert"
@@ -57,26 +56,4 @@ func (w *Window) Press(keys string) error {
 		return w.editShown()
 	}
 	return ErrNotImplemented
-}
-
-// editShown opens the editor at the scenario on show, at its block, or else at the top of the
-// .feature file of the story on show. With the editor, a Drop in or search already open, the
-// key is typed there instead, so it does nothing here. Needed by "Press e to edit a scenario"
-// and "Press e to edit a story".
-func (w *Window) editShown() error {
-	assert.That(w != nil, "edit shown runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	if w.editor != nil || w.session != nil || w.search != nil || w.prompt != nil {
-		return nil
-	}
-	if w.selectedScenario != "" {
-		_, err := w.Edit(w.selectedScenario)
-		return err
-	}
-	capability, ok := w.storyCapability()
-	if !ok {
-		return nil
-	}
-	_, err := w.Edit(filepath.Join(capability.Slug, filepath.Base(capability.FeaturePath)))
-	return err
 }

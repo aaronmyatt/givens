@@ -342,3 +342,35 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Finding: big.go's sections stay apart by folder order, but the import blocks and the end of
   big_helpers.go are hot spots every slice touches. After this, the developer asked for the
   rest to go one at a time.
+
+## Write stories and scenarios moves in (2026-10-25)
+- Three commits, as the plan says. The section is last in big.go, after Work in the terminal
+  (folder order: "work" sorts before "write").
+- a) New and edit. authoring.go, editor.go and preview.go are gone; editor_more.go keeps only
+  `setupFile` and `deleteFile`, for c. The section: the offer constants and
+  `MessageChangedOnDisk` at the top; `NewStory` under "Write a new story"; `NewScenario` and
+  `blockEnd` under "Add a scenario to a capability" and "A new scenario starts flagged to do";
+  the step suggestions under "Reuse an existing step"; `Save`, `conflict`, `ChangedOnDisk`,
+  `editorOffers` and `chooseInEditor` under the saving and changed-on-disk scenarios; `Marks`,
+  `markParseErrors`, `capitalized`, `Problems` and `shellProblems` under "A line that isn't a
+  step"; `previewable` and preview.go under the three Preview scenarios ("Preview a story with
+  an image" is Preview's about.md branch); `editShown`, the editor's accessors, `dirty`,
+  `closeEditor`, `CloseEditor` and `snapshot` under "Press e to edit a scenario" and "Edit the
+  story on show". big.go imports internal/spec now.
+- To big_helpers.go: `Edit` and `readEditable`, since Gherkin files' `editBrokenFeature`,
+  Share setup's `editHelper` and `openHelperFile`, Update the kit's "Compare" and Drop in's
+  `editFile` open files with `Edit`, and Tags' `flagTodo` reads with `readEditable`; and
+  `writeNew`, since Open a project's `createCapabilities` writes with it.
+- `editShown` came out of input.go: it's one story's function, not the dispatcher, as
+  `shownCapability` came out of selection.go. Press's `case KeyEdit` stays. No seam cut.
+- `blockEnd` stays in the section though `Edit`, now a helper, calls it: it finds a scenario's
+  block, for typing a step there, and preview and delete are its other callers. Same call as
+  `setupTexts` under `RequiredCommands`.
+- `OfferCompare` stays in the section's const block though Update the kit offers it too: a
+  label is the story's. `OfferNewScenario` stays in offers.go's page offers const block.
+- Not cut: core glue's calls (`allOffers`' `editorOffers` and `OfferNewStory`, `Choose`'s
+  `chooseInEditor`, `Type`'s `typeText`, `Select`'s `closeEditor`, `Snapshot`'s `snapshot`);
+  the opening comment names them. edit.go stays: only types and limits; the header lists it.
+- Gherkin files', Open a project's, Share setup's and Update the kit's opening comments pointed
+  at authoring.go, editor.go or editor_more.go; they now point at the section or big_helpers.go.
+- Section 680 lines, big_helpers.go +67. big.go 3,344, big_helpers.go 628. 15 of 17.
