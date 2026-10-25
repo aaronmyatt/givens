@@ -15,6 +15,8 @@
 //
 // Code outside this file that a story depends on, and why it's elsewhere:
 //   - internal/kit/givens.sh: bash, run in the developer's shell by every setup script.
+//   - internal/tui, internal/termedit and cmd/givens: the edges. They import this package, so
+//     moving them in would make it depend on Bubble Tea; their stories have pointer sections.
 
 package app
 
@@ -214,6 +216,15 @@ func withTodo(lines []string, at int, flagged bool) ([]string, error) {
 	return kept, nil
 }
 
+// Feature: The kit
+//
+// capabilities/the-kit. A pointer: the kit is bash, so none of its code is here. It's
+// internal/kit/givens.sh, built into the givens binary by internal/kit/kit.go and copied into
+// each project as capabilities/_shared/givens.sh; every scenario is a bats test in
+// internal/kit/kit.bats, run under bash 3.2 by scripts/check.sh kit. Strict mode, the "Your
+// turn" heading, quiet mode, colour, need, fail and warn, --when, and steps by hand and asks in
+// a terminal are all functions in givens.sh.
+
 // Feature: Trust a project
 //
 // capabilities/trust-a-project. Givens asks before it runs any of a project's scripts, and
@@ -357,6 +368,14 @@ func (s *Session) trustThisProject() error {
 	}
 	return s.restart(false)
 }
+
+// Feature: Use Givens from the terminal
+//
+// capabilities/use-givens-from-the-terminal. A pointer: the commands are cmd/givens, an edge
+// that imports this package, so none of their code is here. list and check are
+// cmd/givens/list.go (runList, runCheck); run, with steps by hand and code blocks in a
+// terminal, is cmd/givens/run.go (runSetup, runBlocks); main.go routes each command. "List by
+// tag" parses its expression with internal/tags.
 
 // Feature: Views
 //
@@ -552,3 +571,13 @@ func (w *Window) emptyView() string {
 	}
 	return "No scenarios are tagged @" + w.selectedView
 }
+
+// Feature: Work in the terminal
+//
+// capabilities/work-in-the-terminal. A pointer: the TUI and the editor hand-off are edges that
+// import this package, so none of their code is here. The TUI is internal/tui: tui.go (the
+// Bubble Tea model), browse.go (the tabs and lists), story.go, search.go, helpers.go,
+// dropin.go and checklist.go (the Drop in page), layout.go, and edit.go, which hands a file to
+// the developer's editor through internal/termedit. cmd/givens starts it (tui.go) and runs the
+// terminal commands (edit.go, new.go, manage.go, panels.go). What each screen does is the
+// other stories' code, here and in internal/app, read through snapshot.go.

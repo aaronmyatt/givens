@@ -119,3 +119,21 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   is the Views section and `tagViews`. "A runner filters on the same tags" is cucumber-js.
   "A scenario flagged to do" is project's `Todo` and the TUI's ⚑.
 - Section 126 lines, big_helpers.go +0. big.go 554, big_helpers.go 134. 4 of 17.
+
+## Pointer sections: The kit, Use Givens from the terminal, Work in the terminal (2026-10-25)
+- Three Feature headings with no code, in folder order: The kit before Trust, Use Givens from
+  the terminal before Views, Work in the terminal last. Each opening comment names where the
+  story lives: internal/kit/givens.sh and kit.bats; cmd/givens list.go, run.go and main.go;
+  internal/tui (by file), internal/termedit and cmd/givens' terminal commands.
+- No Scenario headings: none of their code is in big.go. `scripts/entry.sh "Quiet mode"` lands
+  on the Feature's lines, and `--debug` says "no functions … to stop in", as the plan expected.
+- The header's "Code outside this file" list gains the edges.
+- Plan was wrong here: install.go and `InstallCommand` serve no story. Their only callers are
+  the archived Mac app's serve (`_archive/internal/serve/methods.go`); no feature has an
+  install scenario. They stay where they are, not in Use Givens from the terminal. Dead code
+  in the live tree: a backlog line to delete them (with `writableFolders`' test in
+  app_test.go) is the developer's call.
+- `givensCommand` stays in windows.go: Drop in's `startSession` (dropin_run.go) is its one live
+  caller, besides the dead `InstallCommand`. It moves with Drop in (slice 12).
+- No app code serves only one of these three stories: the edges call other stories' functions.
+- Sections 9, 8 and 9 lines. big.go 583, big_helpers.go 134. 7 of 17.
