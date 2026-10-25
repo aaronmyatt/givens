@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"givens/internal/assert"
@@ -91,6 +92,383 @@ func (w *Window) copyFromSearch() error {
 	return errors.New("no scenario is listed to copy")
 }
 
+// Feature: Search everything
+//
+// capabilities/search-everything. ⌘K looks through stories, scenarios, steps, setup files and
+// helpers at once, from an index read once each time the project's files change. SearchResults,
+// the grouped results, is in big_helpers.go, since Copy from search and Tags' search scenarios
+// read it too; so is uniqueSteps, which the editor's step suggestions share. A tag expression is
+// read by parseTags, in the Tags section. Core glue does the rest: Press and Type (input.go)
+// open the panel and fill its box, searchSnapshot and searchMessages (snapshot.go) show it and
+// say "Nothing matches", and selectStep (selection.go) selects a step result, whose scenarios
+// Views' inView lists through usesStep. The panel is internal/tui/search.go, and `givens
+// search` is runSearch in cmd/givens/panels.go.
+
+// Search result kinds, in the order the results list groups them.
+// See capabilities/search-everything.
+const (
+	SearchStories   = "Stories"
+	SearchScenarios = "Scenarios"
+	SearchSteps     = "Steps"
+	SearchScripts   = "Scripts"
+	SearchHelpers   = "Helpers"
+)
+
+// SearchResultsMax bounds each kind's results.
+const SearchResultsMax = 200
+
+// SearchResult is one row of the ⌘K results list.
+type SearchResult struct {
+	Name       string   `json:"name"`       // a capability, scenario, step, script or helper
+	Detail     string   `json:"detail"`     // the matching story line, script line or helper
+	Capability string   `json:"capability"` // the capability it belongs to, or ""
+	Uses       int      `json:"uses"`       // for a step: scenarios using it word for word
+	Matches    []string `json:"matches"`    // each highlighted part of Name and Detail
+}
+
+// SearchGroup is one kind of result under its heading, best matches first.
+type SearchGroup struct {
+	Kind    string         `json:"kind"` // one of the Search* kinds
+	Results []SearchResult `json:"results"`
+}
+
+// SearchResults is what the ⌘K panel shows right now.
+type SearchResults struct {
+	Query  string        `json:"query"`  // the text in the search box
+	Filter string        `json:"filter"` // the chosen kind filter, or "" for every kind
+	Groups []SearchGroup `json:"groups"` // only kinds with results, in Search* order
+}
+
+// search is the ⌘K panel's state.
+type search struct {
+	query  string
+	filter string
+}
+
+// query is a search box's text split into a tag expression and words.
+type query struct {
+	expression tags.Expression
+	tagged     bool   // the text holds a tag expression
+	words      string // what's left, lower case, trimmed
+	problem    string // why the tag expression doesn't parse, or ""
+}
+
+// Scenario: Search for a phrase
+// Scenario: Nothing matches
+
+// readQuery splits a search box's text: tags and and, or, not and brackets make the tag
+// expression; the rest are words to find.
+func readQuery(text string) query {
+	assert.That(len(text) <= NameLengthMax*4, "a query stays bounded")
+	expression, words := make([]string, 0, 4), make([]string, 0, 4)
+	for _, token := range strings.Fields(strings.NewReplacer("(", " ( ", ")", " ) ").
+		Replace(text)) {
+		switch {
+		case strings.HasPrefix(token, "@"), token == "and", token == "or", token == "not",
+			token == "(", token == ")":
+			expression = append(expression, token)
+		default:
+			words = append(words, token)
+		}
+	}
+	read := query{tagged: len(expression) > 0, words: strings.ToLower(strings.Join(words, " "))}
+	read.expression, read.problem = parseTags(expression)
+	return read
+}
+
+// searchGroups finds every kind of result. A tag expression narrows the search to scenarios.
+func (w *Window) searchGroups(read query) []SearchGroup {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(read.problem == "", "the query parsed")
+	scenarios := SearchGroup{Kind: SearchScenarios, Results: w.findScenarios(read)}
+	if read.tagged {
+		return []SearchGroup{scenarios}
+	}
+	return []SearchGroup{
+		{Kind: SearchStories, Results: w.findStories(read.words)},
+		scenarios,
+		{Kind: SearchSteps, Results: w.findSteps(read.words)},
+		{Kind: SearchScripts, Results: w.findScripts(read.words)},
+		{Kind: SearchHelpers, Results: w.findHelpers(read.words)},
+	}
+}
+
+// findScenarios finds scenarios matching the tag expression, whose names hold the words.
+func (w *Window) findScenarios(read query) []SearchResult {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(read.problem == "", "the query parsed")
+	found := make([]SearchResult, 0, 8)
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			if read.tagged && !read.expression.Match(scenario.Tags) {
+				continue
+			}
+			if !strings.Contains(strings.ToLower(scenario.Name), read.words) {
+				continue
+			}
+			found = append(found, SearchResult{
+				Name: scenario.Name, Detail: capability.Name, Capability: capability.Name,
+				Matches: matchesIn(read.words, scenario.Name, capability.Name),
+			})
+		}
+	}
+	return limit(found)
+}
+
+// matchesIn lists each place word appears in the texts, as written there, in reading order.
+func matchesIn(word string, texts ...string) []string {
+	assert.That(word == strings.ToLower(word), "the word is lower case")
+	assert.That(len(texts) > 0, "there's text to look in")
+	matches := make([]string, 0, 2)
+	if word == "" {
+		return matches
+	}
+	for _, text := range texts {
+		lower := strings.ToLower(text)
+		// bound: each pass moves at past one match, and lower is finite.
+		for at := strings.Index(lower, word); at >= 0; {
+			matches = append(matches, text[at:at+len(word)])
+			next := strings.Index(lower[at+len(word):], word)
+			if next < 0 {
+				break
+			}
+			at += len(word) + next
+		}
+	}
+	return matches
+}
+
+// limit keeps the first SearchResultsMax results.
+func limit(found []SearchResult) []SearchResult {
+	assert.That(found != nil, "results are a list")
+	assert.That(SearchResultsMax > 0, "results have a limit")
+	if len(found) > SearchResultsMax {
+		return found[:SearchResultsMax]
+	}
+	return found
+}
+
+// searchIndex holds what ⌘K looks through, read and lower-cased once: every distinct step
+// with its uses, and every setup file's lines. It's built on the first search after the
+// project's files change, so typing a query reads nothing from disk.
+type searchIndex struct {
+	steps   []indexedStep
+	scripts []indexedScript
+}
+
+// indexedStep is one step text, as first written, with how many scenarios use it.
+type indexedStep struct {
+	name       string // "Given a signed-in shopper"
+	lower      string // the text alone, lower case, which is what's searched
+	capability string // the first capability that uses it
+	uses       int
+}
+
+// indexedScript is one setup, teardown or setup steps file.
+type indexedScript struct {
+	capability string
+	name       string // relative to the capabilities folder, like "checkout/scripts/x.sh"
+	lowerName  string
+	lines      []string // trimmed
+	lowerLines []string
+}
+
+// searchMemo is the last query's results, so a snapshot, its messages and the grouped
+// results asked for straight after all share one search.
+type searchMemo struct {
+	query   string
+	filter  string
+	results SearchResults
+}
+
+// searchIndexOf builds the index for the window's project.
+func (w *Window) searchIndexOf() *searchIndex {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(filepath.IsAbs(w.path), "the capabilities folder is absolute")
+	if w.index != nil {
+		return w.index
+	}
+	index := &searchIndex{steps: make([]indexedStep, 0, 64), scripts: make([]indexedScript, 0, 32)}
+	at := make(map[string]int, 64)
+	for _, capability := range w.project.Capabilities {
+		for _, scenario := range capability.Scenarios {
+			for _, step := range uniqueSteps(scenario) {
+				if seen, ok := at[step.Text]; ok {
+					index.steps[seen].uses++
+					continue
+				}
+				at[step.Text] = len(index.steps)
+				index.steps = append(index.steps, indexedStep{
+					name: step.Keyword + " " + step.Text, lower: strings.ToLower(step.Text),
+					capability: capability.Name, uses: 1,
+				})
+			}
+			for _, path := range []string{scenario.Setup, scenario.SetupCards,
+				scenario.Teardown} {
+				if script, ok := w.indexScript(capability.Name, path); ok {
+					index.scripts = append(index.scripts, script)
+				}
+			}
+		}
+	}
+	w.index = index
+	return index
+}
+
+// indexScript reads one setup file into the index, or reports there's none to read.
+func (w *Window) indexScript(capability string, path string) (indexedScript, bool) {
+	assert.That(capability != "", "a script belongs to a capability")
+	assert.That(path == "" || filepath.IsAbs(path), "a script's path is absolute")
+	if path == "" {
+		return indexedScript{}, false
+	}
+	relative, err := filepath.Rel(w.path, path)
+	if err != nil {
+		return indexedScript{}, false
+	}
+	text, err := helpers.ReadScript(path)
+	if err != nil {
+		return indexedScript{}, false
+	}
+	name := filepath.ToSlash(relative)
+	lines := strings.Split(text, "\n")
+	script := indexedScript{
+		capability: capability, name: name, lowerName: strings.ToLower(name),
+		lines: make([]string, 0, len(lines)), lowerLines: make([]string, 0, len(lines)),
+	}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		script.lines = append(script.lines, trimmed)
+		script.lowerLines = append(script.lowerLines, strings.ToLower(trimmed))
+	}
+	return script, true
+}
+
+// Scenario: Find a capability by its story
+
+// findStories finds capabilities whose name or a story line holds words.
+func (w *Window) findStories(words string) []SearchResult {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(words != "", "there are words to find")
+	found := make([]SearchResult, 0, 4)
+	for _, capability := range w.project.Capabilities {
+		for _, line := range capability.Story {
+			if !strings.Contains(strings.ToLower(line), words) {
+				continue
+			}
+			found = append(found, SearchResult{
+				Name: capability.Name, Detail: line, Capability: capability.Name,
+				Matches: matchesIn(words, capability.Name, line),
+			})
+			break
+		}
+	}
+	return limit(found)
+}
+
+// Scenario: Find every use of a step
+
+// findSteps finds steps holding the words, each step text once, with how many scenarios use
+// it word for word.
+func (w *Window) findSteps(words string) []SearchResult {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(words != "", "there are words to find")
+	found := make([]SearchResult, 0, 8)
+	for _, step := range w.searchIndexOf().steps {
+		if strings.Contains(step.lower, words) {
+			found = append(found, SearchResult{
+				Name: step.name, Capability: step.capability, Uses: step.uses,
+				Matches: matchesIn(words, step.name, ""),
+			})
+		}
+	}
+	return limit(found)
+}
+
+// usesStep is true when one of a scenario's steps is step word for word, keyword aside: the
+// scenarios "Find every use of a step" lists once a step result is selected.
+func usesStep(scenario Scenario, step string) bool {
+	assert.That(step != "", "a step is named")
+	assert.That(scenario.Name != "", "the scenario has a name")
+	for _, used := range scenario.Steps {
+		if _, text, _ := strings.Cut(used, " "); text == step {
+			return true
+		}
+	}
+	return false
+}
+
+// Scenario: Show only one kind of result
+
+// FilterSearch shows only one kind of result, by its heading ("Scripts"), or every kind for "".
+// Needed by "Show only one kind of result" in capabilities/search-everything.
+func (w *Window) FilterSearch(kind string) error {
+	assert.That(w != nil, "filter runs on a window")
+	assert.That(len(kind) <= NameLengthMax, "the kind fits NameLengthMax")
+	kinds := []string{"", SearchStories, SearchScenarios, SearchSteps, SearchScripts,
+		SearchHelpers}
+	if !slices.Contains(kinds, kind) {
+		return errors.New(kind + " isn't a kind of search result")
+	}
+	if w.search == nil {
+		return errors.New("search isn't open")
+	}
+	w.search.filter = kind
+	return nil
+}
+
+// findScripts finds setup files whose name or text holds the words: those named for them
+// first, then those that only mention them, each with its first matching line.
+func (w *Window) findScripts(words string) []SearchResult {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(words != "", "there are words to find")
+	named, mentioned := make([]SearchResult, 0, 8), make([]SearchResult, 0, 8)
+	for _, script := range w.searchIndexOf().scripts {
+		detail := ""
+		for index, line := range script.lowerLines {
+			if strings.Contains(line, words) {
+				detail = script.lines[index]
+				break
+			}
+		}
+		isNamed := strings.Contains(script.lowerName, words)
+		if detail == "" && !isNamed {
+			continue
+		}
+		result := SearchResult{
+			Name: script.name, Detail: detail, Capability: script.capability,
+			Matches: matchesIn(words, script.name, detail),
+		}
+		if isNamed {
+			named = append(named, result)
+		} else {
+			mentioned = append(mentioned, result)
+		}
+	}
+	return limit(append(named, mentioned...))
+}
+
+// Scenario: Find a helper
+
+// findHelpers finds documented helpers whose name or description holds the words.
+func (w *Window) findHelpers(words string) []SearchResult {
+	assert.That(w.project != nil, "search runs in a loaded project")
+	assert.That(words != "", "there are words to find")
+	found := make([]SearchResult, 0, 4)
+	for _, helper := range w.Helpers() {
+		shown := strings.ToLower(helper.Name + "\n" + helper.Description)
+		if !strings.Contains(shown, words) {
+			continue
+		}
+		found = append(found, SearchResult{
+			Name: helper.Name, Detail: helper.Description, Capability: helper.Capability,
+			Matches: matchesIn(words, helper.Name, helper.Description),
+		})
+	}
+	sort.SliceStable(found, func(a, b int) bool { return found[a].Name < found[b].Name })
+	return limit(found)
+}
+
 // Feature: Tags
 //
 // capabilities/tags. Kinds, timeouts, groups and to do flags are plain Gherkin tags, so a test
@@ -98,9 +476,9 @@ func (w *Window) copyFromSearch() error {
 // Feature's and Rule's included, and internal/tags parses Cucumber's tag expressions. Each tag
 // is a view: the Views section lists and selects them, through tagViews and isViewTag in
 // big_helpers.go, and "An error state", "A tag view" and "A tag on the Feature" land there.
-// Search's readQuery (search.go) splits a search into words and a tag expression, which
-// findScenarios (search_find.go) matches. "A runner filters on the same tags" is
-// cucumber-js's, and the ⚑ on a flagged scenario is internal/tui's.
+// The Search everything section's readQuery splits a search into words and a tag expression,
+// which its findScenarios matches. "A runner filters on the same tags" is cucumber-js's, and
+// the ⚑ on a flagged scenario is internal/tui's.
 
 // Scenario: Search by tag
 // Scenario: Search with a tag expression
