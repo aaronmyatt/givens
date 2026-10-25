@@ -195,3 +195,41 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   Two slices that both add helpers next to each other, or both cut seams in the same core
   file, would clash; neither happened here.
 - After the merge: build, TestBigFile (9 of 17) and scripts/check.sh pass.
+
+## Share setup between scenarios moves in (2026-10-25)
+- shared.go, helper_edit.go and needs.go are gone. Their Share code is the section, between
+  Search everything and Tags: `sharedFolder` and `OfferEdit`, then `elsewhere` under "Calling
+  another capability's helper"; `listHelpers`, `callersOf` and `helperCode` under the two
+  "same helper" scenarios; `setupTexts` under "See what a scenario needs installed";
+  `findHelper`, `selectHelper`, `editHelper` and `EditingHelper` under "Edit a helper";
+  `NewHelper` and `openHelperFile` under "Add a helper"; `SaveHelper` and `syntaxProblems`
+  under "Save a helper with a syntax error". big.go imports context, os/exec, regexp, strconv
+  and unicode/utf8 now.
+- To big_helpers.go:
+  - `Helpers`, the Shared list: Search's `findHelpers` and Views' `viewItems` and
+    `ViewHelpers` call it, besides this section's `findHelper` and `EditingHelper`.
+  - `RequiredCommands` and `ChromeHint`: the shared-code test. Its live callers are Drop in's
+    `precheck` (dropin_run.go, "A command the setup needs isn't installed", and Mix shell's
+    "No Chrome installed") and core glue's `requirementLabels` (snapshot.go), which shows this
+    story's "See what a scenario needs installed". Two stories use it and it isn't a seam, so
+    it's a helper. The share suite's steps also call it; steps don't count.
+  - `syntaxCheckTimeout`, `helperProblemsMax`, `bashErrorPattern` and `bashError`: the
+    editor's `shellProblems` (editor_more.go, Write stories) uses them as `syntaxProblems` does.
+- `setupTexts` stays in the section, though `RequiredCommands` is its one caller. Same call as
+  `readQuery` and `searchGroups`, which stayed in Search under `SearchResults`: the helper is
+  the shared way in, and the walk it calls (own script, `from` setups, helpers those call) is
+  this story's. Moving it too would have made big_helpers.go about +130, not +88.
+- `elsewhere` stays in the section, though its one caller is Drop in's `Session.messages`
+  (dropin_page.go). It holds this story's "Calling another capability's helper" and was always
+  a named function Drop in calls, like the `trustOf` seam; the opening comment names the call.
+- No seam cut. The helper offer in `allOffers` (offers.go) is one line, `return
+  []string{OfferEdit}` when a helper is selected, so it stays in core glue with `Choose`'s
+  `editHelper` case; no `helperOffers`. The opening comment names both.
+- One reshaping: helper_edit.go's const block held the two bash -n limits and `OfferEdit`. It's
+  split: the limits went to big_helpers.go as a block, `OfferEdit` to the section as a const of
+  its own. Values and comments unchanged.
+- helpers.go stays: only the Helper, RequiredCommand, HelperProblem and HelperEdit types. The
+  header's "Code outside this file" list names it.
+- The four "Changing …" scenarios and "Updating the kit keeps scenarios verified" have no
+  heading: they're internal/fingerprint, called from status.go and dropin_record.go.
+- Section 370 lines, big_helpers.go +88. big.go 1508, big_helpers.go 270. 10 of 17.

@@ -13,11 +13,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"givens/internal/assert"
+	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/project"
 )
@@ -179,4 +183,88 @@ func uniqueSteps(scenario project.Scenario) []project.Step {
 		}
 	}
 	return steps
+}
+
+// Helpers is the "Shared" section of the sidebar: every documented helper in the project's
+// _shared folders, _shared's first, in file order. A helper defined twice in one folder is
+// flagged; a capability's helper that shadows a shared one says so.
+func (w *Window) Helpers() []Helper {
+	assert.That(w != nil, "helpers runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	w.refresh()
+	if w.project == nil {
+		return []Helper{}
+	}
+	// Kept until a file changes: finding callers reads every script once per helper.
+	if w.helpers != nil {
+		return append([]Helper{}, w.helpers...)
+	}
+	shared, err := helpers.InFolder(w.path, "", "")
+	if err != nil {
+		return []Helper{}
+	}
+	listed := w.listHelpers(shared, "", nil)
+	for _, capability := range w.project.Capabilities {
+		own, err := helpers.InFolder(w.path, capability.Slug, capability.Slug)
+		if err != nil {
+			continue
+		}
+		listed = append(listed, w.listHelpers(own, capability.Name, shared)...)
+	}
+	w.helpers = listed
+	return append([]Helper{}, listed...)
+}
+
+// Limits on checking a helper file.
+const (
+	// syntaxCheckTimeout bounds one `bash -n`, which only reads the file.
+	syntaxCheckTimeout = 5 * time.Second
+	// helperProblemsMax bounds the lines marked in one file.
+	helperProblemsMax = 64
+)
+
+// bashError matches one of bash's syntax reports: "x.sh: line 9: syntax error: …".
+const bashErrorPattern = `line (\d+): (.+)`
+
+var bashError = regexp.MustCompile(bashErrorPattern) //tiger:allow-global compiled once
+
+// ChromeHint is the install hint for a setup with browser lines.
+const ChromeHint = "brew install --cask google-chrome"
+
+// RequiredCommands lists the commands a scenario's setup needs, whether each is installed, and
+// its install hint: the `need` lines in its script, the setups it builds on, and every helper
+// those call. Needed by "See what a scenario needs installed" and by Drop in's check before
+// anything runs.
+func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
+	assert.That(w != nil, "required commands runs on a window")
+	assert.That(len(scenario) <= NameLengthMax, "the name fits NameLengthMax")
+	found, ok := w.findScenario(scenario)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", scenario, ErrNotFound)
+	}
+	texts, err := w.setupTexts(found)
+	if err != nil {
+		return nil, err
+	}
+	all := ""
+	for _, text := range texts {
+		all += text + "\n"
+	}
+	needs := helpers.Needs(all)
+	required := make([]RequiredCommand, 0, len(needs)+1)
+	// A browser line needs Chrome, as a need line needs its command.
+	if helpers.UsesBrowser(all) {
+		_, found := browser.Chrome()
+		required = append(required, RequiredCommand{
+			Command: "Chrome", Hint: ChromeHint, Installed: found,
+		})
+	}
+	for _, need := range needs {
+		// LookPath searches PATH as a shell would. Ref: https://pkg.go.dev/os/exec#LookPath
+		_, missing := exec.LookPath(need.Command)
+		required = append(required, RequiredCommand{
+			Command: need.Command, Hint: need.Hint, Installed: missing == nil,
+		})
+	}
+	return required, nil
 }

@@ -17,17 +17,24 @@
 //   - internal/kit/givens.sh: bash, run in the developer's shell by every setup script.
 //   - internal/tui, internal/termedit and cmd/givens: the edges. They import this package, so
 //     moving them in would make it depend on Bubble Tea; their stories have pointer sections.
+//   - helpers.go: Share setup's types (Helper, RequiredCommand, HelperProblem, HelperEdit). A
+//     data model with no code, so it stays a file of its own.
 
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"givens/internal/assert"
 	"givens/internal/helpers"
@@ -467,6 +474,376 @@ func (w *Window) findHelpers(words string) []SearchResult {
 	}
 	sort.SliceStable(found, func(a, b int) bool { return found[a].Name < found[b].Name })
 	return limit(found)
+}
+
+// Feature: Share setup between scenarios
+//
+// capabilities/share-setup-between-scenarios. Helpers are shell functions in _shared folders:
+// the kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
+// internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
+// Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view
+// read it too; so is RequiredCommands, which Drop in's precheck (dropin_run.go) also calls,
+// and so are the bash -n limits and bashError, which the editor's shellProblems
+// (editor_more.go) shares. The four "Changing …" scenarios and "Updating the kit keeps
+// scenarios verified" are internal/fingerprint, which status.go and Drop in's record
+// (dropin_record.go) call. Code elsewhere: Drop in's page shows elsewhere's message
+// (messages, dropin_page.go); core glue offers OfferEdit and runs editHelper (allOffers and
+// Choose, offers.go), selects a helper (selectNow, selection.go), and shows a helper and a
+// scenario's requirements (helperLabels and requirementLabels, snapshot.go). Helper and its
+// kin are types in helpers.go, and Window's helpers cache is in window.go. The Helpers tab is
+// internal/tui/helpers.go; `givens helpers` and `givens helper` are cmd/givens/panels.go.
+
+// sharedFolder is where helpers live: _shared at the root, or in a capability's folder.
+const sharedFolder = "_shared"
+
+// OfferEdit opens the selected helper in the editor.
+const OfferEdit = "Edit"
+
+// Scenario: Calling another capability's helper
+
+// elsewhere says where a helper the setup couldn't find is defined, when another capability's
+// _shared folder has it: "mock_payments is defined in checkout/_shared/payments.sh, which only
+// Checkout's scripts can call". It's "" when no other capability defines it.
+func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
+	assert.That(w.project != nil, "helpers are found in a loaded project")
+	assert.That(len(output) <= 1<<20, "output stays bounded")
+	for _, line := range output {
+		before, found := strings.CutSuffix(line, ": command not found")
+		if !found {
+			continue
+		}
+		missing := before[strings.LastIndex(before, " ")+1:]
+		for _, capability := range w.project.Capabilities {
+			if capability.Slug == scenario.Capability {
+				continue
+			}
+			own, err := helpers.InFolder(w.path, capability.Slug, capability.Slug)
+			if err != nil {
+				continue
+			}
+			for _, helper := range own {
+				if helper.Name == missing {
+					return fmt.Sprintf("%s is defined in %s, which only %s's scripts can call",
+						missing, helper.File, capability.Name)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// Scenario: Two helpers with the same name
+// Scenario: Two shared files define the same helper
+
+// listHelpers turns one folder's documented helpers into Shared list entries.
+func (w *Window) listHelpers(found []helpers.Helper, capability string,
+	shared []helpers.Helper) []Helper {
+	assert.That(w.project != nil, "helpers are listed for a loaded project")
+	assert.That(len(found) <= helpers.HelpersMax, "helpers stay bounded")
+	listed := make([]Helper, 0, len(found))
+	for _, helper := range found {
+		if !helper.Documented() {
+			continue
+		}
+		entry := Helper{
+			Name: helper.Name, Signature: helper.Signature, Description: helper.Description,
+			Capability: capability, DefinedIn: helper.File, Line: helper.Line,
+			Callers: w.callersOf(helper), Code: w.helperCode(helper.File, helper.Line),
+		}
+		for _, other := range found {
+			if other.Name == helper.Name && other.File != helper.File {
+				entry.Warning = "Also defined in " + other.File
+			}
+		}
+		for _, other := range shared {
+			if other.Name == helper.Name && entry.Overrides == "" {
+				entry.Overrides = "Overrides " + other.File
+			}
+		}
+		listed = append(listed, entry)
+	}
+	return listed
+}
+
+// callersOf lists, sorted, the setup scripts that call a helper by name: every capability's
+// for a shared helper, or only its own capability's.
+func (w *Window) callersOf(helper helpers.Helper) []string {
+	assert.That(w.project != nil, "callers are found in a loaded project")
+	assert.That(helper.Name != "", "a helper has a name")
+	calls := regexp.MustCompile(`(?m)^[^#\n]*\b` + regexp.QuoteMeta(helper.Name) + `\b`)
+	callers := make([]string, 0, 8)
+	for _, capability := range w.project.Capabilities {
+		if helper.Capability != "" && helper.Capability != capability.Slug {
+			continue
+		}
+		for _, scenario := range capability.Scenarios {
+			if scenario.Setup == "" {
+				continue
+			}
+			text, err := helpers.ReadScript(scenario.Setup)
+			if err != nil || !calls.MatchString(text) {
+				continue
+			}
+			if relative, err := filepath.Rel(w.path, scenario.Setup); err == nil {
+				callers = append(callers, filepath.ToSlash(relative))
+			}
+		}
+	}
+	sort.Strings(callers)
+	return callers
+}
+
+// helperCodeLinesMax bounds how much of a helper the Shared page shows.
+const helperCodeLinesMax = 200
+
+// helperCode is a helper's function as written: from its `name() {` line, counting from 1,
+// to the first line that is only a closing brace. "" when the file can't be read.
+func (w *Window) helperCode(file string, line int) string {
+	assert.That(!filepath.IsAbs(file), "a helper's file is relative to the capabilities folder")
+	assert.That(line >= 0, "lines count from 1")
+	text, err := helpers.ReadScript(filepath.Join(w.path, filepath.FromSlash(file)))
+	if err != nil || line < 1 {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	if line > len(lines) {
+		return ""
+	}
+	end := min(len(lines), line-1+helperCodeLinesMax)
+	for index := line - 1; index < end; index++ {
+		if strings.TrimRight(lines[index], " \t") == "}" {
+			end = index + 1
+			break
+		}
+	}
+	return strings.Join(lines[line-1:end], "\n")
+}
+
+// Scenario: See what a scenario needs installed
+
+// setupTexts is every script a scenario's setup runs: its own, the setups it builds on through
+// from lines, and the bodies of the helpers each of those calls, nested calls included.
+func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
+	assert.That(w.project != nil, "setup is read in a loaded project")
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	shared, err := helpers.InFolder(w.path, "", "")
+	if err != nil {
+		return nil, err
+	}
+	texts := make([]string, 0, 8)
+	queue, seen := []project.Scenario{scenario}, map[string]bool{scenario.Key(): true}
+	// bound: a scenario joins the queue once, and the project has finitely many.
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		texts = append(texts, runBlocksIn(current.SetupCards)...)
+		if current.Setup == "" {
+			continue
+		}
+		text, err := helpers.ReadScript(current.Setup)
+		if err != nil {
+			return nil, err
+		}
+		own, err := helpers.InFolder(w.path, current.Capability, current.Capability)
+		if err != nil {
+			return nil, err
+		}
+		visible := helpers.Visible(shared, own)
+		texts = append(texts, text)
+		for _, name := range helpers.Called(text, visible) {
+			texts = append(texts, visible[name].Body)
+		}
+		for _, from := range helpers.Froms(text) {
+			if built, err := w.project.Find(from.Key); err == nil && !seen[built.Key()] {
+				seen[built.Key()] = true
+				queue = append(queue, built)
+			}
+		}
+	}
+	return texts, nil
+}
+
+// Scenario: Edit a helper
+
+// findHelper finds a documented helper in the Shared list by name, or by
+// "<file relative to capabilities>:<name>" when two share it.
+func (w *Window) findHelper(name string) (Helper, bool) {
+	assert.That(w != nil, "find helper runs on a window")
+	assert.That(name != "", "a helper has a name")
+	for _, helper := range w.Helpers() {
+		if helper.Name == name || helper.DefinedIn+":"+helper.Name == name {
+			return helper, true
+		}
+	}
+	return Helper{}, false
+}
+
+// selectHelper selects a helper in the Shared list, if one has that name.
+func (w *Window) selectHelper(name string) bool {
+	assert.That(w != nil, "select helper runs on a window")
+	assert.That(name != "", "a helper has a name")
+	helper, ok := w.findHelper(name)
+	if !ok {
+		return false
+	}
+	w.selected, w.selectedCapability, w.selectedScenario = name, "", ""
+	w.selectedHelper = helper.DefinedIn + ":" + helper.Name
+	return true
+}
+
+// editHelper opens the selected helper's file in the editor, at its `name() {` line.
+func (w *Window) editHelper() error {
+	assert.That(w != nil, "edit helper runs on a window")
+	assert.That(w.selectedHelper != "", "a helper is selected")
+	helper, ok := w.findHelper(w.selectedHelper)
+	if !ok {
+		return fmt.Errorf("%s: %w", w.selectedHelper, ErrNotFound)
+	}
+	editor, err := w.Edit(helper.DefinedIn)
+	if err != nil {
+		return err
+	}
+	editor.line = helper.Line
+	return nil
+}
+
+// EditingHelper is the helper file open in the editor, where it opened, the scripts that call
+// its helpers and the syntax errors marked in it. Its Path is "" when no helper is open.
+// Needed by "Edit a helper" and "Save a helper with a syntax error".
+func (w *Window) EditingHelper() HelperEdit {
+	assert.That(w != nil, "editing helper runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.editor == nil || filepath.Base(filepath.Dir(w.editor.path)) != sharedFolder {
+		return HelperEdit{Callers: []string{}, Problems: []HelperProblem{}}
+	}
+	relative, err := filepath.Rel(w.path, w.editor.path)
+	if err != nil {
+		return HelperEdit{Callers: []string{}, Problems: []HelperProblem{}}
+	}
+	callers := make([]string, 0, 8)
+	for _, helper := range w.Helpers() {
+		if helper.DefinedIn == filepath.ToSlash(relative) &&
+			(w.editor.line == 0 || helper.Line == w.editor.line) {
+			callers = append(callers, helper.Callers...)
+		}
+	}
+	return HelperEdit{
+		Path: w.editor.path, Line: w.editor.line, Callers: callers,
+		Problems: append([]HelperProblem{}, w.editor.helperProblems...),
+	}
+}
+
+// Scenario: Add a helper
+
+// NewHelper creates <capability>/_shared/<name>.sh holding a `# @helper` comment and an empty
+// function called name, and opens it in the editor. capability is a capability's name, such as
+// "Checkout", or "" for the capabilities folder's own _shared, which every capability's
+// scripts can call. Needed by "Add a helper".
+func (w *Window) NewHelper(capability string, name string) error {
+	assert.That(w != nil, "new helper runs on a window")
+	assert.That(len(capability) <= NameLengthMax, "the capability's name fits NameLengthMax")
+	assert.That(!strings.ContainsAny(name, "/ \n"), "a helper's name is a shell function name")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(name) {
+		return fmt.Errorf("%q isn't a shell function name", name)
+	}
+	dir := w.path
+	if capability != "" {
+		owner, ok := w.findCapability(capability)
+		if !ok {
+			return fmt.Errorf("%s: %w", capability, ErrNotFound)
+		}
+		dir = owner.Dir
+	}
+	path := filepath.Join(dir, sharedFolder, name+".sh")
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", filepath.Base(path))
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	text := "# shellcheck shell=bash\n\n# @helper " + name + "\n" +
+		"# What " + name + " sets up, for the scripts that call it.\n" +
+		name + "() {\n  :\n}\n"
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		return err
+	}
+	if err := w.reload(); err != nil {
+		return err
+	}
+	return w.openHelperFile(path, name)
+}
+
+// openHelperFile opens a helper file in the editor at name's definition.
+func (w *Window) openHelperFile(path string, name string) error {
+	assert.That(filepath.IsAbs(path), "the helper file is absolute")
+	assert.That(name != "", "a helper has a name")
+	relative, err := filepath.Rel(w.path, path)
+	if err != nil {
+		return err
+	}
+	editor, err := w.Edit(relative)
+	if err != nil {
+		return err
+	}
+	for index, line := range strings.Split(editor.text, "\n") {
+		if strings.HasPrefix(line, name+"()") {
+			editor.line = index + 1
+		}
+	}
+	return nil
+}
+
+// Scenario: Save a helper with a syntax error
+
+// SaveHelper saves text as the helper file open in the editor, even when bash can't parse it,
+// then marks the lines `bash -n` reports. Needed by "Save a helper with a syntax error".
+// Ref: https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin (-n reads only)
+func (w *Window) SaveHelper(text string) error {
+	assert.That(w != nil, "save helper runs on a window")
+	assert.That(utf8.ValidString(text), "a helper file is text")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	if w.editor == nil || filepath.Base(filepath.Dir(w.editor.path)) != sharedFolder {
+		return errors.New("no helper file is open in the editor")
+	}
+	if len(text) > helpers.FileSizeBytesMax {
+		return fmt.Errorf("a helper file is at most %d bytes", helpers.FileSizeBytesMax)
+	}
+	if err := os.WriteFile(w.editor.path, []byte(text), 0o644); err != nil {
+		return err
+	}
+	w.editor.text, w.editor.opened = text, text
+	problems, err := syntaxProblems(w.editor.path)
+	if err != nil {
+		return err
+	}
+	w.editor.helperProblems = problems
+	return w.reload()
+}
+
+// syntaxProblems runs `bash -n` on a file and reads the lines it reports.
+func syntaxProblems(path string) ([]HelperProblem, error) {
+	assert.That(filepath.IsAbs(path), "the file is absolute")
+	assert.That(syntaxCheckTimeout > 0, "the check has a limit")
+	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "bash", "-n", path).CombinedOutput()
+	var exit *exec.ExitError
+	if err != nil && !errors.As(err, &exit) {
+		return nil, err
+	}
+	problems := make([]HelperProblem, 0, 2)
+	for _, match := range bashError.FindAllStringSubmatch(string(output), helperProblemsMax) {
+		line, convertErr := strconv.Atoi(match[1])
+		if convertErr == nil {
+			problems = append(problems, HelperProblem{Line: line, Message: match[2]})
+		}
+	}
+	return problems, nil
 }
 
 // Feature: Tags
