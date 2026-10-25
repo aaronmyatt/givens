@@ -98,8 +98,8 @@ func TestBigFile(t *testing.T) {
 	// Ref: https://pkg.go.dev/maps#Keys
 	for _, name := range slices.Sorted(maps.Keys(stories)) {
 		if !told[name] {
-			t.Errorf("%s: \"Feature: %s\" has no section in internal/app/big.go", stories[name].path,
-				name)
+			t.Errorf("%s: \"Feature: %s\" has no section in internal/app/big.go",
+				stories[name].path, name)
 		}
 	}
 	t.Logf("%d of %d stories are in the big file", len(sections), len(stories))
