@@ -137,3 +137,29 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   caller, besides the dead `InstallCommand`. It moves with Drop in (slice 12).
 - No app code serves only one of these three stories: the edges call other stories' functions.
 - Sections 9, 8 and 9 lines. big.go 583, big_helpers.go 134. 7 of 17.
+
+## Search everything moves in (2026-10-25)
+- search.go, search_find.go and search_index.go are gone. Their Search code is the section,
+  between Copy and Tags: the result kinds and types, then `readQuery`, `searchGroups`,
+  `findScenarios`, `matchesIn`, `limit` and the index (`searchIndexOf`, `indexScript`, its types
+  and `searchMemo`) under "Search for a phrase" and "Nothing matches"; `findStories`, `findSteps`
+  with `usesStep`, `FilterSearch` with `findScripts`, and `findHelpers` under their scenarios.
+- To big_helpers.go: `SearchResults`, since Copy's `copyFromSearch` calls it and Tags' four
+  search scenarios run through it; `uniqueSteps`, since the editor's step suggestions
+  (`suggestionsFor`, editor_more.go, Write stories) call it too.
+- No new seams. `usesStep` (cut in the Views slice) and the tag filter in `findScenarios` and
+  `searchGroups`' tagged branch stay in the section; `parseTags` stays Tags'. `usesStep` is
+  called from Views' `inView`, but as a seam it lives with its story, as `parseTags` and
+  `trustOf` do.
+- Stays out, as core glue: `Press` and `Type` (input.go) open the panel and fill its box,
+  `searchSnapshot` and `searchMessages` (snapshot.go) show it and say "Nothing matches", and
+  `selectStep` (selection.go) selects a step result. The opening comment names them.
+- The Tags opening comment pointed at search.go and search_find.go; it now points at this
+  section.
+- Section 377 lines, big_helpers.go +48. big.go 961, big_helpers.go 182. 8 of 17.
+- Surprise: the rule for shared code gave two answers here. By "another story's code calls it",
+  `usesStep` would go to big_helpers.go; by "a seam lives with its guest", it stays. Seams win,
+  so the helpers rule counts callers of non-seam code only.
+- Ran in a worktree (obf/search-everything) beside Update the kit's, for the slice-4 clash count.
+  The tags suite's "A runner filters on the same tags" fails outside `scripts/check.sh`, which
+  installs cucumber-js in the sample shop first; it fails the same on main.

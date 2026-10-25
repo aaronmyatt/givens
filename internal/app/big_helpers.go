@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"givens/internal/assert"
+	"givens/internal/helpers"
 	"givens/internal/project"
 )
 
@@ -131,4 +132,51 @@ func isViewTag(tag string) bool {
 	assert.That(strings.HasPrefix(tag, "@"), "a tag starts with @")
 	assert.That(len(tag) <= NameLengthMax, "a tag fits NameLengthMax")
 	return tag != project.TagError && !strings.HasPrefix(tag, "@timeout")
+}
+
+// SearchResults is the ⌘K panel's query, filter and grouped results, or the zero value while
+// search is closed. A query that matches nothing, or a tag expression that doesn't parse,
+// has no groups. Needed by every scenario in capabilities/search-everything and the search
+// scenarios in capabilities/tags.
+func (w *Window) SearchResults() SearchResults {
+	assert.That(w != nil, "search results run on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.search == nil {
+		return SearchResults{Groups: []SearchGroup{}}
+	}
+	if memo := w.searchMemo; memo != nil && memo.query == w.search.query &&
+		memo.filter == w.search.filter {
+		return memo.results
+	}
+	results := SearchResults{
+		Query: w.search.query, Filter: w.search.filter, Groups: make([]SearchGroup, 0, 5),
+	}
+	defer func() {
+		w.searchMemo = &searchMemo{query: results.Query, filter: results.Filter, results: results}
+	}()
+	read := readQuery(w.search.query)
+	if w.project == nil || read.problem != "" || (read.words == "" && !read.tagged) {
+		return results
+	}
+	for _, group := range w.searchGroups(read) {
+		if len(group.Results) > 0 && (results.Filter == "" || results.Filter == group.Kind) {
+			results.Groups = append(results.Groups, group)
+		}
+	}
+	return results
+}
+
+// uniqueSteps is a scenario's steps, each text once, so a step it repeats counts as one use.
+func uniqueSteps(scenario project.Scenario) []project.Step {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	steps := make([]project.Step, 0, len(scenario.Steps))
+	seen := make(map[string]bool, len(scenario.Steps))
+	for _, step := range scenario.Steps {
+		if !seen[step.Text] {
+			seen[step.Text] = true
+			steps = append(steps, step)
+		}
+	}
+	return steps
 }
