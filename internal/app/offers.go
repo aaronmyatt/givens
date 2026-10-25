@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"givens/internal/assert"
-	"givens/internal/project"
 )
 
 // Offers is every action the window offers right now, by its label: "Drop in", "Copy",
@@ -148,7 +147,7 @@ const (
 )
 
 // noSetup is true for a scenario with no setup files at all.
-func noSetup(scenario project.Scenario) bool {
+func noSetup(scenario LoadedScenario) bool {
 	assert.That(scenario.Capability != "" || scenario.Name == "", "a scenario has a home")
 	assert.That(scenario.Setup == "" || filepath.IsAbs(scenario.Setup), "paths are absolute")
 	return scenario.Name != "" && scenario.Setup == "" && scenario.SetupCards == "" &&
@@ -157,7 +156,7 @@ func noSetup(scenario project.Scenario) bool {
 
 // scenarioPageOffers is what a scenario's page offers: its own actions, then ways to write
 // a missing setup or to open each setup file there is.
-func scenarioPageOffers(shown Scenario, loaded project.Scenario) []string {
+func scenarioPageOffers(shown Scenario, loaded LoadedScenario) []string {
 	assert.That(shown.Name != "", "a shown scenario has a name")
 	assert.That(loaded.Name == "" || loaded.Name == shown.Name, "both are the same scenario")
 	offers := append(scenarioOffers(shown), OfferCopySteps)

@@ -5,7 +5,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/project"
 )
 
 // Window is one Givens window, showing one project.
@@ -26,10 +25,10 @@ type Window struct {
 	app     *App
 	id      int // numbered from 1 in opening order; see ID
 	kind    string
-	path    string           // the capabilities folder, or the folder opened when found is false
-	found   bool             // path is a capabilities folder
-	project *project.Project // nil when found is false
-	watcher *Watcher         // nil when found is false
+	path    string         // the capabilities folder, or the folder opened when found is false
+	found   bool           // path is a capabilities folder
+	project *LoadedProject // nil when found is false
+	watcher *Watcher       // nil when found is false
 
 	selected           string   // the name Select was given, or ""
 	selectedCapability string   // the slug of the capability on show, or ""

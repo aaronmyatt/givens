@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, slug, kit and starter:
+//   - internal/spec, slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -61,7 +61,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/browser"
 	"givens/internal/kit"
-	"givens/internal/project"
 	"givens/internal/slug"
 	"givens/internal/spec"
 	"givens/internal/starter"
@@ -79,7 +78,7 @@ import (
 
 // copySetup puts a scenario's setup on the clipboard: `bash <path>.sh`, the path from the git
 // repo's root, or for a setup done only by hand, its markdown.
-func (w *Window) copySetup(scenario project.Scenario) error {
+func (w *Window) copySetup(scenario LoadedScenario) error {
 	assert.That(w != nil, "copy runs on a window")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	clipboard := w.app.config.Clipboard
@@ -195,7 +194,7 @@ const pollInterval = 20 * time.Millisecond
 // Session is one Drop in: a setup run and the checklist that follows.
 type Session struct {
 	window   *Window
-	scenario project.Scenario
+	scenario LoadedScenario
 	row      []RunPair // the outline row's values, or nil
 	examples string    // the row's Examples block's slug, or ""
 
@@ -266,7 +265,7 @@ func (w *Window) dropIn(scenario string, skipTeardown bool) (*Session, error) {
 
 // startSession opens the Drop in page for a scenario, or one row of an outline, and runs its
 // setup once the project is trusted. A setup with no script needs no trust: nothing runs.
-func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardown bool) (
+func (w *Window) startSession(found LoadedScenario, row outlineRow, skipTeardown bool) (
 	*Session, error) {
 	assert.That(w != nil, "start session runs on a window")
 	assert.That(found.Capability != "", "the scenario belongs to a capability")
@@ -330,7 +329,7 @@ func (s *Session) begin() error {
 // lines, which the checklist shows instead; GIVENS_UI makes by_hand and ask cards. begin adds
 // GIVENS_BIN and the arguments' files.
 // See capabilities/the-kit/about.md.
-func setupEnv(scenario project.Scenario, row []RunPair) []string {
+func setupEnv(scenario LoadedScenario, row []RunPair) []string {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	assert.That(len(row) <= HelpersMax, "a row stays bounded")
 	env := []string{"GIVENS_QUIET=1", "GIVENS_UI=1", "GIVENS_SCENARIO=" + scenario.Key()}
@@ -475,11 +474,11 @@ func (s *Session) Givens() []string {
 
 // givensOf are a scenario's Given steps, Background first, each And and But after a Given
 // with them, placeholders filled in: what setup sets up, which the checklist leaves out.
-func givensOf(scenario project.Scenario, row []RunPair) []string {
+func givensOf(scenario LoadedScenario, row []RunPair) []string {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	givens := make([]string, 0, len(scenario.Background)+len(scenario.Steps))
-	for _, steps := range [][]project.Step{scenario.Background, scenario.Steps} {
+	for _, steps := range [][]GherkinStep{scenario.Background, scenario.Steps} {
 		kind := "given"
 		for _, step := range steps {
 			switch step.Keyword {
@@ -519,7 +518,7 @@ func (s *Session) Note() string {
 // precheck finds what would stop setup before it runs: a from line naming no scenario, or a
 // command the setup or its helpers need that isn't installed. It returns the message to show,
 // and any install hints.
-func (w *Window) precheck(scenario project.Scenario) (string, []string, error) {
+func (w *Window) precheck(scenario LoadedScenario) (string, []string, error) {
 	assert.That(w.project != nil, "a Drop in runs in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	if scenario.Setup == "" && len(runBlocksIn(scenario.SetupCards)) == 0 {
@@ -554,7 +553,7 @@ func (s *Session) stillRunning() string {
 	assert.That(!s.started.IsZero(), "a session records when it started")
 	limit := s.scenario.StillRunning
 	if limit <= 0 {
-		limit = project.StillRunningDefault
+		limit = StillRunningDefault
 	}
 	if s.status != SessionRunning || s.keepWaiting ||
 		s.window.app.config.Clock.Now().Sub(s.started)-s.waited < limit {
@@ -801,11 +800,11 @@ func (w *Window) addTeardown() error {
 
 // fromProblem finds what's wrong with the setups a scenario builds on: a from line naming no
 // scenario, an outline named without a row, or setups that build on each other in a loop.
-func (w *Window) fromProblem(scenario project.Scenario) (string, error) {
+func (w *Window) fromProblem(scenario LoadedScenario) (string, error) {
 	assert.That(w.project != nil, "from lines are read in a loaded project")
 	assert.That(scenario.Setup != "", "the scenario has a setup script")
 	type visit struct {
-		scenario project.Scenario
+		scenario LoadedScenario
 		path     []string // slugs from the scenario dropped in to
 	}
 	stack := []visit{{scenario: scenario, path: []string{scenario.Slug}}}
@@ -843,7 +842,7 @@ func (w *Window) fromProblem(scenario project.Scenario) (string, error) {
 }
 
 // outlineWithoutRow says an outline was named without a row to build on, or "".
-func outlineWithoutRow(built project.Scenario, values []string) string {
+func outlineWithoutRow(built LoadedScenario, values []string) string {
 	assert.That(built.Slug != "", "the scenario has a slug")
 	assert.That(len(values) <= HelpersMax, "values stay bounded")
 	if !built.Outline || len(values) > 0 {
@@ -1017,16 +1016,16 @@ func (s *Session) failedOffers() []string {
 
 // scenarioFileOf says which of a scenario's setup files an edit offer opens, or nil for any
 // other offer.
-func scenarioFileOf(action string) func(project.Scenario) string {
+func scenarioFileOf(action string) func(LoadedScenario) string {
 	assert.That(action != "", "an action has a label")
 	assert.That(OfferEditScript != OfferEditSetup, "each file has its own offer")
 	switch action {
 	case OfferEditScript:
-		return func(scenario project.Scenario) string { return scenario.Setup }
+		return func(scenario LoadedScenario) string { return scenario.Setup }
 	case OfferEditSetup:
-		return func(scenario project.Scenario) string { return scenario.SetupCards }
+		return func(scenario LoadedScenario) string { return scenario.SetupCards }
 	case OfferEditTeardown:
-		return func(scenario project.Scenario) string { return scenario.Teardown }
+		return func(scenario LoadedScenario) string { return scenario.Teardown }
 	}
 	return nil
 }
@@ -1433,15 +1432,15 @@ func fillPlaceholders(text string, row []RunPair) string {
 }
 
 // rowNamed finds the selected outline's row with value among its values, or "column=value".
-func (w *Window) rowNamed(name string) (project.Scenario, outlineRow, bool) {
+func (w *Window) rowNamed(name string) (LoadedScenario, outlineRow, bool) {
 	assert.That(w != nil, "row named runs on a window")
 	assert.That(name != "", "a row is named by a value")
 	if w.selectedScenario == "" {
-		return project.Scenario{}, outlineRow{}, false
+		return LoadedScenario{}, outlineRow{}, false
 	}
 	scenario, ok := w.findScenario(w.selectedScenario)
 	if !ok || !scenario.Outline {
-		return project.Scenario{}, outlineRow{}, false
+		return LoadedScenario{}, outlineRow{}, false
 	}
 	for _, row := range rowsOf(scenario) {
 		for _, value := range row.values {
@@ -1450,7 +1449,7 @@ func (w *Window) rowNamed(name string) (project.Scenario, outlineRow, bool) {
 			}
 		}
 	}
-	return project.Scenario{}, outlineRow{}, false
+	return LoadedScenario{}, outlineRow{}, false
 }
 
 // DropInRows lists the Examples rows of the selected outline's Drop in page, one after
@@ -1541,7 +1540,7 @@ func (s *Session) marked() bool {
 
 // outlineStatus sums up an outline's rows: "Never run" until one has run, "Verified …" once
 // all are, and "1 of 2 rows verified" between.
-func outlineStatus(loaded *project.Project, scenario project.Scenario, now time.Time) string {
+func outlineStatus(loaded *LoadedProject, scenario LoadedScenario, now time.Time) string {
 	assert.That(loaded != nil, "status is read in a loaded project")
 	assert.That(scenario.Outline, "only an outline has rows")
 	rows := rowsOf(scenario)
@@ -1617,9 +1616,9 @@ const MessageNameExamples = "Name each Examples block so runs can tell them apar
 
 // examplesWarning is the warning on an outline with more than one unnamed Examples block: runs
 // are recorded against the block's name, so unnamed blocks would share them.
-func examplesWarning(scenario project.Scenario) string {
+func examplesWarning(scenario LoadedScenario) string {
 	assert.That(scenario.Name != "", "the scenario has a name")
-	assert.That(len(scenario.Examples) <= project.HelperFilesMax, "blocks stay bounded")
+	assert.That(len(scenario.Examples) <= HelperFilesMax, "blocks stay bounded")
 	unnamed := 0
 	for _, block := range scenario.Examples {
 		if block.Slug == "" {
@@ -1701,18 +1700,18 @@ func AttachedFiles(capabilities string, run Run) ([]string, error) {
 
 // Feature: Gherkin files
 //
-// capabilities/gherkin-files. Givens reads each capability's one .feature file with the
-// official Cucumber Gherkin parser (internal/spec, read into a project by internal/project), so
-// a test runner and Givens read the same scenarios. A file that doesn't parse, or a second
-// .feature file in a folder, is a warning on the capability with its fix. Code elsewhere:
-// slugClash and scenarioWarning, which warns on a scenario as shown, are in big_helpers.go,
-// since Write stories' rename and Drop in's @timeout and Examples warnings use them too;
-// scenarioOffers (offers.go) offers only "Copy" on a clashing slug. capabilityOf and scenarioOf
-// (project.go) and Sidebar (window.go) show the warnings; core glue's allOffers and Choose
-// (offers.go) call gherkinOffers, editBrokenFeature and moveToOwnCapability, and
-// OfferMoveToOwnCapability is with the page offers there. "Comments are kept" is Write
-// stories' editor (Save, and Edit in big_helpers.go), "Step definitions are left alone" is
-// internal/project's loader, and "A test runner reads the same files" is cucumber-js.
+// capabilities/gherkin-files. Givens reads each capability's one .feature file with the official
+// Cucumber Gherkin parser (internal/spec, read into a project by LoadProject in big_helpers.go), so
+// a test runner and Givens read the same scenarios. A file that doesn't parse, or a second .feature
+// file in a folder, is a warning on the capability with its fix. Code elsewhere: slugClash and
+// scenarioWarning, which warns on a scenario as shown, are in big_helpers.go, since Write stories'
+// rename and Drop in's @timeout and Examples warnings use them too; scenarioOffers (offers.go)
+// offers only "Copy" on a clashing slug. capabilityOf and scenarioOf (project.go) and Sidebar
+// (window.go) show the warnings; core glue's allOffers and Choose (offers.go) call gherkinOffers,
+// editBrokenFeature and moveToOwnCapability, and OfferMoveToOwnCapability is with the page offers
+// there. "Comments are kept" is Write stories' editor (Save, and Edit in big_helpers.go), "Step
+// definitions are left alone" is LoadProject's (big_helpers.go), and "A test runner reads the same
+// files" is cucumber-js.
 
 // Scenario: Rules group scenarios
 
@@ -1750,7 +1749,7 @@ func (w *Window) RuleGroups(capability string) ([]RuleGroup, error) {
 // Scenario: Two .feature files in one capability
 
 // capabilityWarning says what's wrong with a capability's folder, or "".
-func capabilityWarning(loaded project.Capability) string {
+func capabilityWarning(loaded LoadedCapability) string {
 	assert.That(loaded.Slug != "", "a capability has a slug")
 	assert.That(loaded.Ignored != nil || loaded.ParseError != "", "ignored files were listed")
 	if loaded.ParseError != "" {
@@ -1764,16 +1763,16 @@ func capabilityWarning(loaded project.Capability) string {
 }
 
 // problemCapabilities lists capabilities with something to fix, the selected one first.
-func (w *Window) problemCapabilities() []project.Capability {
+func (w *Window) problemCapabilities() []LoadedCapability {
 	assert.That(w != nil, "problems runs on a window")
 	assert.That(w.project != nil, "problems are in a loaded project")
-	found := make([]project.Capability, 0, 4)
+	found := make([]LoadedCapability, 0, 4)
 	for _, capability := range w.project.Capabilities {
 		if capability.ParseError == "" && len(capability.Ignored) == 0 {
 			continue
 		}
 		if capability.Slug == w.selectedCapability {
-			found = append([]project.Capability{capability}, found...)
+			found = append([]LoadedCapability{capability}, found...)
 		} else {
 			found = append(found, capability)
 		}
@@ -1798,7 +1797,7 @@ func (w *Window) gherkinOffers(offers []string) []string {
 }
 
 // capabilityOffers is what a capability's page offers: a way to fix what's wrong with it.
-func capabilityOffers(capability project.Capability) []string {
+func capabilityOffers(capability LoadedCapability) []string {
 	assert.That(capability.Slug != "", "a capability has a slug")
 	assert.That(capability.FeaturePath != "", "a capability has a .feature file")
 	if capability.ParseError != "" {
@@ -4488,7 +4487,7 @@ type RunLine struct {
 // History lists a scenario's recorded runs, newest first, up to RunsShownMax; an outline's
 // rows all together. Kept, like statuses, until a file changes; the day is part of the key,
 // so "today" turns into "yesterday" on time.
-func (w *Window) History(scenario project.Scenario) []RunLine {
+func (w *Window) History(scenario LoadedScenario) []RunLine {
 	assert.That(w.project != nil, "history is read in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	now := w.app.config.Clock.Now()
@@ -5036,7 +5035,7 @@ const OfferEdit = "Edit"
 // elsewhere says where a helper the setup couldn't find is defined, when another capability's
 // _shared folder has it: "mock_payments is defined in checkout/_shared/payments.sh, which only
 // Checkout's scripts can call". It's "" when no other capability defines it.
-func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
+func (w *Window) elsewhere(scenario LoadedScenario, output []string) string {
 	assert.That(w.project != nil, "helpers are found in a loaded project")
 	assert.That(len(output) <= 1<<20, "output stays bounded")
 	for _, line := range output {
@@ -5168,12 +5167,12 @@ func (w *Window) helperCode(file string, line int) string {
 
 // stepsText is the scenario's block as it bears on a run: tags, steps and Examples, or only
 // the given row of them.
-func stepsText(scenario project.Scenario, row []RunPair) string {
+func stepsText(scenario LoadedScenario, row []RunPair) string {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(row) <= RunFieldsMax, "a row stays bounded")
 	var text strings.Builder
 	text.WriteString(strings.Join(scenario.Tags, " ") + "\n")
-	for _, step := range append(append([]project.Step{}, scenario.Background...),
+	for _, step := range append(append([]GherkinStep{}, scenario.Background...),
 		scenario.Steps...) {
 		text.WriteString(step.Keyword + " " + step.Text + "\n" + step.DocString + "\n")
 		for _, cells := range step.Table {
@@ -5196,7 +5195,7 @@ func stepsText(scenario project.Scenario, row []RunPair) string {
 }
 
 // setupText is a scenario's setup files, one after another; a missing file adds nothing.
-func setupText(scenario project.Scenario) (string, error) {
+func setupText(scenario LoadedScenario) (string, error) {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	assert.That(scenario.Setup == "" || filepath.IsAbs(scenario.Setup), "paths are absolute")
 	var text strings.Builder
@@ -5219,12 +5218,12 @@ func setupText(scenario project.Scenario) (string, error) {
 
 // fromChain lists the scenarios a scenario's setup builds on, nearest first, each once. A
 // from line naming no scenario, and a loop, end the chain: Drop in reports both before running.
-func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Scenario, error) {
+func fromChain(loaded *LoadedProject, scenario LoadedScenario) ([]LoadedScenario, error) {
 	assert.That(loaded != nil, "the project is loaded")
 	assert.That(len(loaded.Capabilities) <= spec.CapabilitiesMax, "capabilities stay bounded")
-	chain := make([]project.Scenario, 0, 4)
+	chain := make([]LoadedScenario, 0, 4)
 	seen := map[string]bool{scenario.Key(): true}
-	queue := []project.Scenario{scenario}
+	queue := []LoadedScenario{scenario}
 	// bound: a scenario joins the queue only once, and the project has finitely many.
 	for len(queue) > 0 {
 		current := queue[0]
@@ -5251,7 +5250,7 @@ func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Sc
 
 // calledHelpers fingerprints every helper the scenarios' setup scripts call, each seen from
 // its own capability, nested calls included, sorted by name.
-func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]RunPair, error) {
+func calledHelpers(loaded *LoadedProject, scenarios []LoadedScenario) ([]RunPair, error) {
 	assert.That(loaded != nil, "the project is loaded")
 	assert.That(len(scenarios) > 0, "there's at least the scenario itself")
 	shared, err := HelpersInFolder(loaded.Root, "", "")
@@ -5330,7 +5329,7 @@ func partWords(name string) string {
 
 // setupTexts is every script a scenario's setup runs: its own, the setups it builds on through
 // from lines, and the bodies of the helpers each of those calls, nested calls included.
-func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
+func (w *Window) setupTexts(scenario LoadedScenario) ([]string, error) {
 	assert.That(w.project != nil, "setup is read in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	shared, err := HelpersInFolder(w.path, "", "")
@@ -5338,7 +5337,7 @@ func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
 		return nil, err
 	}
 	texts := make([]string, 0, 8)
-	queue, seen := []project.Scenario{scenario}, map[string]bool{scenario.Key(): true}
+	queue, seen := []LoadedScenario{scenario}, map[string]bool{scenario.Key(): true}
 	// bound: a scenario joins the queue once, and the project has finitely many.
 	for len(queue) > 0 {
 		current := queue[0]
@@ -5654,14 +5653,14 @@ func NeedLines(text string) []NeedLine {
 // Feature: Tags
 //
 // capabilities/tags. Kinds, timeouts, groups and to do flags are plain Gherkin tags, so a test
-// runner filters on the ones Givens uses. internal/project reads a scenario's tags, the
-// Feature's and Rule's included, and ParseTagExpression parses Cucumber's tag expressions: it
-// is in big_helpers.go, since Search matches them and `givens list --tags` reads them too.
-// Each tag is a view: the Views section lists and selects them, through tagViews and
-// isViewTag in big_helpers.go, and "An error state", "A tag view" and "A tag on the Feature"
-// land there. The Search everything section's readQuery splits a search into words and a tag
-// expression, which its findScenarios matches. "A runner filters on the same tags" is
-// cucumber-js's, and the ⚑ on a flagged scenario is internal/tui's.
+// runner filters on the ones Givens uses. loadScenario (big_helpers.go) reads a scenario's tags,
+// the Feature's and Rule's included, and ParseTagExpression parses Cucumber's tag expressions: it
+// is in big_helpers.go, since Search matches them and `givens list --tags` reads them too. Each tag
+// is a view: the Views section lists and selects them, through tagViews and isViewTag in
+// big_helpers.go, and "An error state", "A tag view" and "A tag on the Feature" land there. The
+// Search everything section's readQuery splits a search into words and a tag expression, which its
+// findScenarios matches. "A runner filters on the same tags" is cucumber-js's, and the ⚑ on a
+// flagged scenario is internal/tui's.
 
 // Scenario: Search by tag
 // Scenario: Search with a tag expression
@@ -5696,13 +5695,13 @@ const (
 
 // todoOffers is the flag offer a scenario's page shows. A @todo from its Rule or Feature line
 // isn't offered for removal: taking it off would unflag every scenario under that line.
-func todoOffers(loaded project.Scenario) []string {
+func todoOffers(loaded LoadedScenario) []string {
 	assert.That(loaded.Name != "", "a shown scenario has a name")
 	assert.That(len(loaded.OwnTags) <= len(loaded.Tags), "own tags are among its tags")
 	switch {
 	case !loaded.Todo:
 		return []string{OfferFlagTodo}
-	case slices.Contains(loaded.OwnTags, project.TagTodo):
+	case slices.Contains(loaded.OwnTags, TagTodo):
 		return []string{OfferRemoveTodo}
 	}
 	return []string{}
@@ -5711,7 +5710,7 @@ func todoOffers(loaded project.Scenario) []string {
 // flagTodo adds @todo to a scenario's own tags, or takes it off, in its .feature file. Only
 // the tag lines above its Scenario: line change, so git diff shows one line.
 // Needed by "Flag a scenario to do" and "Remove a to do flag" in capabilities/tags.
-func (w *Window) flagTodo(scenario project.Scenario, flagged bool) error {
+func (w *Window) flagTodo(scenario LoadedScenario, flagged bool) error {
 	assert.That(w != nil, "flag runs on a window")
 	assert.That(scenario.Line > 0, "a loaded scenario has a line")
 	capability, ok := w.findCapability(scenario.Capability)
@@ -5750,21 +5749,21 @@ func withTodo(lines []string, at int, flagged bool) ([]string, error) {
 	if flagged {
 		if top == at {
 			indent := lines[at][:len(lines[at])-len(strings.TrimLeft(lines[at], " \t"))]
-			return slices.Insert(lines, at, indent+project.TagTodo), nil
+			return slices.Insert(lines, at, indent+TagTodo), nil
 		}
-		lines[at-1] += " " + project.TagTodo
+		lines[at-1] += " " + TagTodo
 		return lines, nil
 	}
 	kept := make([]string, 0, len(lines))
 	for index, line := range lines {
 		fields := strings.Fields(line)
-		if index < top || index >= at || !slices.Contains(fields, project.TagTodo) {
+		if index < top || index >= at || !slices.Contains(fields, TagTodo) {
 			kept = append(kept, line)
 			continue
 		}
 		// A tag line left with no tags goes; one with others keeps them, in order.
 		fields = slices.DeleteFunc(fields, func(field string) bool {
-			return field == project.TagTodo
+			return field == TagTodo
 		})
 		if len(fields) > 0 {
 			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
@@ -5772,7 +5771,7 @@ func withTodo(lines []string, at int, flagged bool) ([]string, error) {
 		}
 	}
 	if slices.Equal(kept, lines) {
-		return nil, fmt.Errorf("line %d's own tags have no %s", at+1, project.TagTodo)
+		return nil, fmt.Errorf("line %d's own tags have no %s", at+1, TagTodo)
 	}
 	assert.That(len(kept) <= len(lines), "unflagging adds no line")
 	return kept, nil
@@ -6256,7 +6255,7 @@ func inView(scenario Scenario, view string, step string) bool {
 
 // unverifiedRows lists an outline's rows that aren't verified, each as its own entry, named
 // after the outline and the row: "Card rejected by the bank: stolen".
-func (w *Window) unverifiedRows(shown Scenario, loaded project.Scenario) []Scenario {
+func (w *Window) unverifiedRows(shown Scenario, loaded LoadedScenario) []Scenario {
 	assert.That(loaded.Outline, "only an outline has rows")
 	assert.That(shown.Name == loaded.Name, "the shown scenario is the loaded one")
 	listed := make([]Scenario, 0, 2)
@@ -6476,9 +6475,9 @@ func (w *Window) NewScenario(draft model.ScenarioDraft) error {
 		return err
 	}
 	// A new scenario isn't built yet, so it starts flagged @todo.
-	tags := project.TagTodo
+	tags := TagTodo
 	if draft.Error {
-		tags = project.TagError + " " + tags
+		tags = TagError + " " + tags
 	}
 	block := "\n  " + tags + "\n  Scenario: " + draft.Name + "\n"
 	updated := strings.TrimRight(text, "\n") + "\n" + block
@@ -6855,7 +6854,7 @@ func (w *Window) Rename(name string, newName string) error {
 
 // renameScenario rewrites the scenario's Scenario: line, then moves its setup files and
 // updates from lines, unless another scenario still makes the old slug.
-func (w *Window) renameScenario(scenario project.Scenario, newName string) error {
+func (w *Window) renameScenario(scenario LoadedScenario, newName string) error {
 	assert.That(scenario.Line > 0, "a loaded scenario has a line")
 	assert.That(slug.Of(newName) != "", "the new name makes a slug")
 	capability, ok := w.findCapability(scenario.Capability)
@@ -6957,7 +6956,7 @@ func (w *Window) updateFromLines(old string, replacement string) error {
 // renameCapability renames a capability's Feature: line, its folder and .feature file, and
 // every from line naming one of its scenarios. Its runs stay under the old name, so its
 // scenarios start at Never run.
-func (w *Window) renameCapability(capability project.Capability, newName string) error {
+func (w *Window) renameCapability(capability LoadedCapability, newName string) error {
 	assert.That(capability.Slug != "", "a capability has a slug")
 	assert.That(slug.Of(newName) != "", "the new name makes a slug")
 	newSlug := slug.Of(newName)
@@ -7097,7 +7096,7 @@ func (w *Window) builtOn(prefix string, skip string) (string, error) {
 
 // deleteScenario removes a scenario's block, with its tags and the blank line before it, and
 // moves its setup files to the Trash.
-func (w *Window) deleteScenario(scenario project.Scenario) error {
+func (w *Window) deleteScenario(scenario LoadedScenario) error {
 	assert.That(scenario.Line > 0, "a loaded scenario has a line")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	capability, ok := w.findCapability(scenario.Capability)
@@ -7138,7 +7137,7 @@ func (w *Window) deleteScenario(scenario project.Scenario) error {
 }
 
 // deleteCapability moves a capability's folder to the Trash.
-func (w *Window) deleteCapability(capability project.Capability) error {
+func (w *Window) deleteCapability(capability LoadedCapability) error {
 	assert.That(filepath.IsAbs(capability.Dir), "a capability's folder is absolute")
 	assert.That(strings.HasPrefix(capability.Dir, w.path), "it's in this project")
 	if err := w.app.trash(capability.Dir); err != nil {
@@ -7395,18 +7394,18 @@ const (
 
 // storyCapability is the capability whose story is on show: the selected one, or the first
 // when nothing is selected, as shownCapability picks it.
-func (w *Window) storyCapability() (project.Capability, bool) {
+func (w *Window) storyCapability() (LoadedCapability, bool) {
 	assert.That(w != nil, "story capability runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if w.project == nil {
-		return project.Capability{}, false
+		return LoadedCapability{}, false
 	}
 	name := w.selectedCapability
 	if w.selected == "" && len(w.project.Capabilities) > 0 {
 		name = w.project.Capabilities[0].Slug
 	}
 	if name == "" {
-		return project.Capability{}, false
+		return LoadedCapability{}, false
 	}
 	return w.findCapability(name)
 }

@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"givens/internal/project"
 )
 
 // copyShopCapabilities copies the sample shop's capabilities folder and returns its path.
@@ -22,7 +20,7 @@ func copyShopCapabilities(t *testing.T) string {
 // fingerprintOf loads root and fingerprints one scenario by its run key.
 func fingerprintOf(t *testing.T, root string, key string) []RunPair {
 	t.Helper()
-	loaded, err := project.Load(root)
+	loaded, err := LoadProject(root)
 	if err != nil {
 		t.Fatal(err)
 	}

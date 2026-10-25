@@ -4,11 +4,10 @@ import (
 	"os"
 
 	"givens/internal/assert"
-	"givens/internal/project"
 )
 
 // capabilityOf is a loaded capability as a window shows it.
-func (w *Window) capabilityOf(loaded project.Capability) Capability {
+func (w *Window) capabilityOf(loaded LoadedCapability) Capability {
 	assert.That(loaded.Slug != "", "a capability has a slug")
 	assert.That(loaded.Dir != "", "a capability has a folder")
 	shown := Capability{
@@ -28,11 +27,11 @@ func (w *Window) capabilityOf(loaded project.Capability) Capability {
 }
 
 // scenarioOf is a loaded scenario as a window shows it.
-func (w *Window) scenarioOf(capability project.Capability, loaded project.Scenario) Scenario {
+func (w *Window) scenarioOf(capability LoadedCapability, loaded LoadedScenario) Scenario {
 	assert.That(loaded.Capability != "", "a scenario belongs to a capability")
-	assert.That(len(loaded.Steps) <= project.HelperFilesMax, "steps stay bounded")
+	assert.That(len(loaded.Steps) <= HelperFilesMax, "steps stay bounded")
 	steps := make([]string, 0, len(loaded.Background)+len(loaded.Steps))
-	for _, step := range append(append([]project.Step{}, loaded.Background...),
+	for _, step := range append(append([]GherkinStep{}, loaded.Background...),
 		loaded.Steps...) {
 		steps = append(steps, step.Keyword+" "+step.Text)
 	}

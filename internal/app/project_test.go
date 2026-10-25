@@ -1,4 +1,4 @@
-package project
+package app
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 
 // TestLoadSampleShop loads testdata/sample-shop, the project most scenarios start from.
 func TestLoadSampleShop(t *testing.T) {
-	loaded, err := Load(filepath.Join("..", "..", "testdata", "sample-shop", "capabilities"))
+	loaded, err := LoadProject(filepath.Join("..", "..", "testdata", "sample-shop", "capabilities"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestLoadRulesBackgroundsAndOutlines(t *testing.T) {
 	write(t, filepath.Join(root, "billing", "billing.feature"), rulesFeature)
 	write(t, filepath.Join(root, "billing", "scripts", "plain.md"), "Do it by hand.\n")
 	write(t, filepath.Join(root, "notes", "readme.txt"), "not a capability\n")
-	loaded, err := Load(root)
+	loaded, err := LoadProject(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestLoadRulesBackgroundsAndOutlines(t *testing.T) {
 func TestLoadBrokenFeature(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "broken", "broken.feature"), "Scenario: Orphan\n  Given oops\n")
-	loaded, err := Load(root)
+	loaded, err := LoadProject(root)
 	if err != nil {
 		t.Fatal(err)
 	}

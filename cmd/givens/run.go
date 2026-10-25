@@ -12,7 +12,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/project"
 )
 
 // answerBytesMax bounds one line typed at a markdown step.
@@ -32,7 +31,7 @@ func runSetup(args []string) int {
 		complain(err)
 		return exitProblems
 	}
-	loaded, err := project.Load(root)
+	loaded, err := app.LoadProject(root)
 	if err != nil {
 		complain(err)
 		return exitProblems

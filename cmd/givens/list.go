@@ -11,7 +11,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/project"
 	"givens/internal/spec"
 )
 
@@ -73,7 +72,7 @@ func listScenarios(filter app.TagExpression) ([]listed, error) {
 	if err != nil {
 		return nil, err
 	}
-	loaded, err := project.Load(root)
+	loaded, err := app.LoadProject(root)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +110,7 @@ func runCheck(args []string) int {
 		complain(err)
 		return exitProblems
 	}
-	loaded, err := project.Load(root)
+	loaded, err := app.LoadProject(root)
 	if err != nil {
 		complain(err)
 		return exitProblems

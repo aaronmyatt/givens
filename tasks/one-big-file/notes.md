@@ -774,20 +774,42 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   `Files`/`FilesDir`/`FolderOf`/`CheckFile`/`CopyFiles`/`FileBytesMax` ->
   `AttachedFiles`/`AttachedFilesDir`/`AttachedFilesFolder`/`CheckAttachedFile`/
   `CopyAttachedFiles`/`AttachedFileBytesMax`, and the clash `copyFile` -> `copyAttachedFile`
-  (Keep runs off main's `copyFile` copies runs/files into the ref); `FreeTime` -> `FreeRunTime`; notes:
-  `Summary` -> `NoteSummary`, `WriteNote`/`ReadNote`/`NoteFileName`/`NoteBytesMax` get a `Run`;
-  the ref: `RefCopy`/`LinkRefCopy`/`RefCopyLinkName`/`RefDirName` -> `RunsRefCopy`/
+  (Keep runs off main's `copyFile` copies runs/files into the ref); `FreeTime` -> `FreeRunTime`;
+  notes: `Summary` -> `NoteSummary`, `WriteNote`/`ReadNote`/`NoteFileName`/`NoteBytesMax` get a
+  `Run`; the ref: `RefCopy`/`LinkRefCopy`/`RefCopyLinkName`/`RefDirName` -> `RunsRefCopy`/
   `LinkRunsRefCopy`/`RunsRefCopyLinkName`/`RunsRefDirName` (like runref's `RunsRef`); limits:
   `Limits`/`DefaultLimits`/`ReadLimits`/`WriteLimits`/`LimitMax`/`LimitsFileName` get a `Run`;
   `ReadLines` -> `ReadDayLogLines`; unexported: `format` -> `formatRun`, `readFile` ->
   `readRunFile`, `timeTaken` -> `runTimeTaken`, `rowKey` -> `runRowKey` (app's rows are outline
   rows), `removeFolder` -> `removeRunFilesFolder`, `folderBytes` -> `runFilesFolderBytes`,
   `writeLog` -> `writeDayLog`. `Run`, `GitCommonDir`, `FilesPerRunMax`, `OffMainFileName`,
-  `RunsKeptDefault`, `MegabytesKeptDefault`, `PruneToPercent` and the other unexported names kept
-  theirs: `Run` is the word every story uses.
+  `RunsKeptDefault`, `MegabytesKeptDefault`, `PruneToPercent` and the other unexported names
+  kept theirs: `Run` is the word every story uses.
 - Tests: runs_test.go, files_test.go and prune_test.go are internal/app/runs_test.go,
   runs_files_test.go and runs_prune_test.go. Lines the longer names pushed past 100 columns
   were rewrapped. Comments that said `runs.X` or internal/runs (Drop in's attached files, Keep
   runs off main's opening comment and run store, Open a project's branch note) name the new
   names; big.go's header list drops runs.
 - big.go 7,541 lines (+604), big_helpers.go 2,120 (+402), 28% of big.go.
+
+## internal/project folds in (2026-10-25)
+- internal/project is gone. project.go and scenario.go, in that order, are in big_helpers.go
+  before `capabilitiesFolderName` and findCapabilities, under the package doc: reload and
+  findCapabilities load the project, `givens list` and `givens run` too, and every story reads
+  its types.
+- Renames: the clashes `Capability` -> `LoadedCapability` and `Scenario` -> `LoadedScenario`.
+  app's Capability and Scenario are what a window shows (JSON-tagged, a status, rendered
+  about.md, steps as text); project's are what was read from disk (folder, paths, setup files,
+  parsed steps), and `capabilityOf`/`scenarioOf` turn a loaded one into a shown one, so
+  "Loaded" says which side of that a value is on. `Project` -> `LoadedProject` and `Load` ->
+  `LoadProject` to match (a bare `Project` in app reads as the window's project). `Step` ->
+  `GherkinStep` (beside `MarkdownStep`), `Examples` -> `ExamplesBlock` (it's one block; the
+  field stays `Examples`), the clash `rowsOf` -> `tableRowsOf` (app's `rowsOf` is an outline's
+  rows), `scenarioOf`/`scenariosOf` -> `loadScenario`/`loadScenarios` (Window's `scenarioOf`
+  goes the other way), `readTags` -> `readScenarioTags` (Tags has `parseTags`), `existing` ->
+  `existingFile`. The limits, the `Tag*` constants, `ErrNoScenario`, `Find`, `Key` and the
+  other unexported names kept theirs.
+- project_test.go is internal/app/project_test.go (app had none). Gherkin files' and Tags'
+  opening comments named internal/project; they name LoadProject and loadScenario now. big.go's
+  header list drops project.
+- big.go 7,540 lines (-1, an import), big_helpers.go 2,585 (+465), 34% of big.go.
