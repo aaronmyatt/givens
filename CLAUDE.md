@@ -14,7 +14,8 @@ scenarios, sets up each scenario's starting state, and walks a developer through
   return `ErrNotImplemented` until built. `internal/tui/`: the TUI. `cmd/givens/`: the CLI.
   `tools/tigerlint/`: the linter.
 - `internal/app/big.go`: the one-big-file pilot (`tasks/one-big-file/`), in story order:
-  `// Feature:`, `// Rule:` and `// Scenario:` comments mark the sections. `scripts/entry.sh
+  `// Feature:`, `// Rule:` and `// Scenario:` comments mark the sections. Code two or more stories use is in
+  `internal/app/big_helpers.go`. `scripts/entry.sh
   "<name>"` prints a section's lines and functions, `--debug` a delve command; `TestBigFile`
   checks the headings against the feature files.
 - `_archive/`: the macOS SwiftUI app and its `givens serve` bridge, archived; Go tooling

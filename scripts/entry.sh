@@ -57,11 +57,10 @@ story() {
 
 # bounds prints "<first>-<last>" for the section starting at line $1, a $2 heading. A Feature
 # runs to the next Feature; a Rule to the next Rule or Feature; a Scenario comment, with any
-# right below it, to the next heading. Every section stops at the Helpers heading.
+# right below it, to the next heading.
 bounds() {
   awk -v from="$1" -v kind="$2" '
     NR <= from { last = NR; next }
-    /^\/\/ Helpers$/ { stop = 1 }
     /^\/\/ Feature: / { stop = 1 }
     /^\/\/ Rule: / && kind != "Feature" { stop = 1 }
     /^\/\/ Scenario: / && kind == "Scenario" { if (NR == last + 1) { last = NR; next } stop = 1 }

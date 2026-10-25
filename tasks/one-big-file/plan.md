@@ -5,6 +5,9 @@ and `TestBigFile` fails on a story without one.
 
 ## Where it stands
 
+- 2026-10-25: helpers moved out of big.go into `internal/app/big_helpers.go`, at the
+  developer's ask. `TestBigFile` fails if that file holds a Feature, Rule or Scenario heading.
+
 - 2 of 17 stories are in big.go: Copy a setup script, and Trust a project.
   - The Trust a project move isn't committed yet: big.go, dropin_page.go, dropin_run.go and
     the deleted trust.go are still in the working tree.
@@ -33,7 +36,8 @@ and `TestBigFile` fails on a story without one.
      headings where scenarios share code.
 6. **Decide where each piece goes.**
    - Code that only this story uses goes in its section.
-   - Code that 2 or more stories use goes under `// Helpers`.
+   - Code that 2 or more stories use goes in `internal/app/big_helpers.go`, the helpers'
+     own big file. Big.go holds only stories.
    - Types and constants, the data models, stay in their own files. List each of those
      files in the header.
 7. **Pass the gate before the commit.**
@@ -68,9 +72,9 @@ and `TestBigFile` fails on a story without one.
   `Offers`, `Choose` and `allOffers`; plus `selection.go`, `input.go` and `prompt.go`.
   - Each story's own offer list moves into its section. `aboutOffers`, `todoOffers`,
     `runsOffers` and `readOnlyOffers` already work this way.
-  - Choice made: keep the core apart (A) instead of putting it under Helpers (B).
+  - Choice made: keep the core apart (A) instead of putting it in big_helpers.go (B).
     - A: big.go reads as stories only, and the helper tripwire still means something.
-    - B: closer to the essay, but about 1,000 lines of core would swamp the helpers.
+    - B: closer to the essay, but about 1,000 lines of core would swamp the helpers file.
     - Revisit at slice 13 using the measured numbers.
 
 ## Slices, in order
@@ -83,13 +87,13 @@ did.
 | # | Story | Scenarios | Moves in | Watch for |
 | --- | --- | --- | --- | --- |
 | 0 | (commit Trust a project) | — | what's in the working tree | the suites pass first |
-| 1 | Views | 4 | views.go (223) | `tagViews` and `isViewTag` are tags' too, so they go to Helpers |
+| 1 | Views | 4 | views.go (223) | `tagViews` and `isViewTag` are tags' too, so they go to big_helpers.go |
 | 2 | Tags | 11 | todo.go (102), the tag parts of views.go and search.go | "flag to do" is also used by Write stories (new scenario starts flagged) |
 | 3 | Edge pointers: The kit, Use Givens from the terminal, Work in the terminal | 12 + 8 + 43 | install.go (95), `InstallCommand` and `givensCommand` from windows.go | sections with no functions; `--debug` says "no functions to stop in" |
 | 4 | Update the kit **and** Search everything, as two worktrees at once | 5 + 6 | kitupdate.go (152); search.go, search_find.go, search_index.go (426) | the clash experiment: count merge conflicts; both touch the import block |
-| 5 | Read a capability | 6 | history.go (120), copy_steps.go (36), story and scenario parts of selection.go | `status.go` is used by 4 files, so it goes to Helpers |
+| 5 | Read a capability | 6 | history.go (120), copy_steps.go (36), story and scenario parts of selection.go | `status.go` is used by 4 files, so it goes to big_helpers.go |
 | 6 | Gherkin files | 7 | examples.go (26), warnings from project.go, `moveToOwnCapability`, `RuleGroups` | the parser stays in `internal/spec` |
-| 7 | Open a project | 9 | windows.go (217), create.go (63), branch.go (190), `Open` from app.go | loading in project.go (`findCapabilities`, `reload`, `findScenario`) goes to Helpers; Keep runs off main uses `OpenBranch` too |
+| 7 | Open a project | 9 | windows.go (217), create.go (63), branch.go (190), `Open` from app.go | loading in project.go (`findCapabilities`, `reload`, `findScenario`) goes to big_helpers.go; Keep runs off main uses `OpenBranch` too |
 | 8 | Keep runs off main | 11 | runs_off_main.go (314) | run writes called from Drop in's record: cut a seam |
 | 9 | Share setup between scenarios | 12 | shared.go (174), helper_edit.go (197), needs.go (94) | `RequiredCommands` is also used by Drop in and snapshot: the shared-code test |
 | 10 | Write stories and scenarios, in 3 commits | 27 | a) authoring.go, editor.go, the editor parts of editor_more.go, preview.go; b) rename.go, delete.go; c) about_edit.go, `setupFile` and `deleteFile` | editor_more.go (402) mixes all three; `Rename` and `Delete` are called from manage.go and fakes.go |
@@ -104,7 +108,7 @@ Sizes are line counts of the files today.
 - `TestBigFile` stops just counting missing stories: a Feature with no section fails.
 - The header lists every file outside big.go and why.
 - Measure, then decide core glue A or B:
-  - section lines vs helper lines;
+  - big.go's lines vs big_helpers.go's lines;
   - big.go's total, expected to be about 6,500;
   - gopls and editor speed at that size.
 - Write a closing entry in `notes.md`:
@@ -120,7 +124,7 @@ Sizes are line counts of the files today.
 ## Stop and rethink if
 
 - A slice needs a behaviour change to move. That breaks "moves unchanged".
-- Helpers outweigh the sections. The tripwire has tripped, so pick a group to move to an
+- big_helpers.go outgrows big.go. The tripwire has tripped, so pick a group to move to an
   adjacent file.
 - Slice 4 merges with more than a trivial import clash. Then parallel agents can't share
   big.go, and the essay needs a scenario about that.

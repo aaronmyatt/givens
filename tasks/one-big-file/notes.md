@@ -76,3 +76,12 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   story that isn't in the big file yet.
 - The header said helpers are for "every story", but repoRoot is copy's alone: it now says
   helpers sit below the sections so a section reads as what its story does.
+
+## Helpers get their own file (2026-10-25)
+- At the developer's ask, the Helpers part of big.go is now `internal/app/big_helpers.go`, so
+  big.go holds only stories. Its header says what goes there and names the tripwire: the
+  helpers file growing past big.go.
+- `TestBigFile` reads the whole of big.go (no more `// Helpers` stop) and fails if
+  big_helpers.go holds a Feature, Rule or Scenario heading; checked by adding one.
+  `scripts/entry.sh` no longer stops at a Helpers heading.
+- big.go 229 lines, big_helpers.go 104.

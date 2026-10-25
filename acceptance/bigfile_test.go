@@ -14,17 +14,19 @@ import (
 	"givens/internal/spec"
 )
 
-// bigFile tells Givens's stories in order, relative to this package. See its header and
-// tasks/one-big-file/notes.md.
-const bigFile = "../internal/app/big.go"
+// bigFile tells Givens's stories in order, relative to this package, and bigHelpersFile holds
+// the code two or more of them use. See their headers and tasks/one-big-file/notes.md.
+const (
+	bigFile        = "../internal/app/big.go"
+	bigHelpersFile = "../internal/app/big_helpers.go"
+)
 
 // The comments that lay out the big file: a section per Feature, and inside it each Rule and,
-// where it helps, a Scenario. helpersHeading ends the last section.
+// where it helps, a Scenario.
 const (
 	featureHeading  = "// Feature: "
 	ruleHeading     = "// Rule: "
 	scenarioHeading = "// Scenario: "
-	helpersHeading  = "// Helpers"
 )
 
 // section is one story's part of the big file.
@@ -53,9 +55,17 @@ func TestBigFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sections, err := readSections()
+	sections, err := readSections(bigFile)
 	if err != nil {
 		t.Fatal(err)
+	}
+	strays, err := readSections(bigHelpersFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stray := range strays {
+		t.Errorf("internal/app/big_helpers.go:%d: \"Feature: %s\" belongs in big.go; this file "+
+			"holds only helpers", stray.line, stray.feature)
 	}
 	last := -1
 	for _, part := range sections {
@@ -114,10 +124,9 @@ func rulesOf(feature *messages.Feature) []string {
 	return rules
 }
 
-// readSections reads the big file's Feature, Rule and Scenario comments into sections, up to
-// the Helpers heading.
-func readSections() ([]section, error) {
-	opened, err := os.Open(bigFile)
+// readSections reads a file's Feature, Rule and Scenario comments into sections.
+func readSections(path string) ([]section, error) {
+	opened, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +136,6 @@ func readSections() ([]section, error) {
 	// Ref: https://pkg.go.dev/bufio#Scanner
 	for number := 1; scanner.Scan(); number++ { // bound: ends at the file's end
 		line := scanner.Text()
-		if line == helpersHeading {
-			break
-		}
 		if name, ok := strings.CutPrefix(line, featureHeading); ok {
 			sections = append(sections, section{feature: name, line: number})
 			continue

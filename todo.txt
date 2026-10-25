@@ -45,3 +45,15 @@ x 2026-10-24 2026-10-11 Release: package Givens.app and the givens command ref:r
 x 2026-10-25 2026-10-25 One big file: pilot the scenario-driven big-file workflow on copy-a-setup-script ref:one-big-file — big.go tells the story in Feature/Scenario-headed sections, TestBigFile checks them, scripts/entry.sh finds and debugs a section; no tags in the scenarios — see tasks/one-big-file/notes.md
 x 2026-10-25 2026-10-25 One big file: decide whether to grow the pilot to trust-a-project and views ref:one-big-file @human — grown: Trust a project is in big.go; views next — see tasks/one-big-file/notes.md
 2026-10-25 One big file: move Views into big.go ref:one-big-file
+2026-10-25 One big file: move Tags into big.go ref:one-big-file
+2026-10-25 One big file: pointer sections for The kit, Use Givens from the terminal, Work in the terminal ref:one-big-file
+2026-10-25 One big file: move Update the kit and Search everything in parallel worktrees, count conflicts ref:one-big-file
+2026-10-25 One big file: move Read a capability into big.go ref:one-big-file
+2026-10-25 One big file: move Gherkin files into big.go ref:one-big-file
+2026-10-25 One big file: move Open a project into big.go ref:one-big-file
+2026-10-25 One big file: move Keep runs off main into big.go ref:one-big-file
+2026-10-25 One big file: move Share setup between scenarios into big.go ref:one-big-file
+2026-10-25 One big file: move Write stories and scenarios into big.go, in 3 commits ref:one-big-file
+2026-10-25 One big file: move Mix shell, browser and hand steps into big.go ref:one-big-file
+2026-10-25 One big file: move Drop into a scenario into big.go, in 5 commits ref:one-big-file
+2026-10-25 One big file: finish: require every story, decide core glue, measure ref:one-big-file
