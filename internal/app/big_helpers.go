@@ -791,3 +791,57 @@ func (w *Window) editFile(path string) error {
 	_, err = w.Edit(relative)
 	return err
 }
+
+// outlineRow is one Examples row: its block's slug and its values in column order. The zero
+// value is "not an outline row".
+type outlineRow struct {
+	examples string
+	values   []runs.Pair
+}
+
+// rowsOf lists an outline's rows, block by block, in file order.
+func rowsOf(scenario project.Scenario) []outlineRow {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(scenario.Examples) <= project.HelperFilesMax, "blocks stay bounded")
+	rows := make([]outlineRow, 0, 4)
+	for _, block := range scenario.Examples {
+		for _, cells := range block.Rows {
+			values := make([]runs.Pair, 0, len(block.Header))
+			for column, name := range block.Header {
+				if column < len(cells) {
+					values = append(values, runs.Pair{Name: name, Value: cells[column]})
+				}
+			}
+			rows = append(rows, outlineRow{examples: block.Slug, values: values})
+		}
+	}
+	return rows
+}
+
+// rowStatus says where one outline row stands, as StatusOf does for a scenario.
+func rowStatus(loaded *project.Project, scenario project.Scenario, row outlineRow,
+	now time.Time) string {
+	assert.That(loaded != nil, "status is read in a loaded project")
+	assert.That(scenario.Outline, "only an outline has rows")
+	return statusFor(loaded, scenario, runs.Key(scenario.Key(), row.examples), row.values, now)
+}
+
+// rowName says a row as a person would: its first value, like "expired".
+func rowName(row []runs.Pair) string {
+	assert.That(len(row) <= runs.FieldsMax, "a row stays bounded")
+	if len(row) == 0 {
+		return ""
+	}
+	assert.That(row[0].Name != "", "a value has a column")
+	return row[0].Value
+}
+
+// removeArguments removes the session's argument files, if it wrote any.
+func (s *Session) removeArguments() {
+	assert.That(s != nil, "arguments are removed for a session")
+	assert.That(s.argumentsDir == "" || strings.Contains(s.argumentsDir, "givens-arguments-"),
+		"only an arguments folder is removed")
+	if s.argumentsDir != "" {
+		_ = os.RemoveAll(s.argumentsDir)
+	}
+}

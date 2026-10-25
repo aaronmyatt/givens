@@ -514,3 +514,31 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Mix shell's, Share setup's and Write stories' opening comments named cards.go and
   dropin_page.go; they name the functions only now, or big_helpers.go for `editFile`.
 - Section +569 lines, 1,290 in all; big_helpers.go +25. big.go 5,395, big_helpers.go 793.
+- e) Outlines and rows. rows.go, arguments.go and examples.go are gone. At the section's end:
+  the row offers, `fillPlaceholders`, `rowNamed`, `DropInRows`, `ChooseOnRow` and `marked` under
+  "See every row on one page", "Drop in to one row" and "Switch to another row";
+  `outlineStatus` under "Record a run for one row"; `writeArguments` and `writeArgument` under
+  "Step data reaches the script"; `MessageNameExamples` and `examplesWarning` under "Several
+  unnamed Examples blocks". big.go imports encoding/csv now.
+- To big_helpers.go: `outlineRow`, `rowsOf`, `rowStatus` and `rowName`, since Views'
+  `unverifiedRows` lists an outline's rows with them; `removeArguments`, since Open a project's
+  `CloseWindow` calls it (it sits next to `scratchDir`, the folder it removes).
+- `outlineStatus` and `examplesWarning` stay in the section, though their callers are helpers
+  (`StatusOf`, `scenarioWarning`): same call as `blockEnd` and `setupTexts`. `marked` stays,
+  though core glue's `leaveThenSelect` calls it. No seams cut.
+- Section +224 lines, 1,514 in all; big_helpers.go +54. big.go 5,620, big_helpers.go 847.
+  17 of 17. 41 of the 47 scenarios have a heading; the other six are the kit's `from`, git's
+  merge=union and the setup's own idempotency, and the opening comment names them.
+- In all: 9 files gone (session.go, dropin_run.go, dropin_record.go, dropin_files.go, cards.go,
+  dropin_page.go, rows.go, arguments.go, examples.go), plus `addTeardown` and `scenarioFileOf`
+  from offers.go and `leaveSession` from selection.go. big_helpers.go +131 against the
+  section's 1,514. No seams cut: the guests had gone first, as the plan meant.
+- Surprise: the guests call back into their host. Mix shell's cards call `fail`, `resume` and
+  `checklistOf`, and Trust's seams call `begin` and `restart`. By the callers rule those Session
+  methods are shared, so four of them went to big_helpers.go; `begin` stayed, as the run a seam
+  only gates. A host's state machine its guests drive is split by the rule, not by the story.
+- Left in internal/app beside big.go and big_helpers.go, 2,127 lines in 17 files: core glue
+  (snapshot.go 357, offers.go 224, selection.go 123, prompt.go 68, input.go 59, project.go 52);
+  App and Window (app.go 138, window.go 169); data models (dropin.go 66, edit.go 63, helpers.go
+  51); the dead install code (install.go 95, windows.go 32); and tests (app_test.go 414,
+  branch_test.go 107, runs_off_main_test.go 58, todo_test.go 51).
