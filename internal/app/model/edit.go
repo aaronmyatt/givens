@@ -1,4 +1,4 @@
-package app
+package model
 
 // Limits for editing. Tiger Style: put a limit on everything.
 // Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
@@ -6,8 +6,6 @@ const (
 	// EditorTextBytesMax bounds a file open in the editor; it matches the spec reader's limit
 	// on a .feature file.
 	EditorTextBytesMax = 4 << 20
-	// StorySentenceLengthMax bounds each line typed into the New story dialog.
-	StorySentenceLengthMax = NameLengthMax
 )
 
 // StoryDraft is what a developer fills in on the New story dialog: the capability's name and
@@ -42,22 +40,4 @@ type StepSuggestion struct {
 type PreviewLine struct {
 	Text string `json:"text"` // the line as shown, keywords lined up for steps
 	Mark string `json:"mark"` // the parser's message when the line doesn't parse, or ""
-}
-
-// Editor is the window's editor, holding one file: a .feature file, an about.md, a setup
-// script or a helper. Its text is unsaved until Save.
-type Editor struct {
-	window   *Window
-	path     string
-	text     string // what the editor shows, unsaved changes included
-	opened   string // the file's text when it was opened or last saved
-	problems []string
-	line     int // the line the editor opened at, counting from 1; 0 for the top
-
-	helperProblems []HelperProblem // `bash -n` reports, for a helper file
-	scenario       string          // the scenario the editor opened at, or ""
-	typing         int             // the line being typed, counting from 0; -1 when none
-	cursor         int             // where typing starts a new line, counting from 0
-	marks          []EditorMark    // lines the parser couldn't read at the last save
-	previewing     bool            // "Preview" is showing beside the text
 }

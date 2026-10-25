@@ -16,6 +16,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/slug"
 	"givens/internal/spec"
 )
@@ -31,7 +32,7 @@ type state struct {
 	*world.World
 	subject string      // the scenario a step called "it"
 	editor  *app.Editor // the editor a step opened
-	story   app.StoryDraft
+	story   model.StoryDraft
 
 	featureBefore string            // a .feature file's text before the step acted on it
 	before        map[string]string // every file in the capabilities folder, before a delete
@@ -176,7 +177,7 @@ func (s *state) newStory(name string, asA string, iWant string, soThat string) e
 		return err
 	}
 	// givens new story fills in a StoryDraft from its template and calls NewStory, as here.
-	s.story = app.StoryDraft{Name: name, AsA: asA, IWant: iWant, SoThat: soThat}
+	s.story = model.StoryDraft{Name: name, AsA: asA, IWant: iWant, SoThat: soThat}
 	return window.NewStory(s.story)
 }
 
@@ -244,16 +245,16 @@ func (s *state) shownFlaggedToDo(name string) error {
 }
 
 func (s *state) newErrorScenario(capabilityName string, name string) error {
-	return s.newScenario(capabilityName, app.ScenarioDraft{Name: name, Error: true})
+	return s.newScenario(capabilityName, model.ScenarioDraft{Name: name, Error: true})
 }
 
 func (s *state) newHappyScenario(capabilityName string, name string) error {
-	return s.newScenario(capabilityName, app.ScenarioDraft{Name: name})
+	return s.newScenario(capabilityName, model.ScenarioDraft{Name: name})
 }
 
 // newScenario adds a scenario to a capability, as givens new scenario does once its template
 // is filled in, keeping the .feature file's text from before.
-func (s *state) newScenario(capabilityName string, draft app.ScenarioDraft) error {
+func (s *state) newScenario(capabilityName string, draft model.ScenarioDraft) error {
 	window, err := s.window()
 	if err != nil {
 		return err

@@ -590,3 +590,15 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   A todo.txt line covers it.
 - `deadcode` (golang.org/x/tools) didn't find these: reflection (JSON snapshots, chromedp)
   keeps every exported method alive to it. Grepping callers outside `_archive/` did.
+
+## Data models get a package (2026-10-25)
+- At the developer's ask, the type-only files moved to `internal/app/model` (package
+  `model`): dropin.go, edit.go and helpers.go, plus CheckItem from Drop in's section, which
+  DropInRow holds. 176 references were found with `gopls references` and qualified as
+  `model.X` (or `app.X` became `model.X` outside the package); goimports fixed the imports.
+- Two exceptions stayed in `app`: Editor, which holds a *Window and has 24 methods (a type's
+  methods must be in its package), now opens Write stories' section; and
+  StorySentenceLengthMax, which is NameLengthMax from app.go.
+- SetupCard's unexported inline and runBlocks fields became Inline and RunBlocks (gopls
+  rename), tagged `json:"-"` so the JSON is unchanged.
+- app.go and window.go stay: App and Window carry methods, so they aren't data-only.

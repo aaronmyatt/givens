@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // unsavedEdit is what "a developer is editing" adds to a scenario's last step without saving,
@@ -108,7 +108,7 @@ func (s *state) lineMarked(message string) error {
 		return errors.New("nothing is open to edit")
 	}
 	marks := s.editor.Marks()
-	want := app.EditorMark{Line: s.addedLineNumber, Message: message}
+	want := model.EditorMark{Line: s.addedLineNumber, Message: message}
 	if !slices.Contains(marks, want) {
 		return fmt.Errorf("line %d isn't marked %q; the marks are %v", s.addedLineNumber,
 			message, marks)
@@ -140,7 +140,7 @@ func (s *state) previewLinedUp() error {
 		return errors.New("nothing is open to edit")
 	}
 	preview := s.editor.Preview()
-	if !slices.ContainsFunc(preview, func(line app.PreviewLine) bool {
+	if !slices.ContainsFunc(preview, func(line model.PreviewLine) bool {
 		return strings.Contains(line.Text, s.subject)
 	}) {
 		return fmt.Errorf("the preview doesn't name %q: %v", s.subject, preview)
@@ -151,7 +151,7 @@ func (s *state) previewLinedUp() error {
 	}
 	from := 0
 	for _, want := range linedUp(steps) {
-		found := slices.Index(preview[from:], app.PreviewLine{Text: want})
+		found := slices.Index(preview[from:], model.PreviewLine{Text: want})
 		if found < 0 {
 			return fmt.Errorf("the preview doesn't show %q unmarked after line %d: %v",
 				want, from, preview)

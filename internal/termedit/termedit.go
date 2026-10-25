@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/assert"
 )
 
@@ -170,7 +171,7 @@ func (e *Edit) Finish() (Outcome, bool, error) {
 }
 
 // withProblems puts each problem above the text as a "# givens:" line.
-func withProblems(text string, problems []app.EditorMark) string {
+func withProblems(text string, problems []model.EditorMark) string {
 	assert.That(len(problems) > 0, "there are problems to show")
 	assert.That(len(problems) <= opensMax*8, "problems stay bounded")
 	var lines strings.Builder
@@ -184,7 +185,7 @@ func withProblems(text string, problems []app.EditorMark) string {
 // withoutProblems takes the "# givens:" lines off the top of a file.
 func withoutProblems(text string) string {
 	assert.That(problemPrefix != "", "problem lines are marked")
-	assert.That(len(text) <= app.EditorTextBytesMax*2, "the text stays bounded")
+	assert.That(len(text) <= model.EditorTextBytesMax*2, "the text stays bounded")
 	// bound: each pass takes one line off text.
 	for strings.HasPrefix(text, problemPrefix) {
 		_, rest, found := strings.Cut(text, "\n")
@@ -224,7 +225,7 @@ func Run(editor *app.Editor) (Outcome, *Edit, error) {
 // taken out: a form to fill in, as `git commit` gives. The file is removed after.
 func Template(name string, text string) (string, error) {
 	assert.That(name != "" && !strings.Contains(name, "/"), "a template has a file name")
-	assert.That(len(text) <= app.EditorTextBytesMax, "a template stays bounded")
+	assert.That(len(text) <= model.EditorTextBytesMax, "a template stays bounded")
 	file, err := os.CreateTemp("", "givens-*-"+name)
 	if err != nil {
 		return "", err

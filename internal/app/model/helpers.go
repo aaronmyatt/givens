@@ -1,4 +1,4 @@
-package app
+package model
 
 // Helper is one shell function documented with a `# @helper` comment in a `_shared/` folder,
 // as the sidebar's "Shared" section lists it. See capabilities/share-setup-between-scenarios.

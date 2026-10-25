@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/runs"
 )
@@ -22,23 +23,23 @@ type AppSnapshot struct {
 
 // WindowSnapshot is one window as serve describes it. Records.swift's WindowSnapshot.
 type WindowSnapshot struct {
-	ID         string           `json:"id"`
-	Kind       string           `json:"kind"`
-	Title      string           `json:"title"`
-	Path       string           `json:"path"`
-	Messages   []string         `json:"messages"`
-	Sidebar    []SidebarItem    `json:"sidebar"`
-	Selected   string           `json:"selected"`
-	Capability *Capability      `json:"capability"`
-	Scenario   *Scenario        `json:"scenario"`
-	Search     *SearchSnapshot  `json:"search"`
-	Editor     *EditorSnapshot  `json:"editor"`
-	Session    *SessionSnapshot `json:"session"`
-	Listed     []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
-	Rows       []DropInRow      `json:"rows"`   // the selected outline's Examples rows
-	Runs       []RunLine        `json:"runs"`   // the shown scenario's runs, newest first
-	Offers     []string         `json:"offers"`
-	Labels     []string         `json:"labels"`
+	ID         string            `json:"id"`
+	Kind       string            `json:"kind"`
+	Title      string            `json:"title"`
+	Path       string            `json:"path"`
+	Messages   []string          `json:"messages"`
+	Sidebar    []SidebarItem     `json:"sidebar"`
+	Selected   string            `json:"selected"`
+	Capability *Capability       `json:"capability"`
+	Scenario   *Scenario         `json:"scenario"`
+	Search     *SearchSnapshot   `json:"search"`
+	Editor     *EditorSnapshot   `json:"editor"`
+	Session    *SessionSnapshot  `json:"session"`
+	Listed     []Scenario        `json:"listed"` // a view's, tag's or step's scenarios
+	Rows       []model.DropInRow `json:"rows"`   // the selected outline's Examples rows
+	Runs       []RunLine         `json:"runs"`   // the shown scenario's runs, newest first
+	Offers     []string          `json:"offers"`
+	Labels     []string          `json:"labels"`
 	// Branch is the branch a read-only window shows, or "" for the checked-out folder.
 	Branch string `json:"branch"`
 }
@@ -62,11 +63,11 @@ type EditorSnapshot struct {
 
 // SessionSnapshot is the Drop in page. Records.swift's SessionRecord.
 type SessionSnapshot struct {
-	Scenario  string      `json:"scenario"`
-	Status    string      `json:"status"`
-	Output    []string    `json:"output"`
-	Cards     []string    `json:"cards"`
-	Checklist []CheckItem `json:"checklist"`
+	Scenario  string            `json:"scenario"`
+	Status    string            `json:"status"`
+	Output    []string          `json:"output"`
+	Cards     []string          `json:"cards"`
+	Checklist []model.CheckItem `json:"checklist"`
 	// Parts are the checklist cut into runs of one kind, in order, as the page numbers them.
 	Parts []ChecklistPart `json:"parts"`
 	// Attachments are the paths of files "Record run" will keep with the run.
@@ -317,7 +318,7 @@ func (w *Window) searchMessages() []string {
 // linedUp pads each step's keyword on the left to the longest keyword's width, so the step
 // texts start in one column, as the scenario page shows them: "Given …", " When …".
 func linedUp(steps []string) []string {
-	assert.That(len(steps) <= SetupCardsMax*4, "steps stay bounded")
+	assert.That(len(steps) <= model.SetupCardsMax*4, "steps stay bounded")
 	width := 0
 	for _, step := range steps {
 		keyword, _, _ := strings.Cut(step, " ")
@@ -334,7 +335,7 @@ func linedUp(steps []string) []string {
 
 // rowLine is an outline row as one line: its values in column-name order, then its status,
 // like "card=expired — Never run". WindowModel.rowLine in Swift says it the same way.
-func rowLine(row DropInRow) string {
+func rowLine(row model.DropInRow) string {
 	assert.That(len(row.Values) <= runs.FieldsMax, "a row stays bounded")
 	assert.That(row.Status != "", "a row has a status")
 	columns := make([]string, 0, len(row.Values))

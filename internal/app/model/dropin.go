@@ -1,4 +1,7 @@
-package app
+// Package model holds the app's data models: types and constants with no code of their own,
+// which internal/app's stories fill in and the TUI, the CLI and the steps read. Code that acts
+// on them is in internal/app's big.go and big_helpers.go.
+package model
 
 // Drop in page limits. Tiger Style: put a limit on everything.
 // Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
@@ -46,8 +49,11 @@ type SetupCard struct {
 	Warning string   `json:"warning"` // why the card is marked, like an unclosed fence
 	Output  []string `json:"output"`  // what its run blocks printed, in order
 
-	inline    []string // inline code spans, which copy when clicked
-	runBlocks []int    // its run blocks, as indices into Blocks; see big.go's Mix shell section
+	// Kept out of the JSON, as they were while unexported.
+	// Ref: https://pkg.go.dev/encoding/json#Marshal
+	Inline    []string `json:"-"` // inline code spans, which copy when clicked
+	RunBlocks []int    `json:"-"` // its run blocks, as indices into Blocks; see big.go's Mix shell
+
 }
 
 // DropInRow is one Examples row on an outline's Drop in page.
@@ -63,4 +69,11 @@ type DropInRow struct {
 	Greyed   bool     `json:"greyed"` // another row is live, so this one is greyed out
 	// The live row's checklist; empty otherwise.
 	Checklist []CheckItem `json:"checklist"`
+}
+
+// CheckItem is one line of a Drop in checklist.
+type CheckItem struct {
+	Text string `json:"text"` // the step as shown, placeholders filled in
+	Kind string `json:"kind"` // "given" (done by hand), "when" or "then"
+	Mark string `json:"mark"` // "", "done", "pass" or "fail"
 }

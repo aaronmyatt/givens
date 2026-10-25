@@ -12,6 +12,7 @@ import (
 	"errors"
 	"time"
 
+	"givens/internal/app/model"
 	"givens/internal/assert"
 )
 
@@ -75,9 +76,9 @@ type Config struct {
 // each call it one command at a time.
 type App struct {
 	config  Config
-	windows []*Window    // front first
-	opener  URLOpener    // opens links; nil until UseURLOpener
-	kits    []KitRelease // the kit releases Givens ships, oldest first; see ShipKits
+	windows []*Window       // front first
+	opener  model.URLOpener // opens links; nil until UseURLOpener
+	kits    []KitRelease    // the kit releases Givens ships, oldest first; see ShipKits
 	// pendingTrash holds paths sent to the Trash that are still on disk; see trash.
 	pendingTrash map[string]bool
 	windowsEver  int // windows opened so far; numbers the next one

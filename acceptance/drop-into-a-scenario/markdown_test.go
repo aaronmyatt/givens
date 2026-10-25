@@ -11,6 +11,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/slug"
 )
 
@@ -75,14 +76,14 @@ func (s *state) markdownOnly(name string, scriptSlug string) error {
 }
 
 // markdownCards waits for setup to pause at its cards, and returns them.
-func (s *state) markdownCards() (*app.Session, []app.SetupCard, error) {
+func (s *state) markdownCards() (*app.Session, []model.SetupCard, error) {
 	session, err := s.settleTo(app.SessionWaiting)
 	if err != nil {
 		return nil, nil, err
 	}
-	cards := make([]app.SetupCard, 0, 4)
+	cards := make([]model.SetupCard, 0, 4)
 	for _, card := range session.Cards() {
-		if card.Kind == app.CardMarkdown {
+		if card.Kind == model.CardMarkdown {
 			cards = append(cards, card)
 		}
 	}
@@ -219,7 +220,7 @@ func (s *state) codeBlocksSetup() error {
 }
 
 // openCards drops in to the scenario's markdown setup, unless a Drop in is already open.
-func (s *state) openCards() (*app.Session, []app.SetupCard, error) {
+func (s *state) openCards() (*app.Session, []model.SetupCard, error) {
 	if s.Session == nil {
 		if err := s.DropIn(s.scenario); err != nil {
 			return nil, nil, err
@@ -369,7 +370,7 @@ func (s *state) noCopyUntilClosed() error {
 }
 
 // hasCopy reports whether a card offers Copy on a code block.
-func hasCopy(card app.SetupCard) bool {
+func hasCopy(card model.SetupCard) bool {
 	for _, block := range card.Blocks {
 		if block.Copyable {
 			return true

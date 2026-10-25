@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/assert"
 )
 
@@ -50,10 +51,10 @@ type row struct {
 type browseState struct {
 	tab      int
 	cursor   int
-	top      int             // the first row on show, once the list is longer than the page
-	unfolded map[string]bool // headings whose scenarios are listed, by foldID; none at first
-	history  bool            // h: the scenario's runs show in place of its steps
-	pickings []app.DropInRow // an outline's Examples rows to pick from, or nil
+	top      int               // the first row on show, once the list is longer than the page
+	unfolded map[string]bool   // headings whose scenarios are listed, by foldID; none at first
+	history  bool              // h: the scenario's runs show in place of its steps
+	pickings []model.DropInRow // an outline's Examples rows to pick from, or nil
 }
 
 // newBrowse starts on Capabilities, with the cursor at the top.
@@ -505,7 +506,7 @@ func (m *Model) named(message namedMsg) tea.Cmd {
 	name := fields(string(text))["Name"]
 	if err == nil && message.err == nil && name != "" {
 		if err = m.window.Select(message.capability); err == nil {
-			err = m.window.NewScenario(app.ScenarioDraft{Name: name})
+			err = m.window.NewScenario(model.ScenarioDraft{Name: name})
 		}
 	}
 	switch {

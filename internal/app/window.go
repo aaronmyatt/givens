@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/project"
 	"givens/internal/runref"
@@ -14,7 +15,7 @@ type Window struct {
 	// statuses are scenario statuses kept until files change or the day turns; see statusOf.
 	statuses  map[string]string
 	statusDay string
-	helpers   []Helper // the Shared list, kept until files change; see Helpers
+	helpers   []model.Helper // the Shared list, kept until files change; see Helpers
 	// histories are scenarios' run lists, kept until files change; see History.
 	histories map[string][]RunLine
 	// index is what ⌘K searches, and searchMemo its last answer; both kept until files

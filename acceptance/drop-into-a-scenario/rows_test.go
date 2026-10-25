@@ -9,6 +9,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // hasOutline writes the outline, and the named plain scenario if one is given, with setups.
@@ -28,7 +29,7 @@ func (s *state) hasOutline(other string) error {
 }
 
 // rows is the selected outline's Drop in rows.
-func (s *state) rows() ([]app.DropInRow, error) {
+func (s *state) rows() ([]model.DropInRow, error) {
 	window, err := s.window()
 	if err != nil {
 		return nil, err
@@ -41,17 +42,17 @@ func (s *state) rows() ([]app.DropInRow, error) {
 }
 
 // row is the row whose card column is card.
-func (s *state) row(card string) (app.DropInRow, error) {
+func (s *state) row(card string) (model.DropInRow, error) {
 	rows, err := s.rows()
 	if err != nil {
-		return app.DropInRow{}, err
+		return model.DropInRow{}, err
 	}
 	for _, row := range rows {
 		if row.Values["card"] == card {
 			return row, nil
 		}
 	}
-	return app.DropInRow{}, fmt.Errorf("no row has card=%s: %+v", card, rows)
+	return model.DropInRow{}, fmt.Errorf("no row has card=%s: %+v", card, rows)
 }
 
 func (s *state) rowsListed(first string, second string) error {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/termedit"
 )
@@ -61,7 +62,7 @@ func newStory(window *app.Window, name string) error {
 		return err
 	}
 	fields := templateFields(filled)
-	draft := app.StoryDraft{
+	draft := model.StoryDraft{
 		Name: fields["Name"], AsA: fields["As a"], IWant: fields["I want"],
 		SoThat: fields["So that"],
 	}
@@ -87,7 +88,7 @@ func newScenario(window *app.Window, capability string) error {
 		return err
 	}
 	fields := templateFields(filled)
-	draft := app.ScenarioDraft{
+	draft := model.ScenarioDraft{
 		Name: fields["Name"], Error: strings.EqualFold(fields["Error state"], "yes"),
 	}
 	if draft.Name == "" {
@@ -102,7 +103,7 @@ func newScenario(window *app.Window, capability string) error {
 
 // templateFields reads "Name: value" lines.
 func templateFields(text string) map[string]string {
-	assert.That(len(text) <= app.EditorTextBytesMax, "a template stays bounded")
+	assert.That(len(text) <= model.EditorTextBytesMax, "a template stays bounded")
 	fields := make(map[string]string, 4)
 	for _, line := range strings.Split(text, "\n") {
 		if name, value, ok := strings.Cut(line, ":"); ok {

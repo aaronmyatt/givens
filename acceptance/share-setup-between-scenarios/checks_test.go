@@ -15,6 +15,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // bashDurationMax bounds the bash runs these checks make to read a helper file.
@@ -155,7 +156,7 @@ func (s *state) markedIfMissing(command string, mark string) error {
 	if err != nil {
 		return err
 	}
-	at := slices.IndexFunc(required, func(r app.RequiredCommand) bool {
+	at := slices.IndexFunc(required, func(r model.RequiredCommand) bool {
 		return r.Command == command
 	})
 	if at < 0 {

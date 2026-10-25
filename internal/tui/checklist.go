@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/assert"
 )
 
@@ -73,7 +74,7 @@ func (m *Model) checklistKey(name string, text string, offers []string) (bool, t
 
 // markItem marks the checklist item under the cursor: Enter done (or passed, for a Then
 // step), p passed, f failed, x cleared.
-func (m *Model) markItem(items []app.CheckItem, key string) {
+func (m *Model) markItem(items []model.CheckItem, key string) {
 	assert.That(m.session != nil, "a Drop in has a session")
 	assert.That(key != "", "a key marks")
 	if len(items) == 0 {
@@ -196,7 +197,7 @@ func (m *Model) checklistView(snapshot *app.SessionSnapshot) string {
 // outcomeLine says how the Drop in went once every step is marked, like "1 step failed · r
 // to record", or "✓ Run recorded: 1 step failed" once it's recorded; it's empty while a step
 // is still unmarked.
-func outcomeLine(items []app.CheckItem, recorded bool) string {
+func outcomeLine(items []model.CheckItem, recorded bool) string {
 	assert.That(len(items) < checklistItemsMax, "a checklist stays bounded")
 	failed := 0
 	for _, item := range items {

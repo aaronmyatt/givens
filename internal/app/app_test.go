@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"givens/internal/app/model"
 	"givens/internal/kit"
 	"givens/internal/runs"
 )
@@ -235,7 +236,7 @@ func TestLeaveDropIn(t *testing.T) {
 	if status := session.Wait(10 * time.Second); status != SessionReady {
 		t.Fatalf("setup ended %q, want ready: %v", status, session.Output())
 	}
-	var when CheckItem
+	var when model.CheckItem
 	for _, item := range session.Checklist() {
 		if item.Kind == "when" {
 			when = item

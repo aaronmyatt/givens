@@ -12,6 +12,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/spec"
 )
 
@@ -78,7 +79,7 @@ func (s *state) writingNewScenario() error {
 	if err := window.Select("Checkout"); err != nil {
 		return err
 	}
-	return window.NewScenario(app.ScenarioDraft{Name: "Pay with store credit"})
+	return window.NewScenario(model.ScenarioDraft{Name: "Pay with store credit"})
 }
 
 // ensureStepUses adds Checkout scenarios using step until want scenarios use it.
@@ -146,7 +147,7 @@ func (s *state) offeredWith(text string, label string) error {
 		return err
 	}
 	suggestions := editor.Suggestions()
-	want := app.StepSuggestion{Text: text, Label: label}
+	want := model.StepSuggestion{Text: text, Label: label}
 	if !slices.Contains(suggestions, want) {
 		return fmt.Errorf("Givens doesn't suggest %q with %q; it suggests %v", text, label,
 			suggestions)

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"givens/internal/app/model"
 )
 
 // gitShop makes the sample shop a git repository, committed on main with a branch "gift-cards"
@@ -49,11 +51,11 @@ func TestBranchWindowRefusesChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, editErr := branchWindow.Edit("checkout/checkout.feature")
-	story := StoryDraft{Name: "Refunds", AsA: "a shop owner", IWant: "refunds", SoThat: "ok"}
+	story := model.StoryDraft{Name: "Refunds", AsA: "a shop owner", IWant: "refunds", SoThat: "ok"}
 	refused := map[string]error{
 		"edit":        editErr,
 		"newStory":    branchWindow.NewStory(story),
-		"newScenario": branchWindow.NewScenario(ScenarioDraft{Name: "Gift card"}),
+		"newScenario": branchWindow.NewScenario(model.ScenarioDraft{Name: "Gift card"}),
 		"rename":      branchWindow.Rename("Card declined", "Card refused"),
 		"delete":      branchWindow.Delete("Empty cart"),
 		"newHelper":   branchWindow.NewHelper("checkout", "seed_gift_card"),

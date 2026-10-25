@@ -21,6 +21,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/fingerprint"
 	"givens/internal/helpers"
@@ -194,20 +195,20 @@ func uniqueSteps(scenario project.Scenario) []project.Step {
 // Helpers is the "Shared" section of the sidebar: every documented helper in the project's
 // _shared folders, _shared's first, in file order. A helper defined twice in one folder is
 // flagged; a capability's helper that shadows a shared one says so.
-func (w *Window) Helpers() []Helper {
+func (w *Window) Helpers() []model.Helper {
 	assert.That(w != nil, "helpers runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	w.refresh()
 	if w.project == nil {
-		return []Helper{}
+		return []model.Helper{}
 	}
 	// Kept until a file changes: finding callers reads every script once per helper.
 	if w.helpers != nil {
-		return append([]Helper{}, w.helpers...)
+		return append([]model.Helper{}, w.helpers...)
 	}
 	shared, err := helpers.InFolder(w.path, "", "")
 	if err != nil {
-		return []Helper{}
+		return []model.Helper{}
 	}
 	listed := w.listHelpers(shared, "", nil)
 	for _, capability := range w.project.Capabilities {
@@ -218,7 +219,7 @@ func (w *Window) Helpers() []Helper {
 		listed = append(listed, w.listHelpers(own, capability.Name, shared)...)
 	}
 	w.helpers = listed
-	return append([]Helper{}, listed...)
+	return append([]model.Helper{}, listed...)
 }
 
 // Limits on checking a helper file.
@@ -238,7 +239,7 @@ var bashError = regexp.MustCompile(bashErrorPattern) //tiger:allow-global compil
 // its install hint: the `need` lines in its script, the setups it builds on, and every helper
 // those call. Needed by "See what a scenario needs installed" and by Drop in's check before
 // anything runs.
-func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
+func (w *Window) RequiredCommands(scenario string) ([]model.RequiredCommand, error) {
 	assert.That(w != nil, "required commands runs on a window")
 	assert.That(len(scenario) <= NameLengthMax, "the name fits NameLengthMax")
 	found, ok := w.findScenario(scenario)
@@ -254,14 +255,14 @@ func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
 		all += text + "\n"
 	}
 	needs := helpers.Needs(all)
-	required := make([]RequiredCommand, 0, len(needs)+1)
+	required := make([]model.RequiredCommand, 0, len(needs)+1)
 	if chrome, uses := chromeRequired(all); uses {
 		required = append(required, chrome)
 	}
 	for _, need := range needs {
 		// LookPath searches PATH as a shell would. Ref: https://pkg.go.dev/os/exec#LookPath
 		_, missing := exec.LookPath(need.Command)
-		required = append(required, RequiredCommand{
+		required = append(required, model.RequiredCommand{
 			Command: need.Command, Hint: need.Hint, Installed: missing == nil,
 		})
 	}
@@ -364,7 +365,7 @@ var aboutImage = regexp.MustCompile(aboutImagePattern) //tiger:allow-global comp
 // naming it, so the rest of the story still reads: "Image not found: images/flow.svg".
 func withImagePlaceholders(about string, dir string) string {
 	assert.That(filepath.IsAbs(dir), "the capability's folder is absolute")
-	assert.That(len(about) <= EditorTextBytesMax, "about.md stays bounded")
+	assert.That(len(about) <= model.EditorTextBytesMax, "about.md stays bounded")
 	return aboutImage.ReplaceAllStringFunc(about, func(found string) string {
 		path := aboutImage.FindStringSubmatch(found)[2]
 		if strings.Contains(path, "://") {
@@ -581,7 +582,7 @@ func (w *Window) Edit(target string) (*Editor, error) {
 		return nil, err
 	}
 	w.editor = &Editor{window: w, path: path, text: text, opened: text, problems: []string{},
-		typing: -1, marks: []EditorMark{}}
+		typing: -1, marks: []model.EditorMark{}}
 	if scenario, ok := w.findScenario(target); ok {
 		w.editor.scenario = scenario.Name
 		w.editor.line = int(scenario.Line)
@@ -600,10 +601,10 @@ func readEditable(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(content) > EditorTextBytesMax || !utf8.Valid(content) {
+	if len(content) > model.EditorTextBytesMax || !utf8.Valid(content) {
 		return "", fmt.Errorf("%s isn't a text file Givens can edit", filepath.Base(path))
 	}
-	assert.That(len(content) <= EditorTextBytesMax, "editable text stays bounded")
+	assert.That(len(content) <= model.EditorTextBytesMax, "editable text stays bounded")
 	return string(content), nil
 }
 
@@ -718,14 +719,14 @@ func (s *Session) scratchDir() (string, error) {
 // checklistOf is what the developer does once setup is done: first_you lines from the setup
 // script, then the When and Then steps in the order they're written. And and But take the
 // kind before them.
-func checklistOf(scenario project.Scenario, row []runs.Pair) []CheckItem {
+func checklistOf(scenario project.Scenario, row []runs.Pair) []model.CheckItem {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
-	items := make([]CheckItem, 0, len(scenario.Steps)+2)
+	items := make([]model.CheckItem, 0, len(scenario.Steps)+2)
 	if scenario.Setup != "" {
 		if text, err := helpers.ReadScript(scenario.Setup); err == nil {
 			for _, match := range firstYouLine.FindAllStringSubmatch(text, -1) {
-				items = append(items, CheckItem{Text: "First, " + unquote(match[1]),
+				items = append(items, model.CheckItem{Text: "First, " + unquote(match[1]),
 					Kind: "given"})
 			}
 		}
@@ -738,7 +739,7 @@ func checklistOf(scenario project.Scenario, row []runs.Pair) []CheckItem {
 		}
 		if kind != "given" {
 			text := step.Keyword + " " + fillPlaceholders(step.Text, row)
-			items = append(items, CheckItem{Text: text, Kind: kind})
+			items = append(items, model.CheckItem{Text: text, Kind: kind})
 		}
 	}
 	return items

@@ -10,6 +10,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 const (
@@ -103,19 +104,19 @@ func (s *state) byHandSnippet(name string, where string, snippet string) error {
 }
 
 // byHandCard waits for setup to pause, and finds the card for a by_hand step done at where.
-func (s *state) byHandCard(where string) (*app.Session, app.SetupCard, error) {
+func (s *state) byHandCard(where string) (*app.Session, model.SetupCard, error) {
 	session, err := s.settleTo(app.SessionWaiting)
 	if err != nil {
-		return nil, app.SetupCard{}, err
+		return nil, model.SetupCard{}, err
 	}
 	cards := session.Cards()
 	for index, card := range cards {
-		if card.Kind == app.CardByHand && card.Where == where {
+		if card.Kind == model.CardByHand && card.Where == where {
 			s.cardIndex = index
 			return session, card, nil
 		}
 	}
-	return nil, app.SetupCard{}, fmt.Errorf("no by_hand card for %q: %+v", where, cards)
+	return nil, model.SetupCard{}, fmt.Errorf("no by_hand card for %q: %+v", where, cards)
 }
 
 func (s *state) pausedAtCard(where string) error {
@@ -206,18 +207,18 @@ func (s *state) byHandLink(name string, link string, where string) error {
 }
 
 // linkCard is the paused setup's by_hand card that holds the step's link.
-func (s *state) linkCard() (*app.Session, app.SetupCard, error) {
+func (s *state) linkCard() (*app.Session, model.SetupCard, error) {
 	session, err := s.settleTo(app.SessionWaiting)
 	if err != nil {
-		return nil, app.SetupCard{}, err
+		return nil, model.SetupCard{}, err
 	}
 	for index, card := range session.Cards() {
-		if card.Kind == app.CardByHand && card.Link == s.link {
+		if card.Kind == model.CardByHand && card.Link == s.link {
 			s.cardIndex = index
 			return session, card, nil
 		}
 	}
-	return nil, app.SetupCard{}, fmt.Errorf("no card links to %q: %+v", s.link, session.Cards())
+	return nil, model.SetupCard{}, fmt.Errorf("no card links to %q: %+v", s.link, session.Cards())
 }
 
 func (s *state) dropInToPause() error {
@@ -270,7 +271,7 @@ func (s *state) askCard() (*app.Session, error) {
 		return nil, err
 	}
 	for index, card := range session.Cards() {
-		if card.Kind == app.CardAsk {
+		if card.Kind == model.CardAsk {
 			s.cardIndex = index
 			return session, nil
 		}

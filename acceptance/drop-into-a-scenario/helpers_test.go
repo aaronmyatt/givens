@@ -10,6 +10,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 	"givens/internal/slug"
 )
 
@@ -241,13 +242,13 @@ func markAll(session *app.Session) error {
 }
 
 // firstOfKind is the first checklist item of kind, like "then".
-func firstOfKind(items []app.CheckItem, kind string) (app.CheckItem, error) {
+func firstOfKind(items []model.CheckItem, kind string) (model.CheckItem, error) {
 	for _, item := range items {
 		if item.Kind == kind {
 			return item, nil
 		}
 	}
-	return app.CheckItem{}, fmt.Errorf("the checklist has no %q item: %+v", kind, items)
+	return model.CheckItem{}, fmt.Errorf("the checklist has no %q item: %+v", kind, items)
 }
 
 // markOf is the mark on the checklist item whose text is text.

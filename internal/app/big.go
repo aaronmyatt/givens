@@ -16,12 +16,11 @@
 //   - internal/kit/givens.sh: bash, run in the developer's shell by every setup script.
 //   - internal/tui, internal/termedit and cmd/givens: the edges. They import this package, so
 //     moving them in would make it depend on Bubble Tea; their stories have pointer sections.
-//   - helpers.go: Share setup's types (Helper, RequiredCommand, HelperProblem, HelperEdit). A
-//     data model with no code, so it stays a file of its own.
-//   - edit.go: Write stories' types (Editor, StoryDraft, ScenarioDraft, EditorMark,
-//     StepSuggestion, PreviewLine) and the editing limits. A data model, so it stays apart too.
-//   - dropin.go: Drop in's types (URLOpener, CodeBlock, SetupCard, DropInRow) and its card
-//     limits and kinds. A data model too.
+//   - internal/app/model: the data models, types and constants with no code: Drop in's
+//     (dropin.go: the card limits and kinds, URLOpener, CodeBlock, SetupCard, DropInRow,
+//     CheckItem), Write stories' (edit.go: the drafts, marks, suggestions, preview lines and
+//     EditorTextBytesMax) and Share setup's (helpers.go: Helper, RequiredCommand,
+//     HelperProblem, HelperEdit). A package of their own, so the stories read without them.
 //   - internal/browser: Mix shell's Chrome of Givens's own, a wrapper on chromedp, the
 //     third-party CDP client; a package of its own, so the dependency stays in one place.
 //   - snapshot.go, offers.go (Offers, Choose, allOffers), selection.go, input.go, prompt.go
@@ -53,6 +52,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/branch"
 	"givens/internal/browser"
@@ -131,8 +131,8 @@ func (w *Window) copyFromSearch() error {
 // capabilities/drop-into-a-scenario. A Drop in runs a scenario's setup with the kit's quiet
 // mode, teardown first, and walks the developer through its When and Then steps as a
 // checklist, then records the run. A Session is one Drop in, and the Drop in page is what it
-// shows and offers; dropin.go holds its data model (the card limits and kinds, URLOpener,
-// CodeBlock, SetupCard and DropInRow).
+// shows and offers; its data model (the card limits and kinds, URLOpener, CodeBlock, SetupCard,
+// DropInRow and CheckItem) is internal/app/model's dropin.go.
 //
 // Drop in calls the stories that came out of it: trustOf and runTrusted (Trust a project)
 // before setup runs, and runTrusted calls begin back; trustThisProject on the page; keepRun
@@ -193,13 +193,6 @@ const (
 // pollInterval is how often Wait looks at a running setup.
 const pollInterval = 20 * time.Millisecond
 
-// CheckItem is one line of a Drop in checklist.
-type CheckItem struct {
-	Text string `json:"text"` // the step as shown, placeholders filled in
-	Kind string `json:"kind"` // "given" (done by hand), "when" or "then"
-	Mark string `json:"mark"` // "", "done", "pass" or "fail"
-}
-
 // Session is one Drop in: a setup run and the checklist that follows.
 type Session struct {
 	window   *Window
@@ -217,7 +210,7 @@ type Session struct {
 	untrusted    bool   // the developer chose "Don't trust", so scripts are off
 
 	// Cards: by_hand and ask cards the script printed, then the markdown setup's steps.
-	cards          []SetupCard
+	cards          []model.SetupCard
 	snippets       []string // each card's text to copy
 	parsed         int      // the current script's output lines read so far
 	reading        int      // text lines still to read for the last card
@@ -237,7 +230,7 @@ type Session struct {
 	message     string   // across the top: "Setup failed (exit 3)", "This scenario needs bb"
 	hints       []string // install hints, each with a copy button
 	keepWaiting bool
-	checklist   []CheckItem
+	checklist   []model.CheckItem
 	note        string
 	attachments []string // paths of files "Record run" copies into the run's folder
 	recorded    bool     // "Record run" saved this checklist, so leaving loses nothing
@@ -457,11 +450,11 @@ func (s *Session) Wait(limit time.Duration) string {
 
 // Checklist is the manual Givens, then the When and Then steps in the order they're written.
 // It's empty until setup finishes.
-func (s *Session) Checklist() []CheckItem {
+func (s *Session) Checklist() []model.CheckItem {
 	assert.That(s != nil, "checklist runs on a session")
 	assert.That(s.window != nil, "a session belongs to a window")
 	s.poll()
-	return append(make([]CheckItem, 0, len(s.checklist)), s.checklist...)
+	return append(make([]model.CheckItem, 0, len(s.checklist)), s.checklist...)
 }
 
 // ScenarioKey is the Drop in's scenario as a run key, like checkout/card-declined, by which
@@ -871,8 +864,8 @@ func outlineWithoutRow(built project.Scenario, values []string) string {
 // ChecklistPart is one numbered part of the Drop in page: a run of checklist items of one kind.
 // Records.swift's ChecklistPart.
 type ChecklistPart struct {
-	Kind  string      `json:"kind"` // "given" (done by hand), "when" or "then"
-	Items []CheckItem `json:"items"`
+	Kind  string            `json:"kind"` // "given" (done by hand), "when" or "then"
+	Items []model.CheckItem `json:"items"`
 }
 
 // Parts cuts the checklist into runs of one kind, keeping its order, so a scenario that goes
@@ -887,7 +880,7 @@ func (s *Session) Parts() []ChecklistPart {
 			parts[last].Items = append(parts[last].Items, item)
 			continue
 		}
-		parts = append(parts, ChecklistPart{Kind: item.Kind, Items: []CheckItem{item}})
+		parts = append(parts, ChecklistPart{Kind: item.Kind, Items: []model.CheckItem{item}})
 	}
 	assert.That(len(parts) <= len(checklist), "each part holds at least one item")
 	return parts
@@ -1087,11 +1080,11 @@ const cardHeader = "\x1egivens-card\t"
 
 // Cards lists the Drop in page's setup cards in the order setup reached them: by_hand and ask
 // cards from the script, then the markdown setup's cards. Needed by every card scenario.
-func (s *Session) Cards() []SetupCard {
+func (s *Session) Cards() []model.SetupCard {
 	assert.That(s != nil, "cards runs on a session")
 	assert.That(s.window != nil, "a session belongs to a window")
 	s.poll()
-	return append(make([]SetupCard, 0, len(s.cards)), s.cards...)
+	return append(make([]model.SetupCard, 0, len(s.cards)), s.cards...)
 }
 
 // readOutput moves the current script's new output into display, taking card lines out and
@@ -1123,22 +1116,22 @@ func (s *Session) readOutput() {
 // many lines of text follow.
 func (s *Session) addScriptCard(fields []string) {
 	assert.That(s != nil, "add card runs on a session")
-	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
-	if len(fields) != 4 || len(s.cards) >= SetupCardsMax {
+	assert.That(len(s.cards) <= model.SetupCardsMax, "cards stay bounded")
+	if len(fields) != 4 || len(s.cards) >= model.SetupCardsMax {
 		return
 	}
 	lines, err := strconv.Atoi(fields[3])
 	if err != nil || lines < 0 {
 		lines = 0
 	}
-	card := SetupCard{
+	card := model.SetupCard{
 		Kind: fields[0], Link: fields[2], Links: []string{}, Images: []string{},
-		Blocks: []CodeBlock{}, Output: []string{},
+		Blocks: []model.CodeBlock{}, Output: []string{},
 	}
-	if card.Kind == CardAsk {
+	if card.Kind == model.CardAsk {
 		card.Offers = []string{OfferContinue}
 	} else {
-		card.Kind, card.Where = CardByHand, fields[1]
+		card.Kind, card.Where = model.CardByHand, fields[1]
 		card.Offers = []string{OfferDone, OfferFailed}
 		if lines > 0 {
 			card.Offers = append(card.Offers, OfferCopy)
@@ -1158,7 +1151,7 @@ func (s *Session) answering() bool {
 		return false
 	}
 	last := s.cards[len(s.cards)-1]
-	return last.Kind != CardMarkdown && last.Mark == ""
+	return last.Kind != model.CardMarkdown && last.Mark == ""
 }
 
 // finishCardText finishes a script card once its text is read: an ask card's prompt.
@@ -1169,7 +1162,7 @@ func (s *Session) finishCardText() {
 		return
 	}
 	last := &s.cards[len(s.cards)-1]
-	if last.Kind == CardAsk && last.Prompt == "" {
+	if last.Kind == model.CardAsk && last.Prompt == "" {
 		last.Prompt = last.Text
 	}
 }
@@ -1193,30 +1186,30 @@ func (s *Session) ChooseOnCard(card int, action string) error {
 	if chosen.Mark != "" {
 		return fmt.Errorf("card %d is already marked %q", card, chosen.Mark)
 	}
-	if chosen.Kind == CardMarkdown {
+	if chosen.Kind == model.CardMarkdown {
 		return s.markMarkdownCard(card, action)
 	}
 	return s.answerScriptCard(chosen, action)
 }
 
 // answerScriptCard answers the waiting by_hand or ask card on the script's stdin.
-func (s *Session) answerScriptCard(chosen *SetupCard, action string) error {
+func (s *Session) answerScriptCard(chosen *model.SetupCard, action string) error {
 	assert.That(chosen != nil, "a card is chosen")
-	assert.That(chosen.Kind != CardMarkdown, "script cards are answered on stdin")
+	assert.That(chosen.Kind != model.CardMarkdown, "script cards are answered on stdin")
 	if s.process == nil || s.status != SessionWaiting {
 		return errors.New("setup isn't waiting at this card")
 	}
 	answer, mark := "done", MarkDone
 	switch {
-	case action == OfferContinue && chosen.Kind == CardAsk:
+	case action == OfferContinue && chosen.Kind == model.CardAsk:
 		if s.cardInput == "" {
 			s.message = MessageEnterValue
 			return nil
 		}
 		answer = s.cardInput
-	case action == OfferFailed && chosen.Kind == CardByHand:
+	case action == OfferFailed && chosen.Kind == model.CardByHand:
 		answer, mark, s.cardFailed = "failed", "failed", true
-	case action != OfferDone || chosen.Kind != CardByHand:
+	case action != OfferDone || chosen.Kind != model.CardByHand:
 		return fmt.Errorf("%q isn't offered on this card", action)
 	}
 	if err := s.process.Answer(answer); err != nil {
@@ -1231,7 +1224,7 @@ func (s *Session) answerScriptCard(chosen *SetupCard, action string) error {
 // answer, or the first markdown card not yet marked; -1 when none waits.
 func (s *Session) pendingCard() int {
 	assert.That(s != nil, "pending card runs on a session")
-	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
+	assert.That(len(s.cards) <= model.SetupCardsMax, "cards stay bounded")
 	if s.status != SessionWaiting {
 		return -1
 	}
@@ -1255,7 +1248,7 @@ func (s *Session) PendingCard() int {
 
 // UseURLOpener sets what opens links, like a by_hand --url card's "Open". Needed by
 // "A step in the browser".
-func (a *App) UseURLOpener(opener URLOpener) error {
+func (a *App) UseURLOpener(opener model.URLOpener) error {
 	assert.That(a != nil, "use url opener runs on an app")
 	assert.That(opener != nil, "an opener is given")
 	a.opener = opener
@@ -1291,20 +1284,20 @@ func (s *Session) addMarkdownCards() error {
 	}
 	s.intro, s.markdownFrom = parsed.Intro, len(s.cards)
 	for _, step := range parsed.Steps {
-		card := SetupCard{
-			Kind: CardMarkdown, Text: markdown.Rendered(step.Text),
+		card := model.SetupCard{
+			Kind: model.CardMarkdown, Text: markdown.Rendered(step.Text),
 			Links:  append([]string{}, step.Links...),
-			Images: append([]string{}, step.Images...), Blocks: make([]CodeBlock, 0, 2),
-			Offers: []string{OfferDone, OfferFailed}, inline: step.Inline,
+			Images: append([]string{}, step.Images...), Blocks: make([]model.CodeBlock, 0, 2),
+			Offers: []string{OfferDone, OfferFailed}, Inline: step.Inline,
 			Output: []string{},
 		}
 		for index, block := range step.Blocks {
 			runs := runLanguage(block) != ""
-			card.Blocks = append(card.Blocks, CodeBlock{
+			card.Blocks = append(card.Blocks, model.CodeBlock{
 				Language: block.Language, Code: block.Code, Copyable: block.Closed, Run: runs,
 			})
 			if runs {
-				card.runBlocks = append(card.runBlocks, index)
+				card.RunBlocks = append(card.RunBlocks, index)
 			}
 			if !block.Closed {
 				card.Warning = fmt.Sprintf("The code block starting on line %d never closes",
@@ -1312,7 +1305,7 @@ func (s *Session) addMarkdownCards() error {
 			}
 		}
 		// A card that runs marks itself, so it has nothing to choose.
-		if len(card.runBlocks) > 0 {
+		if len(card.RunBlocks) > 0 {
 			card.Offers = []string{}
 		}
 		s.cards, s.snippets = append(s.cards, card), append(s.snippets, "")
@@ -1323,7 +1316,7 @@ func (s *Session) addMarkdownCards() error {
 // markMarkdownCard marks one markdown card; the last Done shows the checklist, and a Failed
 // stops setup there.
 func (s *Session) markMarkdownCard(card int, action string) error {
-	assert.That(s.cards[card].Kind == CardMarkdown, "the card is a markdown step")
+	assert.That(s.cards[card].Kind == model.CardMarkdown, "the card is a markdown step")
 	assert.That(s.markdownFrom >= 0, "markdown cards were added")
 	steps := len(s.cards) - s.markdownFrom
 	switch action {
@@ -1345,16 +1338,16 @@ func (s *Session) markMarkdownCard(card int, action string) error {
 // then each card's heading, text, links and warning.
 func (s *Session) cardLines() []string {
 	assert.That(s != nil, "card lines run on a session")
-	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
+	assert.That(len(s.cards) <= model.SetupCardsMax, "cards stay bounded")
 	lines := make([]string, 0, 4*len(s.cards)+1)
 	if s.intro != "" {
 		lines = append(lines, s.intro)
 	}
 	for index, card := range s.cards {
 		switch card.Kind {
-		case CardByHand:
+		case model.CardByHand:
 			lines = append(lines, "By hand, in "+card.Where)
-		case CardMarkdown:
+		case model.CardMarkdown:
 			lines = append(lines, fmt.Sprintf("Step %d", index-s.markdownFrom+1)+
 				s.runState(index))
 		}
@@ -1373,7 +1366,7 @@ func (s *Session) cardLines() []string {
 // fences, list number or indent. Needed by "Copy a code block" and "Several code blocks".
 func (s *Session) CopyCodeBlock(card int, block int) error {
 	assert.That(s != nil, "copy code block runs on a session")
-	assert.That(block >= 0 && block < CodeBlocksMax, "a block index is in range")
+	assert.That(block >= 0 && block < model.CodeBlocksMax, "a block index is in range")
 	if card < 0 || card >= len(s.cards) || block >= len(s.cards[card].Blocks) {
 		return fmt.Errorf("card %d has no code block %d", card, block)
 	}
@@ -1393,7 +1386,7 @@ func (s *Session) ClickInlineCode(card int, code string) error {
 	if card < 0 || card >= len(s.cards) {
 		return fmt.Errorf("there's no card %d", card)
 	}
-	for _, span := range s.cards[card].inline {
+	for _, span := range s.cards[card].Inline {
 		if span == code {
 			return s.window.app.config.Clipboard.WriteText(code)
 		}
@@ -1405,7 +1398,7 @@ func (s *Session) ClickInlineCode(card int, code string) error {
 // span. The givens command's TUI does it on c, where the app has a button per block and span.
 func (s *Session) CopyCard(card int) error {
 	assert.That(s != nil, "copy card runs on a session")
-	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
+	assert.That(len(s.cards) <= model.SetupCardsMax, "cards stay bounded")
 	if card < 0 || card >= len(s.cards) {
 		return fmt.Errorf("there's no card %d", card)
 	}
@@ -1414,8 +1407,8 @@ func (s *Session) CopyCard(card int) error {
 			return s.CopyCodeBlock(card, index)
 		}
 	}
-	if len(s.cards[card].inline) > 0 {
-		return s.ClickInlineCode(card, s.cards[card].inline[0])
+	if len(s.cards[card].Inline) > 0 {
+		return s.ClickInlineCode(card, s.cards[card].Inline[0])
 	}
 	return errors.New("this card has no code to copy")
 }
@@ -1464,25 +1457,25 @@ func (w *Window) rowNamed(name string) (project.Scenario, outlineRow, bool) {
 // DropInRows lists the Examples rows of the selected outline's Drop in page, one after
 // another, in file order. Only one row is live at a time; the others are greyed out, with
 // "Switch to this row" in place of "Drop in". Needed by the outline scenarios.
-func (w *Window) DropInRows() []DropInRow {
+func (w *Window) DropInRows() []model.DropInRow {
 	assert.That(w != nil, "drop in rows runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if w.selectedScenario == "" {
-		return []DropInRow{}
+		return []model.DropInRow{}
 	}
 	scenario, ok := w.findScenario(w.selectedScenario)
 	if !ok || !scenario.Outline {
-		return []DropInRow{}
+		return []model.DropInRow{}
 	}
 	live := w.session != nil && w.session.scenario.Key() == scenario.Key() &&
 		w.session.row != nil
-	shown := make([]DropInRow, 0, 4)
+	shown := make([]model.DropInRow, 0, 4)
 	for _, row := range rowsOf(scenario) {
-		entry := DropInRow{
+		entry := model.DropInRow{
 			Examples: row.examples, Values: make(map[string]string, len(row.values)),
 			Steps:  make([]string, 0, len(scenario.Steps)),
 			Status: rowStatus(w.project, scenario, row, w.app.config.Clock.Now()),
-			Offers: []string{OfferDropIn}, Disabled: []string{}, Checklist: []CheckItem{},
+			Offers: []string{OfferDropIn}, Disabled: []string{}, Checklist: []model.CheckItem{},
 		}
 		for _, value := range row.values {
 			entry.Values[value.Name] = value.Value
@@ -1536,7 +1529,7 @@ func (w *Window) ChooseOnRow(row string, action string) error {
 // marked is true once any checklist item has a mark.
 func (s *Session) marked() bool {
 	assert.That(s != nil, "marked runs on a session")
-	assert.That(len(s.checklist) <= SetupCardsMax*4, "the checklist stays bounded")
+	assert.That(len(s.checklist) <= model.SetupCardsMax*4, "the checklist stays bounded")
 	for _, item := range s.checklist {
 		if item.Mark != "" {
 			return true
@@ -2164,7 +2157,7 @@ func (w *Window) SetRunLimits(limits runs.Limits) error {
 // with this story and hold Drop in's part too: a card that waits, the checklist once every card
 // is marked, and the default browser when the Givens browser isn't open. Session's block and
 // markdownFailed fields are in its type, in Drop in's section, and SetupCard's Output and
-// runBlocks and CodeBlock's Run in dropin.go's.
+// RunBlocks and CodeBlock's Run in internal/app/model's dropin.go.
 
 // cardOutputLinesMax bounds what one card keeps of its blocks' output.
 const cardOutputLinesMax = 1000
@@ -2219,14 +2212,14 @@ const ChromeHint = "brew install --cask google-chrome"
 
 // chromeRequired is Chrome as a command a setup needs, and true, when a line of the setup's
 // texts uses the browser: a browser line needs Chrome, as a need line needs its command.
-func chromeRequired(all string) (RequiredCommand, bool) {
+func chromeRequired(all string) (model.RequiredCommand, bool) {
 	assert.That(len(all) <= helpers.FileSizeBytesMax*helpers.HelpersMax, "texts stay bounded")
 	assert.That(all == "" || strings.HasSuffix(all, "\n"), "each text ends its line")
 	if !helpers.UsesBrowser(all) {
-		return RequiredCommand{}, false
+		return model.RequiredCommand{}, false
 	}
 	_, found := browser.Chrome()
-	return RequiredCommand{Command: "Chrome", Hint: ChromeHint, Installed: found}, true
+	return model.RequiredCommand{Command: "Chrome", Hint: ChromeHint, Installed: found}, true
 }
 
 // Scenario: A step by hand in the Givens browser
@@ -2271,7 +2264,7 @@ func (s *Session) runNextCard() error {
 		if s.cards[index].Mark != "" {
 			continue
 		}
-		if waiting := s.cards[index].runBlocks; len(waiting) > 0 {
+		if waiting := s.cards[index].RunBlocks; len(waiting) > 0 {
 			s.resume()
 			return s.startBlock(index, waiting)
 		}
@@ -2327,7 +2320,7 @@ func (s *Session) runState(card int) string {
 	assert.That(card >= 0 && card < len(s.cards), "the card exists")
 	assert.That(s.markdownFrom >= 0, "a markdown card is asked about")
 	switch {
-	case len(s.cards[card].runBlocks) == 0:
+	case len(s.cards[card].RunBlocks) == 0:
 		return ""
 	case s.block != nil && s.block.card == card:
 		return " · running"
@@ -3246,19 +3239,18 @@ func (w *Window) findHelpers(words string) []SearchResult {
 
 // Feature: Share setup between scenarios
 //
-// capabilities/share-setup-between-scenarios. Helpers are shell functions in _shared folders:
-// the kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
+// capabilities/share-setup-between-scenarios. Helpers are shell functions in _shared folders: the
+// kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
 // internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
-// Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view
-// read it too; so is RequiredCommands, which Drop in's precheck also calls,
-// and so are the bash -n limits and bashError, which Write stories' shellProblems
-// shares. The four "Changing …" scenarios and "Updating the kit keeps
-// scenarios verified" are internal/fingerprint, which statusFor (big_helpers.go) and Drop in's
-// RecordRun call. Code elsewhere: Drop in's page shows elsewhere's message
-// (messages); core glue offers OfferEdit and runs editHelper (allOffers and
-// Choose, offers.go), selects a helper (selectNow, selection.go), and shows a helper and a
-// scenario's requirements (helperLabels and requirementLabels, snapshot.go). Helper and its
-// kin are types in helpers.go, and Window's helpers cache is in window.go. The Helpers tab is
+// Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view read
+// it too; so is RequiredCommands, which Drop in's precheck also calls, and so are the bash -n
+// limits and bashError, which Write stories' shellProblems shares. The four "Changing …" scenarios
+// and "Updating the kit keeps scenarios verified" are internal/fingerprint, which statusFor
+// (big_helpers.go) and Drop in's RecordRun call. Code elsewhere: Drop in's page shows elsewhere's
+// message (messages); core glue offers OfferEdit and runs editHelper (allOffers and Choose,
+// offers.go), selects a helper (selectNow, selection.go), and shows a helper and a scenario's
+// requirements (helperLabels and requirementLabels, snapshot.go). Helper and its kin are types in
+// internal/app/model's helpers.go, and Window's helpers cache is in window.go. The Helpers tab is
 // internal/tui/helpers.go; `givens helpers` and `givens helper` are cmd/givens/panels.go.
 
 // sharedFolder is where helpers live: _shared at the root, or in a capability's folder.
@@ -3305,15 +3297,15 @@ func (w *Window) elsewhere(scenario project.Scenario, output []string) string {
 
 // listHelpers turns one folder's documented helpers into Shared list entries.
 func (w *Window) listHelpers(found []helpers.Helper, capability string,
-	shared []helpers.Helper) []Helper {
+	shared []helpers.Helper) []model.Helper {
 	assert.That(w.project != nil, "helpers are listed for a loaded project")
 	assert.That(len(found) <= helpers.HelpersMax, "helpers stay bounded")
-	listed := make([]Helper, 0, len(found))
+	listed := make([]model.Helper, 0, len(found))
 	for _, helper := range found {
 		if !helper.Documented() {
 			continue
 		}
-		entry := Helper{
+		entry := model.Helper{
 			Name: helper.Name, Signature: helper.Signature, Description: helper.Description,
 			Capability: capability, DefinedIn: helper.File, Line: helper.Line,
 			Callers: w.callersOf(helper), Code: w.helperCode(helper.File, helper.Line),
@@ -3435,7 +3427,7 @@ func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
 
 // findHelper finds a documented helper in the Shared list by name, or by
 // "<file relative to capabilities>:<name>" when two share it.
-func (w *Window) findHelper(name string) (Helper, bool) {
+func (w *Window) findHelper(name string) (model.Helper, bool) {
 	assert.That(w != nil, "find helper runs on a window")
 	assert.That(name != "", "a helper has a name")
 	for _, helper := range w.Helpers() {
@@ -3443,7 +3435,7 @@ func (w *Window) findHelper(name string) (Helper, bool) {
 			return helper, true
 		}
 	}
-	return Helper{}, false
+	return model.Helper{}, false
 }
 
 // selectHelper selects a helper in the Shared list, if one has that name.
@@ -3478,15 +3470,15 @@ func (w *Window) editHelper() error {
 // EditingHelper is the helper file open in the editor, where it opened, the scripts that call
 // its helpers and the syntax errors marked in it. Its Path is "" when no helper is open.
 // Needed by "Edit a helper" and "Save a helper with a syntax error".
-func (w *Window) EditingHelper() HelperEdit {
+func (w *Window) EditingHelper() model.HelperEdit {
 	assert.That(w != nil, "editing helper runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if w.editor == nil || filepath.Base(filepath.Dir(w.editor.path)) != sharedFolder {
-		return HelperEdit{Callers: []string{}, Problems: []HelperProblem{}}
+		return model.HelperEdit{Callers: []string{}, Problems: []model.HelperProblem{}}
 	}
 	relative, err := filepath.Rel(w.path, w.editor.path)
 	if err != nil {
-		return HelperEdit{Callers: []string{}, Problems: []HelperProblem{}}
+		return model.HelperEdit{Callers: []string{}, Problems: []model.HelperProblem{}}
 	}
 	callers := make([]string, 0, 8)
 	for _, helper := range w.Helpers() {
@@ -3495,9 +3487,9 @@ func (w *Window) EditingHelper() HelperEdit {
 			callers = append(callers, helper.Callers...)
 		}
 	}
-	return HelperEdit{
+	return model.HelperEdit{
 		Path: w.editor.path, Line: w.editor.line, Callers: callers,
-		Problems: append([]HelperProblem{}, w.editor.helperProblems...),
+		Problems: append([]model.HelperProblem{}, w.editor.helperProblems...),
 	}
 }
 
@@ -3594,7 +3586,7 @@ func (w *Window) SaveHelper(text string) error {
 }
 
 // syntaxProblems runs `bash -n` on a file and reads the lines it reports.
-func syntaxProblems(path string) ([]HelperProblem, error) {
+func syntaxProblems(path string) ([]model.HelperProblem, error) {
 	assert.That(filepath.IsAbs(path), "the file is absolute")
 	assert.That(syntaxCheckTimeout > 0, "the check has a limit")
 	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
@@ -3604,11 +3596,11 @@ func syntaxProblems(path string) ([]HelperProblem, error) {
 	if err != nil && !errors.As(err, &exit) {
 		return nil, err
 	}
-	problems := make([]HelperProblem, 0, 2)
+	problems := make([]model.HelperProblem, 0, 2)
 	for _, match := range bashError.FindAllStringSubmatch(string(output), helperProblemsMax) {
 		line, convertErr := strconv.Atoi(match[1])
 		if convertErr == nil {
-			problems = append(problems, HelperProblem{Line: line, Message: match[2]})
+			problems = append(problems, model.HelperProblem{Line: line, Message: match[2]})
 		}
 	}
 	return problems, nil
@@ -3700,7 +3692,7 @@ func (w *Window) flagTodo(scenario project.Scenario, flagged bool) error {
 // Ref: https://cucumber.io/docs/cucumber/api/#tags
 func withTodo(lines []string, at int, flagged bool) ([]string, error) {
 	assert.That(at >= 0, "lines count from 0")
-	assert.That(len(lines) <= EditorTextBytesMax, "lines stay bounded")
+	assert.That(len(lines) <= model.EditorTextBytesMax, "lines stay bounded")
 	if at >= len(lines) || !strings.Contains(lines[at], "Scenario") {
 		return nil, fmt.Errorf("line %d isn't a Scenario: line", at+1)
 	}
@@ -4293,12 +4285,36 @@ func (w *Window) emptyView() string {
 // (Snapshot, snapshot.go). It also offers aboutOffers and runs editAbout (allOffers and Choose),
 // and the scenario page offers and runs "Create script" and "Write setup steps" (scenarioPageOffers
 // and chooseOnScenarioPage, offers.go), whose labels stay there; a new setup script starts with
-// KitSourceLine (big_helpers.go), as Drop in's teardown does; createSetup opens its new file
-// with editFile (big_helpers.go). Editor, the drafts, marks,
-// suggestions and preview lines, and the editing limits are types in edit.go; EditorSnapshot is in
-// snapshot.go. The terminal edits in the developer's editor: `givens new` and `givens edit`
-// (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui) hand the text over
-// through internal/termedit; `givens rename` and `givens delete` are cmd/givens/manage.go.
+// KitSourceLine (big_helpers.go), as Drop in's teardown does; createSetup opens its new file with
+// editFile (big_helpers.go). Editor and StorySentenceLengthMax open this section; the drafts,
+// marks, suggestions, preview lines and EditorTextBytesMax are types in internal/app/model's
+// edit.go; EditorSnapshot is in snapshot.go. The terminal edits in the developer's editor: `givens
+// new` and `givens edit` (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui)
+// hand the text over through internal/termedit; `givens rename` and `givens delete` are
+// cmd/givens/manage.go.
+
+// StorySentenceLengthMax bounds each line typed into the New story dialog. Tiger Style: put a
+// limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const StorySentenceLengthMax = NameLengthMax
+
+// Editor is the window's editor, holding one file: a .feature file, an about.md, a setup
+// script or a helper. Its text is unsaved until Save.
+type Editor struct {
+	window   *Window
+	path     string
+	text     string // what the editor shows, unsaved changes included
+	opened   string // the file's text when it was opened or last saved
+	problems []string
+	line     int // the line the editor opened at, counting from 1; 0 for the top
+
+	helperProblems []model.HelperProblem // `bash -n` reports, for a helper file
+	scenario       string                // the scenario the editor opened at, or ""
+	typing         int                   // the line being typed, counting from 0; -1 when none
+	cursor         int                   // where typing starts a new line, counting from 0
+	marks          []model.EditorMark    // lines the parser couldn't read at the last save
+	previewing     bool                  // "Preview" is showing beside the text
+}
 
 // Authoring offers.
 const (
@@ -4329,7 +4345,7 @@ const MessageChangedOnDisk = "This file changed on disk"
 // NewStory creates a capability from the New story dialog: <slug>/<slug>.feature with
 // "Feature: <Name>" and the story as its description, then lists it in the sidebar.
 // Needed by "Write a new story" in capabilities/write-stories-and-scenarios.
-func (w *Window) NewStory(draft StoryDraft) error {
+func (w *Window) NewStory(draft model.StoryDraft) error {
 	assert.That(w != nil, "new story runs on a window")
 	assert.That(utf8.ValidString(draft.Name), "the story's name is text")
 	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
@@ -4372,7 +4388,7 @@ func (w *Window) NewStory(draft StoryDraft) error {
 // the kit, then opens the scenario in the editor. Needed by "Add a scenario to a capability",
 // "A new scenario starts flagged to do" and "Reuse an existing step" in
 // capabilities/write-stories-and-scenarios.
-func (w *Window) NewScenario(draft ScenarioDraft) error {
+func (w *Window) NewScenario(draft model.ScenarioDraft) error {
 	assert.That(w != nil, "new scenario runs on a window")
 	assert.That(utf8.ValidString(draft.Name), "the scenario's name is text")
 	assert.That(len(draft.Name) <= NameLengthMax, "the name fits NameLengthMax")
@@ -4419,7 +4435,7 @@ func (w *Window) NewScenario(draft ScenarioDraft) error {
 // holding "Scenario:" (counting from 0).
 func blockEnd(lines []string, start int) int {
 	assert.That(start >= 0, "a block starts on a line")
-	assert.That(len(lines) <= EditorTextBytesMax, "lines stay bounded")
+	assert.That(len(lines) <= model.EditorTextBytesMax, "lines stay bounded")
 	end := start + 1
 	// bound: end only grows, up to len(lines).
 	for end < len(lines) && strings.HasPrefix(lines[end], "    ") {
@@ -4452,7 +4468,7 @@ func (e *Editor) typeText(text string) error {
 		lines[e.typing] += text
 	}
 	joined := strings.Join(lines, "\n")
-	if len(joined) > EditorTextBytesMax {
+	if len(joined) > model.EditorTextBytesMax {
 		return errors.New("the file is full")
 	}
 	e.text = joined
@@ -4474,12 +4490,12 @@ func (e *Editor) typedStep() (string, string, bool) {
 // Suggestions lists the steps offered for the step being typed, drawn from the project's
 // steps: those starting with what's typed, most used first, each with "used in N". Needed by
 // "Reuse an existing step".
-func (e *Editor) Suggestions() []StepSuggestion {
+func (e *Editor) Suggestions() []model.StepSuggestion {
 	assert.That(e != nil, "suggestions runs on an editor")
 	assert.That(e.window != nil, "an editor belongs to a window")
 	_, partial, ok := e.typedStep()
 	if !ok {
-		return []StepSuggestion{}
+		return []model.StepSuggestion{}
 	}
 	return e.suggestionsFor(partial)
 }
@@ -4487,26 +4503,26 @@ func (e *Editor) Suggestions() []StepSuggestion {
 // SuggestionsFor lists the steps offered for a step line as the Mac editor holds it: "Given a
 // card" offers steps starting "a card". A line that isn't a step, or a step already written
 // out word for word, offers none.
-func (e *Editor) SuggestionsFor(line string) []StepSuggestion {
+func (e *Editor) SuggestionsFor(line string) []model.StepSuggestion {
 	assert.That(e != nil, "suggestions runs on an editor")
 	assert.That(!strings.Contains(line, "\n"), "suggestions are for one line")
 	keyword, partial, _ := strings.Cut(strings.TrimSpace(line), " ")
 	if !isStepKeyword(keyword) || strings.TrimSpace(partial) == "" {
-		return []StepSuggestion{}
+		return []model.StepSuggestion{}
 	}
 	offered := e.suggestionsFor(partial)
 	if len(offered) == 1 && offered[0].Text == partial {
-		return []StepSuggestion{}
+		return []model.StepSuggestion{}
 	}
 	return offered
 }
 
 // suggestionsFor lists the project's steps starting with partial, most used first.
-func (e *Editor) suggestionsFor(partial string) []StepSuggestion {
+func (e *Editor) suggestionsFor(partial string) []model.StepSuggestion {
 	assert.That(e.window != nil, "an editor belongs to a window")
 	assert.That(partial != "", "suggestions start from what's typed")
 	if e.window.project == nil {
-		return []StepSuggestion{}
+		return []model.StepSuggestion{}
 	}
 	uses := make(map[string]int, 32)
 	for _, capability := range e.window.project.Capabilities {
@@ -4526,9 +4542,9 @@ func (e *Editor) suggestionsFor(partial string) []StepSuggestion {
 		return uses[texts[a]] > uses[texts[b]] ||
 			(uses[texts[a]] == uses[texts[b]] && texts[a] < texts[b])
 	})
-	suggestions := make([]StepSuggestion, 0, min(len(texts), SuggestionsMax))
+	suggestions := make([]model.StepSuggestion, 0, min(len(texts), SuggestionsMax))
 	for _, text := range texts[:min(len(texts), SuggestionsMax)] {
-		suggestions = append(suggestions, StepSuggestion{
+		suggestions = append(suggestions, model.StepSuggestion{
 			Text: text, Label: fmt.Sprintf("used in %d", uses[text]),
 		})
 	}
@@ -4656,23 +4672,23 @@ func (e *Editor) chooseInEditor(action string) error {
 
 // Marks lists the problems marked in the editor's text, by line: what the parser couldn't
 // read at the last save.
-func (e *Editor) Marks() []EditorMark {
+func (e *Editor) Marks() []model.EditorMark {
 	assert.That(e != nil, "marks runs on an editor")
 	assert.That(e.window != nil, "an editor belongs to a window")
-	return append([]EditorMark{}, e.marks...)
+	return append([]model.EditorMark{}, e.marks...)
 }
 
 // markParseErrors reads a saved .feature file and marks the line the parser stops at.
 func (e *Editor) markParseErrors() {
 	assert.That(e != nil, "mark runs on an editor")
 	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
-	e.marks = []EditorMark{}
+	e.marks = []model.EditorMark{}
 	if !strings.HasSuffix(e.path, ".feature") {
 		return
 	}
 	if _, err := spec.ParseFeature(e.path); err != nil {
 		line, message := spec.Explain(err)
-		e.marks = append(e.marks, EditorMark{Line: int(line), Message: capitalized(message)})
+		e.marks = append(e.marks, model.EditorMark{Line: int(line), Message: capitalized(message)})
 	}
 }
 
@@ -4688,27 +4704,27 @@ func capitalized(message string) string {
 // Problems are what the parser can't read in the editor's text as it is now, unsaved: the
 // marks a save would leave. Only a .feature file has them. The givens command checks them
 // before it saves an edit made in $EDITOR. See capabilities/work-in-the-terminal.
-func (e *Editor) Problems() []EditorMark {
+func (e *Editor) Problems() []model.EditorMark {
 	assert.That(e != nil, "problems runs on an editor")
 	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
 	if strings.HasSuffix(e.path, ".sh") {
 		return shellProblems(e.text)
 	}
 	if !strings.HasSuffix(e.path, ".feature") {
-		return []EditorMark{}
+		return []model.EditorMark{}
 	}
 	if _, err := spec.ParseFeatureText(e.text); err != nil {
 		line, message := spec.Explain(err)
-		return []EditorMark{{Line: int(line), Message: capitalized(message)}}
+		return []model.EditorMark{{Line: int(line), Message: capitalized(message)}}
 	}
-	return []EditorMark{}
+	return []model.EditorMark{}
 }
 
 // shellProblems are the lines `bash -n` reports in a setup script or helper file's text, so a
 // script that doesn't parse isn't saved from the developer's editor, as a .feature file that
 // doesn't parse isn't. A check that can't run reports nothing: the file is saved as typed.
 // Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html (-n)
-func shellProblems(text string) []EditorMark {
+func shellProblems(text string) []model.EditorMark {
 	assert.That(utf8.ValidString(text), "a script is text")
 	assert.That(syntaxCheckTimeout > 0, "the check has a limit")
 	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
@@ -4718,14 +4734,14 @@ func shellProblems(text string) []EditorMark {
 	output, err := command.CombinedOutput()
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
-		return []EditorMark{}
+		return []model.EditorMark{}
 	}
-	marks := make([]EditorMark, 0, 2)
+	marks := make([]model.EditorMark, 0, 2)
 	for _, match := range bashError.FindAllStringSubmatch(string(output), helperProblemsMax) {
 		// bash quotes the line it stopped on after its message, as a line of its own.
 		line, convertErr := strconv.Atoi(match[1])
 		if convertErr == nil && !strings.HasPrefix(match[2], "`") {
-			marks = append(marks, EditorMark{Line: line, Message: capitalized(match[2])})
+			marks = append(marks, model.EditorMark{Line: line, Message: capitalized(match[2])})
 		}
 	}
 	return marks
@@ -5084,28 +5100,28 @@ func (e *Editor) previewable() bool {
 // scenario as it reads in the library, keywords lined up, with any line that isn't a step
 // marked with the parser's message; or about.md as the library renders it. Needed by the
 // preview scenarios in capabilities/write-stories-and-scenarios.
-func (e *Editor) Preview() []PreviewLine {
+func (e *Editor) Preview() []model.PreviewLine {
 	assert.That(e != nil, "preview runs on an editor")
 	assert.That(e.window != nil, "an editor belongs to a window")
 	if filepath.Base(e.path) == "about.md" {
 		rendered := withImagePlaceholders(e.text, filepath.Dir(e.path))
-		lines := make([]PreviewLine, 0, 16)
+		lines := make([]model.PreviewLine, 0, 16)
 		for _, line := range strings.Split(rendered, "\n") {
-			lines = append(lines, PreviewLine{Text: line})
+			lines = append(lines, model.PreviewLine{Text: line})
 		}
 		return lines
 	}
 	if e.scenario == "" {
-		return []PreviewLine{}
+		return []model.PreviewLine{}
 	}
 	return previewScenario(strings.Split(e.text, "\n"), e.scenario)
 }
 
 // previewScenario shows one scenario's block from the editor's lines: its name, then its
 // steps lined up. A line that isn't a step, a tag or a comment is marked.
-func previewScenario(lines []string, name string) []PreviewLine {
+func previewScenario(lines []string, name string) []model.PreviewLine {
 	assert.That(name != "", "a scenario has a name")
-	assert.That(len(lines) <= EditorTextBytesMax, "lines stay bounded")
+	assert.That(len(lines) <= model.EditorTextBytesMax, "lines stay bounded")
 	start := -1
 	for index, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -5114,9 +5130,9 @@ func previewScenario(lines []string, name string) []PreviewLine {
 		}
 	}
 	if start < 0 {
-		return []PreviewLine{}
+		return []model.PreviewLine{}
 	}
-	preview := []PreviewLine{{Text: strings.TrimSpace(lines[start])}}
+	preview := []model.PreviewLine{{Text: strings.TrimSpace(lines[start])}}
 	steps, marked := make([]string, 0, 8), make(map[int]string, 1)
 	for _, line := range lines[start+1 : blockEnd(lines, start)] {
 		trimmed := strings.TrimSpace(line)
@@ -5139,10 +5155,10 @@ func previewScenario(lines []string, name string) []PreviewLine {
 	aligned := linedUp(plain)
 	for index, step := range steps {
 		if text, bad := marked[index]; bad {
-			preview = append(preview, PreviewLine{Text: text, Mark: MessageNotAStep})
+			preview = append(preview, model.PreviewLine{Text: text, Mark: MessageNotAStep})
 			continue
 		}
-		preview = append(preview, PreviewLine{Text: aligned[0]})
+		preview = append(preview, model.PreviewLine{Text: aligned[0]})
 		aligned = aligned[1:]
 		assert.That(step != "", "a step has text")
 	}
@@ -5238,7 +5254,7 @@ func (e *Editor) Text() string {
 func (e *Editor) SetText(text string) error {
 	assert.That(e != nil, "set text runs on an editor")
 	assert.That(utf8.ValidString(text), "the editor holds text")
-	assert.That(len(text) <= EditorTextBytesMax, "the text fits EditorTextBytesMax")
+	assert.That(len(text) <= model.EditorTextBytesMax, "the text fits EditorTextBytesMax")
 	e.text = text
 	return nil
 }
@@ -5246,7 +5262,7 @@ func (e *Editor) SetText(text string) error {
 // dirty is true while the editor holds changes that aren't saved.
 func (e *Editor) dirty() bool {
 	assert.That(e != nil, "dirty runs on an editor")
-	assert.That(len(e.text) <= EditorTextBytesMax, "the text stays bounded")
+	assert.That(len(e.text) <= model.EditorTextBytesMax, "the text stays bounded")
 	return e.text != e.opened
 }
 

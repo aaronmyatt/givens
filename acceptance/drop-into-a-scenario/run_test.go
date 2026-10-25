@@ -11,6 +11,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // Lines the test setups print through the kit's ok, which prefixes "✓ ".
@@ -91,7 +92,7 @@ func (s *state) checklistShown() error {
 }
 
 // expectKinds checks that the items of each kind are exactly the wanted steps, in order.
-func expectKinds(items []app.CheckItem, wanted map[string][]string) error {
+func expectKinds(items []model.CheckItem, wanted map[string][]string) error {
 	for kind, steps := range wanted {
 		got := make([]string, 0, len(items))
 		for _, item := range items {

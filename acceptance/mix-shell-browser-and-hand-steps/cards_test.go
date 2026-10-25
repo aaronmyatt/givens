@@ -11,6 +11,7 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // payInApp is the scenario whose setup is only pay-in-app.md.
@@ -144,19 +145,19 @@ func (s *state) writeCards() error {
 }
 
 // card is one of pay-in-app.md's cards, once setup has run as far as it goes.
-func (s *state) card(step string) (app.SetupCard, error) {
+func (s *state) card(step string) (model.SetupCard, error) {
 	session, err := s.session()
 	if err != nil {
-		return app.SetupCard{}, err
+		return model.SetupCard{}, err
 	}
 	session.Wait(world.SetupWait)
 	number, err := s.cardStep(step)
 	if err != nil {
-		return app.SetupCard{}, err
+		return model.SetupCard{}, err
 	}
 	cards := session.Cards()
 	if len(cards) != len(s.cardSteps) {
-		return app.SetupCard{}, fmt.Errorf("%d cards, not %d; setup is %s: %s %q", len(cards),
+		return model.SetupCard{}, fmt.Errorf("%d cards, not %d; setup is %s: %s %q", len(cards),
 			len(s.cardSteps), session.Status(), s.visible(), session.Output())
 	}
 	return cards[number-1], nil

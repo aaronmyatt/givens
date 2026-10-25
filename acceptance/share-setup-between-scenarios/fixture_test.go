@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"givens/internal/app"
+	"givens/internal/app/model"
 )
 
 // sharedFiles lists the sample shop's helper files, relative to its capabilities folder: the
@@ -141,13 +142,13 @@ func (s *state) scenario(name string) (app.Scenario, error) {
 }
 
 // helpersNamed lists the Shared list's entries for a helper; it's an error when there's none.
-func (s *state) helpersNamed(name string) ([]app.Helper, error) {
+func (s *state) helpersNamed(name string) ([]model.Helper, error) {
 	window, err := s.Front()
 	if err != nil {
 		return nil, err
 	}
 	all := window.Helpers()
-	named := make([]app.Helper, 0, 2)
+	named := make([]model.Helper, 0, 2)
 	for _, helper := range all {
 		if helper.Name == name {
 			named = append(named, helper)
