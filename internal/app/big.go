@@ -28,13 +28,14 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, runref, setup, tags, slug, markdown, helpers, kit and
-//     starter: domain packages, each with one job and its own tests.
+//   - internal/spec, project, runs, setup, tags, slug, markdown, helpers, kit and starter:
+//     domain packages, each with one job and its own tests.
 
 package app
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -46,6 +47,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -62,7 +64,6 @@ import (
 	"givens/internal/kit"
 	"givens/internal/markdown"
 	"givens/internal/project"
-	"givens/internal/runref"
 	"givens/internal/runs"
 	"givens/internal/setup"
 	"givens/internal/slug"
@@ -1805,12 +1806,12 @@ func (w *Window) moveToOwnCapability() error {
 // (big_helpers.go) calls pollRunsSync. Core glue shows runsMessages (Snapshot, snapshot.go),
 // adds runsOffers and runs "Move runs off main", "Share runs" and "Change run limits"
 // (allOffers and Choose, offers.go), and Select clears runsNote (selection.go). Window's runs
-// fields are in window.go's type; internal/runref does the git work and internal/runs writes,
-// reads and trims runs; `givens sync` is cmd/givens/panels.go.
+// fields are in window.go's type; RunStore, at the section's end, does the git work and
+// internal/runs writes, reads and trims runs; `givens sync` is cmd/givens/panels.go.
 
 // In a git repository with a remote, a project keeps its runs off main by default: in the git
-// ref refs/givens/runs, which Givens fetches and pushes itself; internal/runref does the git
-// work. Without a remote, runs go in capabilities/runs. See capabilities/keep-runs-off-main.
+// ref refs/givens/runs, which Givens fetches and pushes itself; RunStore does the git work.
+// Without a remote, runs go in capabilities/runs. See capabilities/keep-runs-off-main.
 
 // Offers and messages about runs kept off main.
 const (
@@ -1820,9 +1821,9 @@ const (
 	OfferChangeRunLimits = "Change run limits"
 	// messageMoveOffMain asks before runs already in capabilities/runs are moved.
 	messageMoveOffMain = "Move the runs in capabilities/runs to refs/givens/runs on " +
-		runref.Remote + "? They go to the Trash here, and new runs already go to the ref."
+		RunsRemote + "? They go to the Trash here, and new runs already go to the ref."
 	// MessageSyncingRuns shows while the sync a project's opening started is going.
-	MessageSyncingRuns = "Syncing runs with " + runref.Remote
+	MessageSyncingRuns = "Syncing runs with " + RunsRemote
 	// messageRunsNotSynced starts what the window says when the sync on open went wrong.
 	messageRunsNotSynced = "Runs couldn't be synced: "
 	// MessageRunsMoved says what's left for the developer to do: commit the change.
@@ -1838,13 +1839,13 @@ var ErrRunsOnMain = errors.New("runs are kept off main only in a git repository 
 // offMainText is capabilities/runs/off-main.md: what anyone looking in runs/ reads.
 const offMainText = `# Runs are kept off main
 
-Givens keeps this project's runs in the git ref ` + "`" + runref.Ref + "`" + `, not on a
+Givens keeps this project's runs in the git ref ` + "`" + RunsRef + "`" + `, not on a
 branch. It fetches and pushes the ref itself, so runs aren't in pull requests, and a plain
 clone doesn't download them. See capabilities/keep-runs-off-main in the Givens repository.
 
 To look by hand:
 
-    git fetch origin ` + runref.Ref + `
+    git fetch origin ` + RunsRef + `
     git ls-tree -r FETCH_HEAD
 `
 
@@ -1863,7 +1864,7 @@ func (w *Window) keepRun(run runs.Run, attachments []string, note string) error 
 	if w.keepsRunsOffMain() {
 		// The run goes into the ref's copy, then out to the remote.
 		write := func(tree string) error { return writeRun(tree, run, attachments, note) }
-		return w.afterRunsChange(w.runStore.Change(write, runref.NetworkTimeout))
+		return w.afterRunsChange(w.runStore.Change(write, RunsNetworkTimeout))
 	}
 	return writeRun(w.path, run, attachments, note)
 }
@@ -1920,7 +1921,7 @@ func (w *Window) afterRunsChange(changed error) error {
 		return errors.Join(changed, err)
 	}
 	w.runsUnshared = unshared
-	if errors.Is(changed, runref.ErrUnreachable) {
+	if errors.Is(changed, ErrRemoteUnreachable) {
 		return nil
 	}
 	return changed
@@ -1938,7 +1939,7 @@ func (w *Window) afterRunsChange(changed error) error {
 func (w *Window) openRunStore() {
 	assert.That(w != nil, "open run store runs on a window")
 	assert.That(w.branch == "", "a branch's window keeps no runs of its own")
-	store, ok := runref.Open(w.path)
+	store, ok := RunStoreOf(w.path)
 	if !ok || !w.found || !store.HasRemote() {
 		return
 	}
@@ -1949,7 +1950,7 @@ func (w *Window) openRunStore() {
 	// Buffered, so the goroutine ends even when the window closes before the result is read.
 	done := make(chan error, 1)
 	w.runsSync = done
-	go func() { done <- store.Change(nil, runref.OpenTimeout) }()
+	go func() { done <- store.Change(nil, RunsOpenTimeout) }()
 }
 
 // pollRunsSync picks up the sync on open's result once it's done, without waiting for it.
@@ -2046,7 +2047,7 @@ func (w *Window) SyncRuns() error {
 	if !w.keepsRunsOffMain() {
 		return nil
 	}
-	return w.syncRuns(runref.NetworkTimeout)
+	return w.syncRuns(RunsNetworkTimeout)
 }
 
 // syncRuns fetches, merges and pushes the ref, within timeout.
@@ -2084,8 +2085,8 @@ func (w *Window) askMoveRunsOffMain() error {
 func (w *Window) moveRunsOffMain() error {
 	assert.That(w.runStore != nil, "runs are kept in a store")
 	assert.That(w.project != nil, "runs move in a loaded project")
-	adopt := func(tree string) error { return runref.Adopt(tree, w.path) }
-	if err := w.afterRunsChange(w.runStore.Change(adopt, runref.NetworkTimeout)); err != nil {
+	adopt := func(tree string) error { return AdoptRuns(tree, w.path) }
+	if err := w.afterRunsChange(w.runStore.Change(adopt, RunsNetworkTimeout)); err != nil {
 		return err
 	}
 	moving := w.runsOnMain()
@@ -2134,7 +2135,748 @@ func (w *Window) SetRunLimits(limits runs.Limits) error {
 		return fmt.Errorf("each limit is a whole number from 1 to %d", runs.LimitMax)
 	}
 	write := func(tree string) error { return runs.WriteLimits(tree, limits) }
-	return w.afterRunsChange(w.runStore.Change(write, runref.NetworkTimeout))
+	return w.afterRunsChange(w.runStore.Change(write, RunsNetworkTimeout))
+}
+
+// From internal/runref: the run store keeps a project's runs off main, in the git ref
+// refs/givens/runs, which it commits, fetches, merges and pushes itself. The ref is checked out
+// in <git common dir>/givens/tree (runs.RefCopy), where internal/runs reads and writes runs as
+// it does in capabilities/runs. The developer's working tree, their index and every branch
+// are left alone.
+//
+// Git's plumbing builds each commit from the copy: `add` into an index of Givens's own, then
+// `write-tree` and `commit-tree`.
+// Ref: https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
+
+// The ref, where a fetch keeps the remote's copy of it, and the remote it's shared through.
+// A fetch takes refs/givens/* by pattern, so a remote without the ref isn't an error.
+// RunsRef: https://git-scm.com/docs/git-fetch#_configured_remote_tracking_branches
+const (
+	RunsRef      = "refs/givens/runs"
+	originRef    = "refs/givens-origin/runs"
+	fetchRefspec = "+refs/givens/*:refs/givens-origin/*"
+	RunsRemote   = "origin"
+)
+
+// Limits. Tiger Style: put a limit on everything.
+const (
+	// localTimeout bounds a git call that doesn't touch the network.
+	localTimeout = 20 * time.Second
+	// RunsNetworkTimeout bounds a fetch or push: room to send 250 MB the first time.
+	RunsNetworkTimeout = 120 * time.Second
+	// RunsOpenTimeout bounds the sync a project's opening starts. It runs in the background, but
+	// a Record run waits on the store's lock meanwhile, so it stays short.
+	RunsOpenTimeout = 8 * time.Second
+	// waitDelay bounds how long a git that timed out may hold its output pipes open.
+	waitDelay = time.Second
+	// syncTriesMax bounds how often a sync starts over after another device pushed first.
+	syncTriesMax = 3
+	// treeFilesMax bounds the files in the ref: 1000 runs of 33 files would be 33 000.
+	treeFilesMax = 200_000
+	// outputBytesMax bounds what Givens reads back from one git call: logs, not attachments.
+	outputBytesMax = 64 << 20
+)
+
+// Who commits to the ref. A run line names who ran it, so the commits needn't; and a
+// developer without user.email set can still keep runs.
+// Ref: https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
+const (
+	committerName  = "Givens"
+	committerEmail = "givens@localhost"
+)
+
+// ErrRemoteUnreachable is returned when the remote can't be reached: the runs stay committed on
+// this device until a sync gets through.
+var ErrRemoteUnreachable = errors.New("the remote can't be reached")
+
+// RunStore is one repository's runs ref and its checked-out copy.
+type RunStore struct {
+	capabilities string // the project's capabilities folder; git runs from here
+	gitDir       string // the repository's git common dir
+	dir          string // <gitDir>/givens: the copy, its index and the lock
+	tree         string // <dir>/tree, the copy: runs.RefCopy(capabilities)
+}
+
+// RunStoreOf finds the store of the repository holding capabilities, or false when it isn't in a
+// git repository. Nothing is written until the store is changed.
+func RunStoreOf(capabilities string) (RunStore, bool) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	gitDir := runs.GitCommonDir(capabilities)
+	if gitDir == "" {
+		return RunStore{}, false
+	}
+	store := RunStore{
+		capabilities: capabilities, gitDir: gitDir,
+		dir: filepath.Join(gitDir, runs.RefDirName), tree: runs.RefCopy(capabilities),
+	}
+	assert.That(filepath.Dir(store.tree) == store.dir, "the copy is in the store's folder")
+	return store, true
+}
+
+// Tree is the ref's copy, laid out like a capabilities folder: runs/ and the limits file.
+func (s RunStore) Tree() string {
+	assert.That(s.tree != "", "the store was opened")
+	assert.That(filepath.IsAbs(s.tree), "the copy is absolute")
+	return s.tree
+}
+
+// Kept is true once this device keeps a copy of the ref.
+func (s RunStore) Kept() bool {
+	assert.That(s.tree != "", "the store was opened")
+	assert.That(filepath.IsAbs(s.tree), "the copy is absolute")
+	_, err := os.Stat(s.tree)
+	return err == nil
+}
+
+// HasRemote is true when the repository has the remote runs are shared through.
+func (s RunStore) HasRemote() bool {
+	assert.That(s.gitDir != "", "the store was opened")
+	assert.That(RunsRemote != "", "runs are shared through a named remote")
+	_, err := s.git(localTimeout, "", "remote", "get-url", RunsRemote)
+	return err == nil
+}
+
+// git runs git on the store's repository with the store's own index, and, for the commands
+// that read or write files, the copy as the work tree: the developer's index and working tree
+// aren't touched. It never prompts.
+// Ref: https://git-scm.com/docs/git#Documentation/git.txt-GITINDEXFILE
+func (s RunStore) git(timeout time.Duration, stdin string, args ...string) (string, error) {
+	assert.That(s.dir != "", "the store was opened")
+	assert.That(timeout > 0, "git has a time limit")
+	return s.gitWith(filepath.Join(s.dir, "index"), timeout, stdin, args...)
+}
+
+// gitWith is git with another index: a merge reads the remote's tree into one of its own.
+func (s RunStore) gitWith(index string, timeout time.Duration, stdin string,
+	args ...string) (string, error) {
+	assert.That(filepath.IsAbs(index), "the index is absolute")
+	assert.That(len(args) > 0, "git has a command")
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	full := []string{"--git-dir=" + s.gitDir}
+	// git refuses a work tree whose folder isn't there, so only these two are given one; the
+	// copy is made before either runs.
+	if args[0] == "add" || args[0] == "checkout-index" {
+		full = append(full, "--work-tree="+s.tree)
+	}
+	full = append(full, args...)
+	command := exec.CommandContext(ctx, "git", full...)
+	command.Dir = s.capabilities
+	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C",
+		"GIT_INDEX_FILE="+index,
+		"GIT_AUTHOR_NAME="+committerName, "GIT_AUTHOR_EMAIL="+committerEmail,
+		"GIT_COMMITTER_NAME="+committerName, "GIT_COMMITTER_EMAIL="+committerEmail)
+	// A timed-out git is killed, but a helper it started, like ssh, can keep the output pipes
+	// open; WaitDelay stops waiting for them, so the timeout holds.
+	// Ref: https://pkg.go.dev/os/exec#Cmd.WaitDelay
+	command.WaitDelay = waitDelay
+	command.Stdin = strings.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := command.Run(); err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
+	}
+	if stdout.Len() > outputBytesMax {
+		return "", fmt.Errorf("git %s wrote more than %d bytes", args[0], outputBytesMax)
+	}
+	return stdout.String(), nil
+}
+
+// rev is the commit ref points at, or "" when there's no such ref.
+// Ref: https://git-scm.com/docs/git-for-each-ref
+func (s RunStore) rev(ref string) (string, error) {
+	assert.That(strings.HasPrefix(ref, "refs/"), "a ref is named in full")
+	assert.That(s.gitDir != "", "the store was opened")
+	output, err := s.git(localTimeout, "", "for-each-ref", "--format=%(objectname)", ref)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// commit commits the copy as it is, on parent ("" for none), and points RunsRef at it. It
+// returns parent when the copy holds just what parent does.
+// Ref: https://git-scm.com/docs/git-commit-tree
+func (s RunStore) commit(parent string) (string, error) {
+	assert.That(s.tree != "", "the store was opened")
+	assert.That(!strings.ContainsAny(parent, " \n"), "a parent is one commit")
+	if err := os.MkdirAll(s.tree, 0o755); err != nil {
+		return "", err
+	}
+	// --force adds what a global ignore, like *.log, would leave out.
+	if _, err := s.git(localTimeout, "", "add", "--all", "--force"); err != nil {
+		return "", err
+	}
+	tree, err := s.git(localTimeout, "", "write-tree")
+	if err != nil {
+		return "", err
+	}
+	tree = strings.TrimSpace(tree)
+	if parent != "" {
+		parentTree, err := s.git(localTimeout, "", "rev-parse", parent+"^{tree}")
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(parentTree) == tree {
+			return parent, s.point(RunsRef, parent)
+		}
+	}
+	// --no-gpg-sign: a developer who signs commits isn't asked for a passphrase per run.
+	args := []string{"commit-tree", "--no-gpg-sign", "-m", "Givens runs", tree}
+	if parent != "" {
+		args = append(args, "-p", parent)
+	}
+	commit, err := s.git(localTimeout, "", args...)
+	if err != nil {
+		return "", err
+	}
+	commit = strings.TrimSpace(commit)
+	return commit, s.point(RunsRef, commit)
+}
+
+// point sets ref to commit. Ref: https://git-scm.com/docs/git-update-ref
+func (s RunStore) point(ref string, commit string) error {
+	assert.That(strings.HasPrefix(ref, "refs/givens"), "only Givens's own refs are set")
+	assert.That(commit != "", "a ref points at a commit")
+	_, err := s.git(localTimeout, "", "update-ref", ref, commit)
+	return err
+}
+
+// Locking: one writer at a time, the app or the givens command.
+const (
+	lockFileName = "lock"
+	// lockTriesMax and lockWait bound how long a change waits for another: 10 s.
+	lockTriesMax = 100
+	lockWait     = 100 * time.Millisecond
+	// lockStaleAfter is when a lock left by a Givens that stopped is taken over.
+	lockStaleAfter = 10 * time.Minute
+)
+
+// Change lets write change the copy (add a run, its files, its note), commits it, and shares
+// it: fetch, merge, trim to the limits, push. A nil write only shares. When the remote can't
+// be reached, the change stays committed here and the error wraps ErrRemoteUnreachable.
+func (s RunStore) Change(write func(tree string) error, timeout time.Duration) error {
+	assert.That(s.tree != "", "the store was opened")
+	assert.That(timeout > 0, "a change has a time limit")
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if write != nil {
+		if err := os.MkdirAll(s.tree, 0o755); err != nil {
+			return err
+		}
+		if err := write(s.tree); err != nil {
+			return err
+		}
+	}
+	for range syncTriesMax {
+		shared, err := s.syncOnce(timeout)
+		if err != nil || shared {
+			return err
+		}
+	}
+	return fmt.Errorf("%s moved on %d times while Givens shared its runs; try again", RunsRef,
+		syncTriesMax)
+}
+
+// syncOnce fetches, merges, trims and pushes once. It says false when another device pushed
+// first, so the caller starts over from the fetch.
+func (s RunStore) syncOnce(timeout time.Duration) (bool, error) {
+	assert.That(timeout > 0, "a sync has a time limit")
+	assert.That(s.tree != "", "the store was opened")
+	base, err := s.rev(originRef)
+	if err != nil {
+		return false, err
+	}
+	// --no-write-fetch-head leaves the developer's FETCH_HEAD as it was.
+	// Ref: https://git-scm.com/docs/git-fetch#Documentation/git-fetch.txt---no-write-fetch-head
+	if _, err := s.git(timeout, "", "fetch", "--quiet", "--no-tags", "--no-write-fetch-head",
+		RunsRemote, fetchRefspec); err != nil {
+		return false, s.keepHere(err)
+	}
+	remote, err := s.rev(originRef)
+	if err != nil {
+		return false, err
+	}
+	if remote != "" && remote != base {
+		if err := s.merge(base, remote); err != nil {
+			return false, err
+		}
+	}
+	// Opening a project syncs: with nothing here and no ref on the remote, there's nothing
+	// to share, and no ref is made.
+	if local, err := s.localFiles(); err != nil || (remote == "" && len(local) == 0) {
+		return err == nil, err
+	}
+	trimmed, err := s.trim()
+	if err != nil {
+		return false, err
+	}
+	// A trim starts the ref's history over, so the dropped files leave it.
+	parent := remote
+	if trimmed {
+		parent = ""
+	}
+	commit, err := s.commit(parent)
+	if err != nil || commit == remote {
+		return err == nil, err
+	}
+	return s.push(commit, remote, timeout)
+}
+
+// keepHere commits the copy on this device's own tip, when the remote can't be reached.
+func (s RunStore) keepHere(cause error) error {
+	assert.That(cause != nil, "something stopped the sync")
+	assert.That(s.tree != "", "the store was opened")
+	local, err := s.rev(RunsRef)
+	if err != nil {
+		return err
+	}
+	if _, err := s.commit(local); err != nil {
+		return errors.Join(err, cause)
+	}
+	return fmt.Errorf("%w: %v", ErrRemoteUnreachable, cause)
+}
+
+// trim writes the default limits file if the copy has none, then trims to the limits.
+func (s RunStore) trim() (bool, error) {
+	assert.That(s.tree != "", "the store was opened")
+	if _, err := os.Stat(filepath.Join(s.tree, runs.LimitsFileName)); errors.Is(err,
+		fs.ErrNotExist) {
+		if err := runs.WriteLimits(s.tree, runs.DefaultLimits()); err != nil {
+			return false, err
+		}
+	}
+	limits, err := runs.ReadLimits(s.tree)
+	if err != nil {
+		return false, err
+	}
+	assert.That(limits.Runs > 0 && limits.Megabytes > 0, "limits keep something")
+	return runs.Prune(s.tree, limits)
+}
+
+// push sends commit to the remote's ref. After a trim it replaces what's there, but only if
+// that's still remote, the tip this commit was merged with. It says false when another
+// device pushed first. Ref: https://git-scm.com/docs/git-push (--force-with-lease)
+func (s RunStore) push(commit string, remote string, timeout time.Duration) (bool, error) {
+	assert.That(commit != "", "a commit is pushed")
+	assert.That(commit != remote, "a push sends something new")
+	// --no-verify: the project's pre-push hooks are for its code, not for runs.
+	args := []string{"push", "--quiet", "--no-verify", RunsRemote}
+	if remote != "" {
+		args = append(args, "--force-with-lease="+RunsRef+":"+remote)
+	}
+	if _, err := s.git(timeout, "", append(args, RunsRef+":"+RunsRef)...); err != nil {
+		message := err.Error()
+		if strings.Contains(message, "[rejected]") || strings.Contains(message, "stale info") {
+			return false, nil
+		}
+		return false, fmt.Errorf("%w: %v", ErrRemoteUnreachable, err)
+	}
+	return true, s.point(originRef, commit)
+}
+
+// Unshared counts the run lines in the copy that the remote's ref, as last seen, doesn't
+// hold: what this device has yet to share.
+func (s RunStore) Unshared() (int, error) {
+	assert.That(s.tree != "", "the store was opened")
+	local, err := s.localFiles()
+	if err != nil {
+		return 0, err
+	}
+	names := make([]string, 0, 16)
+	for name := range local {
+		if isLog(name) {
+			names = append(names, name)
+		}
+	}
+	origin, err := s.rev(originRef)
+	if err != nil {
+		return 0, err
+	}
+	shared, err := s.catFiles(origin, names)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, name := range names {
+		lines, err := runs.ReadLines(filepath.Join(s.tree, filepath.FromSlash(name)))
+		if err != nil {
+			return 0, err
+		}
+		have := make(map[string]bool, len(lines))
+		for _, line := range linesOf(shared[name]) {
+			have[line] = true
+		}
+		for _, line := range lines {
+			if !have[line] {
+				count++
+			}
+		}
+	}
+	assert.That(count >= 0, "a count isn't negative")
+	return count, nil
+}
+
+// lock takes the store's lock, waiting for another Givens to finish, and returns its release.
+// A lock older than lockStaleAfter was left by a Givens that stopped, and is taken over.
+// Ref: https://pkg.go.dev/os#O_EXCL
+func (s RunStore) lock() (func(), error) {
+	assert.That(s.dir != "", "the store was opened")
+	path := filepath.Join(s.dir, lockFileName)
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return nil, err
+	}
+	for range lockTriesMax {
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			_ = file.Close()
+			return func() { _ = os.Remove(path) }, nil
+		}
+		if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) > lockStaleAfter {
+			_ = os.Remove(path)
+			continue
+		}
+		time.Sleep(lockWait)
+	}
+	assert.That(lockTriesMax > 0, "the lock was tried")
+	return nil, fmt.Errorf("%s is held by another Givens", path)
+}
+
+// AdoptRuns brings a capabilities folder's runs/ into the copy at tree: each day's lines, merged
+// with what the copy has, and each attached file the copy doesn't have. Used once, when a
+// project starts keeping its runs off main.
+func AdoptRuns(tree string, capabilities string) error {
+	assert.That(filepath.IsAbs(tree), "the copy is absolute")
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	logs, err := filepath.Glob(filepath.Join(runs.Dir(capabilities), "*.log"))
+	if err != nil {
+		return err
+	}
+	for _, from := range logs {
+		lines, err := runs.ReadLines(from)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(runs.Dir(tree), filepath.Base(from))
+		have, err := runs.ReadLines(target)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		merged := runs.MergeLines(nil, lines, have)
+		if err := os.WriteFile(target, []byte(strings.Join(merged, "\n")+"\n"), 0o644); err != nil {
+			return err
+		}
+	}
+	return adoptFiles(tree, capabilities)
+}
+
+// adoptFiles copies each file under capabilities/runs/files into the copy, unless it's there.
+func adoptFiles(tree string, capabilities string) error {
+	assert.That(filepath.IsAbs(tree), "the copy is absolute")
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	from := filepath.Join(runs.Dir(capabilities), "files")
+	copied := 0
+	err := filepath.WalkDir(from, func(at string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.Type().IsRegular() {
+			return err
+		}
+		if copied++; copied > treeFilesMax {
+			return fmt.Errorf("%s holds more than %d files", from, treeFilesMax)
+		}
+		relative, err := filepath.Rel(from, at)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(runs.Dir(tree), "files", relative)
+		if _, err := os.Stat(target); err == nil {
+			return nil
+		}
+		return copyFile(at, target)
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+// copyFile copies one attached file, which CopyFiles already held to runs.FileBytesMax.
+// Ref: https://pkg.go.dev/io#Copy
+func copyFile(source string, target string) error {
+	assert.That(source != target, "a file isn't copied onto itself")
+	assert.That(filepath.IsAbs(target), "the target is absolute")
+	if err := runs.CheckFile(source); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, io.LimitReader(in, runs.FileBytesMax)); err != nil {
+		return errors.Join(err, out.Close())
+	}
+	return out.Close()
+}
+
+// merge brings what the remote's ref holds into the copy, three ways: base is the remote's
+// ref as this device last saw it. A day's log keeps the remote's lines and this device's new
+// ones (runs.MergeLines). A file the remote added comes in; one it removed since base goes,
+// so a trim on another device isn't undone here; one only this device has stays. The
+// remote's limits file wins.
+func (s RunStore) merge(base string, remote string) error {
+	assert.That(s.tree != "", "the store was opened")
+	assert.That(remote != base || remote != "", "there's something to merge")
+	remoteFiles, err := s.files(remote)
+	if err != nil {
+		return err
+	}
+	baseFiles, err := s.files(base)
+	if err != nil {
+		return err
+	}
+	localFiles, err := s.localFiles()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.tree, 0o755); err != nil {
+		return err
+	}
+	if err := s.mergeLogs(base, remote, localFiles, remoteFiles); err != nil {
+		return err
+	}
+	incoming := make([]string, 0, 16)
+	for name := range remoteFiles {
+		if isLog(name) {
+			continue
+		}
+		if name == runs.LimitsFileName || (!localFiles[name] && !baseFiles[name]) {
+			incoming = append(incoming, name)
+		}
+	}
+	for name := range localFiles {
+		if !isLog(name) && !remoteFiles[name] && baseFiles[name] {
+			if err := s.removeFile(name); err != nil {
+				return err
+			}
+		}
+	}
+	return s.checkout(remote, incoming)
+}
+
+// isLog is true for a day's run log in the copy: runs/YYYY-MM-DD.log.
+func isLog(name string) bool {
+	assert.That(name != "", "a file has a name")
+	assert.That(!strings.HasPrefix(name, "/"), "names are relative to the copy")
+	return path.Dir(name) == "runs" && strings.HasSuffix(name, ".log")
+}
+
+// mergeLogs writes each day's log merged three ways, or removes it when no line is left.
+func (s RunStore) mergeLogs(base string, remote string, localFiles map[string]bool,
+	remoteFiles map[string]bool) error {
+	assert.That(remote != "", "a merge has a remote")
+	assert.That(len(localFiles) <= treeFilesMax, "files stay bounded")
+	names := make([]string, 0, 16)
+	for _, files := range []map[string]bool{localFiles, remoteFiles} {
+		for name := range files {
+			if isLog(name) && !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	remoteLogs, err := s.catFiles(remote, names)
+	if err != nil {
+		return err
+	}
+	baseLogs, err := s.catFiles(base, names)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		local := []string{}
+		if localFiles[name] {
+			local, err = runs.ReadLines(filepath.Join(s.tree, filepath.FromSlash(name)))
+			if err != nil {
+				return err
+			}
+		}
+		merged := runs.MergeLines(linesOf(baseLogs[name]), local, linesOf(remoteLogs[name]))
+		if err := s.writeLog(name, merged); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// linesOf splits a log's text into its lines, blank ones left out.
+func linesOf(text []byte) []string {
+	assert.That(len(text) <= outputBytesMax, "a log fits outputBytesMax")
+	lines := make([]string, 0, bytes.Count(text, []byte("\n"))+1)
+	for _, line := range strings.Split(string(text), "\n") {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	assert.That(len(lines) <= len(text)+1, "lines come from the text")
+	return lines
+}
+
+// writeLog writes a day's log in the copy, or removes it when no line is left.
+func (s RunStore) writeLog(name string, lines []string) error {
+	assert.That(isLog(name), "a day's log is written")
+	assert.That(len(lines) <= treeFilesMax*runs.FieldsMax, "lines stay bounded")
+	if len(lines) == 0 {
+		return s.removeFile(name)
+	}
+	target := filepath.Join(s.tree, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(target, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+}
+
+// files lists the files in rev's tree, by their paths in it, or none for "".
+// Ref: https://git-scm.com/docs/git-ls-tree
+func (s RunStore) files(rev string) (map[string]bool, error) {
+	assert.That(!strings.ContainsAny(rev, " \n"), "a rev is one commit")
+	assert.That(s.gitDir != "", "the store was opened")
+	found := make(map[string]bool, 64)
+	if rev == "" {
+		return found, nil
+	}
+	output, err := s.git(localTimeout, "", "ls-tree", "-r", "-z", "--name-only", rev)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range strings.Split(output, "\x00") {
+		if name != "" {
+			found[name] = true
+		}
+	}
+	if len(found) > treeFilesMax {
+		return nil, fmt.Errorf("%s holds %d files, more than %d", RunsRef, len(found), treeFilesMax)
+	}
+	return found, nil
+}
+
+// localFiles lists the files in the copy, by their paths in it.
+// Ref: https://pkg.go.dev/path/filepath#WalkDir
+func (s RunStore) localFiles() (map[string]bool, error) {
+	assert.That(s.tree != "", "the store was opened")
+	found := make(map[string]bool, 64)
+	err := filepath.WalkDir(s.tree, func(at string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if len(found) > treeFilesMax {
+			return fmt.Errorf("%s holds more than %d files", s.tree, treeFilesMax)
+		}
+		if entry.Type().IsRegular() {
+			relative, err := filepath.Rel(s.tree, at)
+			if err != nil {
+				return err
+			}
+			found[filepath.ToSlash(relative)] = true
+		}
+		return nil
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return found, nil
+	}
+	assert.That(len(found) <= treeFilesMax+1, "files stay bounded")
+	return found, err
+}
+
+// catFiles reads the named files of rev's tree in one git call; a name rev doesn't have is
+// left out. Ref: https://git-scm.com/docs/git-cat-file#_batch_output
+func (s RunStore) catFiles(rev string, names []string) (map[string][]byte, error) {
+	assert.That(len(names) <= treeFilesMax, "names stay bounded")
+	assert.That(!strings.ContainsAny(rev, " \n"), "a rev is one commit")
+	found := make(map[string][]byte, len(names))
+	if rev == "" || len(names) == 0 {
+		return found, nil
+	}
+	var asked strings.Builder
+	for _, name := range names {
+		asked.WriteString(rev + ":" + name + "\n")
+	}
+	output, err := s.git(localTimeout, asked.String(), "cat-file", "--batch")
+	if err != nil {
+		return nil, err
+	}
+	reader := bufio.NewReader(strings.NewReader(output))
+	for _, name := range names {
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("git cat-file stopped early: %w", err)
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 {
+			continue // "<rev>:<name> missing"
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size > outputBytesMax {
+			return nil, fmt.Errorf("git cat-file said %q", strings.TrimSpace(header))
+		}
+		content := make([]byte, size+1) // the content, then a newline
+		if _, err := io.ReadFull(reader, content); err != nil {
+			return nil, err
+		}
+		found[name] = content[:size]
+	}
+	return found, nil
+}
+
+// checkout writes the named files of rev's tree into the copy, through an index of its own
+// so the store's index still says what the copy held.
+// Ref: https://git-scm.com/docs/git-checkout-index
+func (s RunStore) checkout(rev string, names []string) error {
+	assert.That(rev != "", "files come from a commit")
+	assert.That(len(names) <= treeFilesMax, "names stay bounded")
+	if len(names) == 0 {
+		return nil
+	}
+	index := filepath.Join(s.dir, "merge-index")
+	defer func() { _ = os.Remove(index) }()
+	if _, err := s.gitWith(index, localTimeout, "", "read-tree", rev); err != nil {
+		return err
+	}
+	_, err := s.gitWith(index, localTimeout, strings.Join(names, "\n")+"\n", "checkout-index",
+		"--force", "--stdin")
+	return err
+}
+
+// removeFile removes a file from the copy, then each folder it leaves empty.
+func (s RunStore) removeFile(name string) error {
+	assert.That(name != "" && !strings.HasPrefix(name, "/"), "names are relative to the copy")
+	assert.That(!strings.Contains(name, ".."), "a name stays inside the copy")
+	target := filepath.Join(s.tree, filepath.FromSlash(name))
+	if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	parent := filepath.Dir(target)
+	// bound: each step goes one folder up, and stops at the copy.
+	for parent != s.tree && strings.HasPrefix(parent, s.tree) {
+		// Remove fails on a folder that isn't empty, which ends the walk.
+		// Ref: https://pkg.go.dev/os#Remove
+		if os.Remove(parent) != nil {
+			return nil
+		}
+		parent = filepath.Dir(parent)
+	}
+	return nil
 }
 
 // Feature: Mix shell, browser and hand steps

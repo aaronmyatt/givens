@@ -1,4 +1,4 @@
-package runref
+package app
 
 import (
 	"errors"
@@ -17,7 +17,7 @@ import (
 type device struct {
 	root         string
 	capabilities string
-	store        Store
+	store        RunStore
 }
 
 // run runs git in dir for a test, away from the developer's own git config. Only the final
@@ -59,7 +59,7 @@ func shared(t *testing.T, n int) (string, []device) {
 		root := filepath.Join(t.TempDir(), "clone"+string(rune('a'+index)))
 		run(t, filepath.Dir(root), "clone", "--quiet", remote, root)
 		capabilities := filepath.Join(root, "capabilities")
-		store, ok := Open(capabilities)
+		store, ok := RunStoreOf(capabilities)
 		if !ok {
 			t.Fatalf("no store for %s", capabilities)
 		}
@@ -87,13 +87,13 @@ func recordAt(key string, s int) func(string) error {
 // remoteKeys lists, sorted, the run key and second of each run the remote's ref holds.
 func remoteKeys(t *testing.T, remote string) []string {
 	t.Helper()
-	names := run(t, remote, "ls-tree", "-r", "--name-only", Ref)
+	names := run(t, remote, "ls-tree", "-r", "--name-only", RunsRef)
 	found := make([]string, 0, 8)
 	for _, name := range strings.Split(names, "\n") {
 		if !strings.HasSuffix(name, ".log") {
 			continue
 		}
-		for _, line := range strings.Split(run(t, remote, "show", Ref+":"+name), "\n") {
+		for _, line := range strings.Split(run(t, remote, "show", RunsRef+":"+name), "\n") {
 			if parsed, err := runs.Parse(line); err == nil {
 				found = append(found, parsed.Key+"@"+parsed.Time.Format("05"))
 			}
@@ -109,7 +109,7 @@ func TestShareAndFetch(t *testing.T) {
 	remote, devices := shared(t, 2)
 	first, second := devices[0], devices[1]
 	if err := first.store.Change(recordAt("checkout/card-declined", 1),
-		NetworkTimeout); err != nil {
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if got := remoteKeys(t, remote); !slices.Equal(got, []string{"checkout/card-declined@01"}) {
@@ -118,7 +118,7 @@ func TestShareAndFetch(t *testing.T) {
 	if status := run(t, first.root, "status", "--porcelain"); status != "" {
 		t.Errorf("recording changed the working tree:\n%s", status)
 	}
-	if err := second.store.Change(nil, NetworkTimeout); err != nil {
+	if err := second.store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	all, err := runs.Read(second.capabilities)
@@ -139,11 +139,11 @@ func TestShareAndFetch(t *testing.T) {
 func TestTwoDevicesMerge(t *testing.T) {
 	remote, devices := shared(t, 2)
 	if err := devices[0].store.Change(recordAt("checkout/card-declined", 1),
-		NetworkTimeout); err != nil {
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if err := devices[1].store.Change(recordAt("checkout/empty-cart", 2),
-		NetworkTimeout); err != nil {
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"checkout/card-declined@01", "checkout/empty-cart@02"}
@@ -160,8 +160,8 @@ func TestUnreachable(t *testing.T) {
 	if err := os.Rename(remote, remote+".away"); err != nil {
 		t.Fatal(err)
 	}
-	err := store.Change(recordAt("checkout/empty-cart", 1), NetworkTimeout)
-	if !errors.Is(err, ErrUnreachable) {
+	err := store.Change(recordAt("checkout/empty-cart", 1), RunsNetworkTimeout)
+	if !errors.Is(err, ErrRemoteUnreachable) {
 		t.Fatalf("with the remote gone, Change = %v", err)
 	}
 	if unshared, err := store.Unshared(); err != nil || unshared != 1 {
@@ -170,7 +170,7 @@ func TestUnreachable(t *testing.T) {
 	if err := os.Rename(remote+".away", remote); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Change(nil, NetworkTimeout); err != nil {
+	if err := store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if got := remoteKeys(t, remote); !slices.Equal(got, []string{"checkout/empty-cart@01"}) {
@@ -189,19 +189,20 @@ func TestTrim(t *testing.T) {
 	limit := func(tree string) error {
 		return runs.WriteLimits(tree, runs.Limits{Runs: 5, Megabytes: 250})
 	}
-	if err := first.store.Change(limit, NetworkTimeout); err != nil {
+	if err := first.store.Change(limit, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	for s := 1; s <= 5; s++ {
 		if err := first.store.Change(recordAt("checkout/empty-cart", s),
-			NetworkTimeout); err != nil {
+			RunsNetworkTimeout); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := second.store.Change(nil, NetworkTimeout); err != nil {
+	if err := second.store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.store.Change(recordAt("checkout/empty-cart", 6), NetworkTimeout); err != nil {
+	if err := first.store.Change(recordAt("checkout/empty-cart", 6),
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"checkout/empty-cart@03", "checkout/empty-cart@04",
@@ -209,11 +210,11 @@ func TestTrim(t *testing.T) {
 	if got := remoteKeys(t, remote); !slices.Equal(got, want) {
 		t.Fatalf("after the trim the remote holds %q, want %q", got, want)
 	}
-	objects := run(t, remote, "rev-list", "--objects", Ref)
+	objects := run(t, remote, "rev-list", "--objects", RunsRef)
 	if strings.Contains(objects, "T090001Z") || strings.Contains(objects, "T090002Z") {
 		t.Errorf("the ref's history still holds the dropped runs' files:\n%s", objects)
 	}
-	if err := second.store.Change(nil, NetworkTimeout); err != nil {
+	if err := second.store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if got := remoteKeys(t, remote); !slices.Equal(got, want) {
@@ -232,8 +233,8 @@ func TestAdopt(t *testing.T) {
 	if err := recordAt("checkout/card-declined", 1)(from.capabilities); err != nil {
 		t.Fatal(err)
 	}
-	adopt := func(tree string) error { return Adopt(tree, from.capabilities) }
-	if err := from.store.Change(adopt, NetworkTimeout); err != nil {
+	adopt := func(tree string) error { return AdoptRuns(tree, from.capabilities) }
+	if err := from.store.Change(adopt, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	all, err := runs.ReadFolder(from.store.Tree())
@@ -250,7 +251,8 @@ func TestAdopt(t *testing.T) {
 func TestPushFirstWins(t *testing.T) {
 	_, devices := shared(t, 2)
 	first, second := devices[0], devices[1]
-	if err := second.store.Change(recordAt("checkout/empty-cart", 1), NetworkTimeout); err != nil {
+	if err := second.store.Change(recordAt("checkout/empty-cart", 1),
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	stale, err := second.store.rev(originRef)
@@ -258,7 +260,7 @@ func TestPushFirstWins(t *testing.T) {
 		t.Fatalf("the second device saw no remote tip: %q, %v", stale, err)
 	}
 	if err := first.store.Change(recordAt("checkout/card-declined", 2),
-		NetworkTimeout); err != nil {
+		RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if err := recordAt("checkout/empty-cart", 3)(second.store.Tree()); err != nil {
@@ -268,7 +270,7 @@ func TestPushFirstWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pushed, err := second.store.push(commit, stale, NetworkTimeout)
+	pushed, err := second.store.push(commit, stale, RunsNetworkTimeout)
 	if pushed || err != nil {
 		t.Errorf("a push over a stale tip gave %v, %v; want false, nil", pushed, err)
 	}
@@ -279,7 +281,7 @@ func TestPushFirstWins(t *testing.T) {
 func TestNothingToShare(t *testing.T) {
 	remote, devices := shared(t, 1)
 	store := devices[0].store
-	if err := store.Change(nil, NetworkTimeout); err != nil {
+	if err := store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
 	if store.Kept() {

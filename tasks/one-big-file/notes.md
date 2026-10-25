@@ -649,3 +649,19 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - watch_test.go is internal/app/watch_test.go. big.go's header list and Open a project's
   opening comment updated; `_archive/internal/serve` still says `watch.Interval`, left as is.
 - big.go 5,989 lines, big_helpers.go 899 (-1, an import line).
+
+## internal/runref folds in (2026-10-25)
+- internal/runref is gone. runref.go, sync.go and merge.go, in that order, are the end of Keep
+  runs off main's section, under the package doc: the section is its only caller (core glue's
+  "Share runs" in offers.go passes `RunsNetworkTimeout`; window.go holds the `*RunStore`).
+- No clashes, but names that leaned on the qualifier were renamed: `Store` -> `RunStore`,
+  `Open` -> `RunStoreOf` (app already has `openRunStore` and `App.Open`), `Ref` -> `RunsRef`,
+  `Remote` -> `RunsRemote`, `NetworkTimeout` -> `RunsNetworkTimeout`, `OpenTimeout` ->
+  `RunsOpenTimeout`, `Adopt` -> `AdoptRuns`, `ErrUnreachable` -> `ErrRemoteUnreachable` (alone,
+  "unreachable" reads as a code path). The unexported names and the methods kept theirs.
+- The steps in acceptance/keep-runs-off-main and work-in-the-terminal call `app.RunStoreOf`,
+  `app.RunsRef` and the timeouts now. internal/runs/ref.go's comment named internal/runref; it
+  names RunStore now.
+- runref_test.go is internal/app/runref_test.go; two lines the longer timeout name pushed past
+  100 columns were rewrapped.
+- big.go 6,731 lines, big_helpers.go 899 (+0).

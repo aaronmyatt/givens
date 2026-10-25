@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"givens/acceptance/world"
-	"givens/internal/runref"
+	"givens/internal/app"
 )
 
 // checkoutFeature is the sample shop's checkout.feature, relative to the shop.
@@ -376,11 +376,11 @@ func (s *state) unsharedRun() error {
 }
 
 func (s *state) remoteHoldsRun() error {
-	command := exec.Command("git", "ls-tree", "-r", "--name-only", runref.Ref)
+	command := exec.Command("git", "ls-tree", "-r", "--name-only", app.RunsRef)
 	command.Dir = filepath.Join(s.Dir, "remote.git")
 	names, err := command.Output()
 	if err != nil {
-		return fmt.Errorf("the remote has no %s: %v; givens printed:\n%s", runref.Ref, err,
+		return fmt.Errorf("the remote has no %s: %v; givens printed:\n%s", app.RunsRef, err,
 			s.Output)
 	}
 	if !strings.Contains(string(names), "runs/") {

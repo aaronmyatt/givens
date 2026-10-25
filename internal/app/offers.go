@@ -8,7 +8,6 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/project"
-	"givens/internal/runref"
 )
 
 // Offers is every action the window offers right now, by its label: "Drop in", "Copy",
@@ -96,7 +95,7 @@ func (w *Window) Choose(action string) error {
 	case OfferMoveRunsOffMain:
 		return w.askMoveRunsOffMain()
 	case OfferShareRuns:
-		return w.syncRuns(runref.NetworkTimeout)
+		return w.syncRuns(RunsNetworkTimeout)
 	case OfferChangeRunLimits:
 		return nil // the dialog opens; SetRunLimits takes what's filled in
 	}

@@ -8,8 +8,8 @@ import (
 	"givens/internal/assert"
 )
 
-// A project can keep its runs off main: in the git ref refs/givens/runs, which internal/runref
-// commits, fetches and pushes. On each device the ref is checked out in
+// A project can keep its runs off main: in the git ref refs/givens/runs, which internal/app's
+// RunStore commits, fetches and pushes. On each device the ref is checked out in
 // <git common dir>/givens/tree, laid out like a capabilities folder's runs/, so the run log
 // and its files are read from there just as from runs/. See capabilities/keep-runs-off-main.
 

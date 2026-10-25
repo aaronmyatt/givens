@@ -10,7 +10,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/runref"
 	"givens/internal/runs"
 	"givens/internal/slug"
 )
@@ -132,13 +131,13 @@ func (s *state) keepsOffMainWithLimit(count int) error {
 	if err := s.gitWithRemote(); err != nil {
 		return err
 	}
-	store, ok := runref.Open(s.Capabilities())
+	store, ok := app.RunStoreOf(s.Capabilities())
 	if !ok {
 		return fmt.Errorf("the sample shop isn't in a git repository")
 	}
 	limits := runs.Limits{Runs: count, Megabytes: runs.MegabytesKeptDefault}
 	limit := func(tree string) error { return runs.WriteLimits(tree, limits) }
-	return store.Change(limit, runref.NetworkTimeout)
+	return store.Change(limit, app.RunsNetworkTimeout)
 }
 
 // keepsOffMainCloned opens the shop in a git repository with a remote, then clones it on
@@ -203,7 +202,7 @@ func (s *state) recordedRuns(name string, count int) error {
 	if err != nil {
 		return err
 	}
-	store, ok := runref.Open(s.Capabilities())
+	store, ok := app.RunStoreOf(s.Capabilities())
 	if !ok {
 		return fmt.Errorf("the sample shop isn't in a git repository")
 	}
@@ -220,7 +219,7 @@ func (s *state) recordedRuns(name string, count int) error {
 		}
 		return nil
 	}
-	return store.Change(write, runref.NetworkTimeout)
+	return store.Change(write, app.RunsNetworkTimeout)
 }
 
 // writeShot writes one passing run of key at at, with a screenshot, under root.
@@ -247,7 +246,7 @@ func (s *state) runKey(name string) (string, error) {
 
 // remoteRuns lists the runs the remote's refs/givens/runs holds.
 func (s *state) remoteRuns() ([]runs.Run, error) {
-	names, err := git(s.remote, "ls-tree", "-r", "--name-only", runref.Ref)
+	names, err := git(s.remote, "ls-tree", "-r", "--name-only", app.RunsRef)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +256,7 @@ func (s *state) remoteRuns() ([]runs.Run, error) {
 			strings.Count(name, "/") != 1 {
 			continue
 		}
-		text, err := git(s.remote, "show", runref.Ref+":"+name)
+		text, err := git(s.remote, "show", app.RunsRef+":"+name)
 		if err != nil {
 			return nil, err
 		}

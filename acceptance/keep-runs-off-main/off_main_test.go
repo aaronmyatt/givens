@@ -14,7 +14,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/runref"
 	"givens/internal/runs"
 )
 
@@ -121,7 +120,7 @@ func (s *state) remoteHolds(names ...string) error {
 			return err
 		}
 		if !slices.ContainsFunc(held, func(run runs.Run) bool { return run.Key == key }) {
-			return fmt.Errorf("the remote's %s holds no run of %s: %+v", runref.Ref, key, held)
+			return fmt.Errorf("the remote's %s holds no run of %s: %+v", app.RunsRef, key, held)
 		}
 	}
 	return nil
@@ -258,7 +257,7 @@ func (s *state) historyDropped() error {
 	if len(s.dropped) == 0 {
 		return fmt.Errorf("no step said which runs were dropped")
 	}
-	objects, err := git(s.remote, "rev-list", "--objects", runref.Ref)
+	objects, err := git(s.remote, "rev-list", "--objects", app.RunsRef)
 	if err != nil {
 		return err
 	}
@@ -303,9 +302,9 @@ func (s *state) afterGivingUp(text string) error {
 	if err != nil {
 		return err
 	}
-	if !window.WaitForRunsSync(runref.OpenTimeout + world.RunsSyncWaitMax) {
+	if !window.WaitForRunsSync(app.RunsOpenTimeout + world.RunsSyncWaitMax) {
 		return fmt.Errorf("the sync on open was still going after %s",
-			runref.OpenTimeout+world.RunsSyncWaitMax)
+			app.RunsOpenTimeout+world.RunsSyncWaitMax)
 	}
 	return s.notSee(text)
 }
@@ -335,7 +334,7 @@ func (s *state) setLimits(count string, megabytes string) error {
 
 // remoteLimits expects the remote's ref to hold a limits file with these limits.
 func (s *state) remoteLimits(count string, megabytes string) error {
-	text, err := git(s.remote, "show", runref.Ref+":"+runs.LimitsFileName)
+	text, err := git(s.remote, "show", app.RunsRef+":"+runs.LimitsFileName)
 	if err != nil {
 		return err
 	}

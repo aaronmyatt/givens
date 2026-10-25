@@ -6,7 +6,6 @@ import (
 	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/project"
-	"givens/internal/runref"
 )
 
 // Window is one Givens window, showing one project.
@@ -51,10 +50,10 @@ type Window struct {
 	branchProblem string // why the last OpenBranch opened nothing, or ""
 
 	// Runs kept off main, in refs/givens/runs; see Keep runs off main in big.go.
-	runStore     *runref.Store // the repository's runs ref, or nil without git and a remote
-	runsUnshared int           // runs recorded here that the remote doesn't have yet
-	runsNote     string        // said once after the runs moved, until the next Select
-	runsSync     chan error    // the sync on open's result, until it's taken in; nil after
+	runStore     *RunStore  // the repository's runs ref, or nil without git and a remote
+	runsUnshared int        // runs recorded here that the remote doesn't have yet
+	runsNote     string     // said once after the runs moved, until the next Select
+	runsSync     chan error // the sync on open's result, until it's taken in; nil after
 }
 
 // SidebarItem is one line in a project window's sidebar.
