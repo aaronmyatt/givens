@@ -10,7 +10,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/project"
 	"givens/internal/slug"
-	"givens/internal/spec"
 	"givens/internal/watch"
 )
 
@@ -149,49 +148,6 @@ func (w *Window) findIn(capabilityName string, name string) (project.Scenario, b
 		}
 	}
 	return project.Scenario{}, false
-}
-
-// MessageTimeoutTag is the warning on a scenario whose @timeout tag can't be read.
-const MessageTimeoutTag = "@timeout must look like @timeout:90s or @timeout:5m"
-
-// scenarioWarning says what's wrong with a scenario as written, or "".
-func scenarioWarning(capability project.Capability, scenario project.Scenario) string {
-	assert.That(scenario.Capability == capability.Slug, "the scenario is in the capability")
-	assert.That(scenario.StillRunning >= 0, "a timeout is never negative")
-	if clash := slugClash(capability, scenario); clash != "" {
-		return clash
-	}
-	if scenario.StillRunning == 0 {
-		return MessageTimeoutTag
-	}
-	return examplesWarning(scenario)
-}
-
-// slugClash is the warning on a scenario whose slug another scenario in its capability
-// makes too, or "". Runs and setup files are named by slug, so neither scenario can use them.
-func slugClash(capability project.Capability, scenario project.Scenario) string {
-	assert.That(scenario.Capability == capability.Slug, "the scenario is in the capability")
-	assert.That(len(capability.Scenarios) <= spec.ScenariosPerFeatureMax, "scenarios bounded")
-	for _, other := range capability.Scenarios {
-		if other.Slug == scenario.Slug && other.Line != scenario.Line {
-			return "Both names make the slug " + scenario.Slug
-		}
-	}
-	return ""
-}
-
-// capabilityWarning says what's wrong with a capability's folder, or "".
-func capabilityWarning(loaded project.Capability) string {
-	assert.That(loaded.Slug != "", "a capability has a slug")
-	assert.That(loaded.Ignored != nil || loaded.ParseError != "", "ignored files were listed")
-	if loaded.ParseError != "" {
-		return loaded.ParseError
-	}
-	if len(loaded.Ignored) > 0 {
-		return filepath.Base(loaded.Ignored[0]) +
-			" isn't read: a capability has one .feature file, named after its folder"
-	}
-	return ""
 }
 
 // capabilityOf is a loaded capability as a window shows it.

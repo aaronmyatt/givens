@@ -253,3 +253,25 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - `OfferCopySteps` stayed in the section, though Open a project's `readOnlyOffers` (branch.go)
   lists it: a label is the story's, as `SearchScenarios` stayed Search's though Copy reads it.
 - Section 181 lines, big_helpers.go +113. big.go 1314, big_helpers.go 295. 10 of 17.
+
+## Gherkin files moves in (2026-10-25)
+- The section is between Copy and Read a capability: `RuleGroup` and `RuleGroups` (from
+  selection.go) under "Rules group scenarios"; then, under "A file that isn't valid Gherkin"
+  and "Two .feature files in one capability", `capabilityWarning` (project.go), then
+  `problemCapabilities`, `capabilityOffers`, `editPrefix` and `moveToOwnCapability` (offers.go).
+- Seams cut, both in core glue's offers.go: the fix-offers loop inline in `allOffers` is now
+  `gherkinOffers`, which `allOffers` calls, like `kitOffers`; the "Edit <file>" branch inline
+  in `Choose` is now `editBrokenFeature`, called as `answer` is. `Choose`'s one-line
+  `moveToOwnCapability` call and `OfferMoveToOwnCapability`, in the page offers' const block,
+  stay.
+- To big_helpers.go: `slugClash`, since Write stories' rename (rename.go) calls it too, and
+  `scenarioWarning` with `MessageTimeoutTag`: it warns on every scenario as shown, for this
+  story's slug clash and Drop in's @timeout and Examples warnings.
+- Plan was wrong here: examples.go isn't this story's. "Name each Examples block" is a Drop in
+  scenario (outlines and rows), and Drop in's dropin_record.go and dropin_page.go are its other
+  callers. It stays where it is, for slice 12e. `withImagePlaceholders` isn't this story's
+  either: it moved to big_helpers.go with Read a capability.
+- Not cut: `scenarioOffers`' "Both names make the slug" branch (offers.go) is three lines in a
+  function the scenario page shares; the opening comment points at it.
+- No file deleted. Section 163 lines, big_helpers.go +30. big.go 1477, big_helpers.go 325.
+  11 of 17.

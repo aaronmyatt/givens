@@ -42,6 +42,7 @@ import (
 	"givens/internal/kit"
 	"givens/internal/project"
 	"givens/internal/runs"
+	"givens/internal/slug"
 	"givens/internal/tags"
 )
 
@@ -99,6 +100,167 @@ func (w *Window) copyFromSearch() error {
 		return w.copySetup(found)
 	}
 	return errors.New("no scenario is listed to copy")
+}
+
+// Feature: Gherkin files
+//
+// capabilities/gherkin-files. Givens reads each capability's one .feature file with the
+// official Cucumber Gherkin parser (internal/spec, read into a project by internal/project), so
+// a test runner and Givens read the same scenarios. A file that doesn't parse, or a second
+// .feature file in a folder, is a warning on the capability with its fix. Code elsewhere:
+// slugClash and scenarioWarning, which warns on a scenario as shown, are in big_helpers.go,
+// since Write stories' rename and Drop in's @timeout and Examples warnings use them too;
+// scenarioOffers (offers.go) offers only "Copy" on a clashing slug. capabilityOf and scenarioOf
+// (project.go) and Sidebar (window.go) show the warnings; core glue's allOffers and Choose
+// (offers.go) call gherkinOffers, editBrokenFeature and moveToOwnCapability, and
+// OfferMoveToOwnCapability is with the page offers there. "Comments are kept" is Write
+// stories' editor (Edit, editor.go), "Step definitions are left alone" is internal/project's
+// loader, and "A test runner reads the same files" is cucumber-js.
+
+// Scenario: Rules group scenarios
+
+// RuleGroup is one Rule: block of a capability, as the capability page groups it.
+type RuleGroup struct {
+	Name      string   `json:"name"`      // the text after "Rule:"
+	Scenarios []string `json:"scenarios"` // the names of the scenarios under it, in file order
+}
+
+// RuleGroups lists a capability's Rule: blocks with the scenarios under each, in file order.
+// Needed by "Rules group scenarios" in capabilities/gherkin-files.
+func (w *Window) RuleGroups(capability string) ([]RuleGroup, error) {
+	assert.That(w != nil, "rule groups run on a window")
+	assert.That(utf8.ValidString(capability), "the capability's name is text")
+	loaded, ok := w.findCapability(capability)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", capability, ErrNotFound)
+	}
+	groups := make([]RuleGroup, 0, 4)
+	for _, scenario := range loaded.Scenarios {
+		if scenario.Rule == "" {
+			continue
+		}
+		last := len(groups) - 1
+		if last < 0 || groups[last].Name != scenario.Rule {
+			groups = append(groups, RuleGroup{Name: scenario.Rule, Scenarios: []string{}})
+			last++
+		}
+		groups[last].Scenarios = append(groups[last].Scenarios, scenario.Name)
+	}
+	return groups, nil
+}
+
+// Scenario: A file that isn't valid Gherkin
+// Scenario: Two .feature files in one capability
+
+// capabilityWarning says what's wrong with a capability's folder, or "".
+func capabilityWarning(loaded project.Capability) string {
+	assert.That(loaded.Slug != "", "a capability has a slug")
+	assert.That(loaded.Ignored != nil || loaded.ParseError != "", "ignored files were listed")
+	if loaded.ParseError != "" {
+		return loaded.ParseError
+	}
+	if len(loaded.Ignored) > 0 {
+		return filepath.Base(loaded.Ignored[0]) +
+			" isn't read: a capability has one .feature file, named after its folder"
+	}
+	return ""
+}
+
+// problemCapabilities lists capabilities with something to fix, the selected one first.
+func (w *Window) problemCapabilities() []project.Capability {
+	assert.That(w != nil, "problems runs on a window")
+	assert.That(w.project != nil, "problems are in a loaded project")
+	found := make([]project.Capability, 0, 4)
+	for _, capability := range w.project.Capabilities {
+		if capability.ParseError == "" && len(capability.Ignored) == 0 {
+			continue
+		}
+		if capability.Slug == w.selectedCapability {
+			found = append([]project.Capability{capability}, found...)
+		} else {
+			found = append(found, capability)
+		}
+	}
+	return found
+}
+
+// gherkinOffers adds each fix a capability's warning carries to offers, once each.
+func (w *Window) gherkinOffers(offers []string) []string {
+	assert.That(w != nil, "gherkin offers run on a window")
+	assert.That(w.project != nil, "fixes are offered in a loaded project")
+	// A capability's warning in the sidebar carries its fix, so fixes are offered with
+	// nothing selected; the selected capability's come first.
+	for _, capability := range w.problemCapabilities() {
+		for _, offer := range capabilityOffers(capability) {
+			if !slices.Contains(offers, offer) {
+				offers = append(offers, offer)
+			}
+		}
+	}
+	return offers
+}
+
+// capabilityOffers is what a capability's page offers: a way to fix what's wrong with it.
+func capabilityOffers(capability project.Capability) []string {
+	assert.That(capability.Slug != "", "a capability has a slug")
+	assert.That(capability.FeaturePath != "", "a capability has a .feature file")
+	if capability.ParseError != "" {
+		return []string{editPrefix + filepath.Base(capability.FeaturePath)}
+	}
+	if len(capability.Ignored) > 0 {
+		return []string{OfferMoveToOwnCapability}
+	}
+	return []string{}
+}
+
+// editPrefix starts an offer to open a file in the editor: "Edit checkout.feature".
+const editPrefix = "Edit "
+
+// editBrokenFeature takes an "Edit <file>" offer: it opens that .feature file of a capability
+// with something to fix. edited is false for any other action.
+func (w *Window) editBrokenFeature(action string) (bool, error) {
+	assert.That(w != nil, "edit broken feature runs on a window")
+	assert.That(action != "", "an action has a label")
+	if file, ok := strings.CutPrefix(action, editPrefix); ok {
+		for _, capability := range w.problemCapabilities() {
+			if filepath.Base(capability.FeaturePath) == file {
+				_, err := w.Edit(filepath.Join(capability.Slug, file))
+				return true, err
+			}
+		}
+	}
+	return false, nil
+}
+
+// moveToOwnCapability moves an extra .feature file, the selected capability's first, into a
+// folder of its own, named after its slug, so it's read as a capability.
+func (w *Window) moveToOwnCapability() error {
+	assert.That(w != nil, "move runs on a window")
+	assert.That(w.project != nil, "a move happens in a loaded project")
+	source := ""
+	for _, capability := range w.problemCapabilities() {
+		if source == "" && len(capability.Ignored) > 0 {
+			source = capability.Ignored[0]
+		}
+	}
+	if source == "" {
+		return fmt.Errorf("no capability has an extra .feature file: %w", ErrNotFound)
+	}
+	name := slug.Of(strings.TrimSuffix(filepath.Base(source), ".feature"))
+	if name == "" {
+		return fmt.Errorf("%s makes no folder name", filepath.Base(source))
+	}
+	dir := filepath.Join(w.path, name)
+	if _, err := os.Stat(dir); err == nil {
+		return fmt.Errorf("there's already a %s folder", name)
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(source, filepath.Join(dir, name+".feature")); err != nil {
+		return err
+	}
+	return w.reload()
 }
 
 // Feature: Read a capability

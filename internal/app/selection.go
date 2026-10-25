@@ -119,36 +119,6 @@ func (w *Window) shownScenario() *Scenario {
 	return &shown
 }
 
-// RuleGroup is one Rule: block of a capability, as the capability page groups it.
-type RuleGroup struct {
-	Name      string   `json:"name"`      // the text after "Rule:"
-	Scenarios []string `json:"scenarios"` // the names of the scenarios under it, in file order
-}
-
-// RuleGroups lists a capability's Rule: blocks with the scenarios under each, in file order.
-// Needed by "Rules group scenarios" in capabilities/gherkin-files.
-func (w *Window) RuleGroups(capability string) ([]RuleGroup, error) {
-	assert.That(w != nil, "rule groups run on a window")
-	assert.That(utf8.ValidString(capability), "the capability's name is text")
-	loaded, ok := w.findCapability(capability)
-	if !ok {
-		return nil, fmt.Errorf("%s: %w", capability, ErrNotFound)
-	}
-	groups := make([]RuleGroup, 0, 4)
-	for _, scenario := range loaded.Scenarios {
-		if scenario.Rule == "" {
-			continue
-		}
-		last := len(groups) - 1
-		if last < 0 || groups[last].Name != scenario.Rule {
-			groups = append(groups, RuleGroup{Name: scenario.Rule, Scenarios: []string{}})
-			last++
-		}
-		groups[last].Scenarios = append(groups[last].Scenarios, scenario.Name)
-	}
-	return groups, nil
-}
-
 // selectStep selects a step from the search results by its name, "Then they see …", so the
 // main pane lists the scenarios that use it.
 func (w *Window) selectStep(name string) bool {
