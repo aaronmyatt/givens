@@ -74,16 +74,7 @@ func readQuery(text string) query {
 		}
 	}
 	read := query{tagged: len(expression) > 0, words: strings.ToLower(strings.Join(words, " "))}
-	parsed, err := tags.Parse(strings.Join(expression, " "))
-	if err != nil {
-		read.problem = "Not" + strings.TrimPrefix(err.Error(), "not")
-		if !errors.Is(err, tags.ErrSyntax) {
-			read.problem = err.Error()
-		}
-		return read
-	}
-	read.expression = parsed
-	assert.That(read.problem == "", "a parsed query has no problem")
+	read.expression, read.problem = parseTags(expression)
 	return read
 }
 

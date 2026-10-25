@@ -103,3 +103,19 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   todo.go or search.go calls `tagViews`; only Views' code does. They went to big_helpers.go
   anyway, as the plan says, since a Tags scenario ("todo" is listed on the Tags tab) is what
   they do.
+
+## Tags moves in (2026-10-25)
+- todo.go is gone: its offers, `todoOffers`, `flagTodo` and `withTodo` are the section, under
+  "Flag a scenario to do" and "Remove a to do flag". todo_test.go stays, still testing
+  `withTodo`.
+- Seam cut: the tag-expression parse inside Search's `readQuery` (search.go) is now
+  `parseTags` in the section, under the four search scenarios; `readQuery` calls it and keeps
+  the split into words and tags. Its "a parsed query has no problem" assertion moved with it.
+- Not cut: `findScenarios`' one-line `read.expression.Match` filter and `searchGroups`'
+  tagged branch stay Search's; the opening comment points at them.
+- "A new scenario starts flagged to do" (Write stories) shares no code with this section:
+  authoring.go writes `project.TagTodo` itself. Nothing went to big_helpers.go.
+- "An error state", "A tag view" and "A tag on the Feature" have no heading here: their code
+  is the Views section and `tagViews`. "A runner filters on the same tags" is cucumber-js.
+  "A scenario flagged to do" is project's `Todo` and the TUI's ⚑.
+- Section 126 lines, big_helpers.go +0. big.go 554, big_helpers.go 134. 4 of 17.
