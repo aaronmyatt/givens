@@ -11,7 +11,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 const (
@@ -379,7 +378,7 @@ func (s *state) loadsNormally(name string) error {
 	if item.Warning != "" || shown.Warning != "" {
 		return fmt.Errorf("%q has a warning: %q / %q", name, item.Warning, shown.Warning)
 	}
-	want, err := s.namesInFeature(slug.Of(name), slug.Of(name)+".feature")
+	want, err := s.namesInFeature(app.SlugOf(name), app.SlugOf(name)+".feature")
 	if err != nil {
 		return err
 	}

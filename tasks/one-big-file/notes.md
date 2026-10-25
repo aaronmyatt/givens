@@ -862,3 +862,17 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - starter_test.go is internal/app/starter_test.go. big.go's header lists internal/app/starter
   and leaves internal/slug and kit as the domain packages.
 - big.go 7,737 lines (+41), big_helpers.go 2,740 (+0), 35% of big.go.
+
+## internal/slug folds in (2026-10-25)
+- internal/slug is gone. `SlugOf` is in big_helpers.go before the project loader, under the
+  package doc: the loader keys scenarios and example blocks by it, and Gherkin files, Open a
+  project, the terminal's check, Write stories and the acceptance steps call it.
+- `NameLengthMax` clashed with app's; both were 1024, so slug's was deleted and SlugOf's
+  assertion uses app's. Nothing changes: the bound is the same number.
+- Renames: `Of` -> `SlugOf`; the test `TestOf` -> `TestSlugOf` (its message says SlugOf).
+- slug_test.go is internal/app/slug_test.go. One acceptance line (drop-into-a-scenario's
+  from_test.go) the longer name pushed past 100 columns was wrapped.
+- Last fold: big.go's header list now says it's all that's left outside the two big files:
+  internal/kit, internal/assert, the edges (tui, termedit, cmd/givens), internal/app/model,
+  internal/browser, the core glue, app.go and window.go, and internal/app/starter's files.
+- big.go 7,740 lines (+3), big_helpers.go 2,777 (+37), 36% of big.go.

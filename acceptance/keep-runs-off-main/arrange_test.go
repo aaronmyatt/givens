@@ -10,7 +10,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 // git runs git in dir and returns its output, the final newline trimmed. A run line ends in
@@ -240,7 +239,7 @@ func (s *state) runKey(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return folder + "/" + slug.Of(name), nil
+	return folder + "/" + app.SlugOf(name), nil
 }
 
 // remoteRuns lists the runs the remote's refs/givens/runs holds.

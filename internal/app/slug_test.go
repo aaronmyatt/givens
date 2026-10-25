@@ -1,10 +1,10 @@
-package slug
+package app
 
 import "testing"
 
 // Table-driven test: each row is one name and the slug it must give.
 // Ref: https://go.dev/wiki/TableDrivenTests
-func TestOf(t *testing.T) {
+func TestSlugOf(t *testing.T) {
 	cases := []struct{ name, want string }{
 		{"Card declined", "card-declined"},
 		{"Pay with saved card", "pay-with-saved-card"},
@@ -15,8 +15,8 @@ func TestOf(t *testing.T) {
 		{"  --  ", ""},
 	}
 	for _, c := range cases {
-		if got := Of(c.name); got != c.want {
-			t.Errorf("Of(%q) = %q, want %q", c.name, got, c.want)
+		if got := SlugOf(c.name); got != c.want {
+			t.Errorf("SlugOf(%q) = %q, want %q", c.name, got, c.want)
 		}
 	}
 }

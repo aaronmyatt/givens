@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 // Polling for "within two seconds": a fixed number of looks, a fixed pause apart.
@@ -197,7 +196,7 @@ func setupsFor(dir string) error {
 		return err
 	}
 	for _, scenario := range scenarios {
-		base := filepath.Join(dir, "scripts", slug.Of(scenario.Name))
+		base := filepath.Join(dir, "scripts", app.SlugOf(scenario.Name))
 		_, shell := os.Stat(base + ".sh")
 		_, markdown := os.Stat(base + ".md")
 		if shell != nil && markdown != nil {

@@ -9,7 +9,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/slug"
 )
 
 // KitSource is the line every setup script starts with.
@@ -259,7 +258,7 @@ func (w *World) ScriptPath(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join("capabilities", capability, "scripts", slug.Of(name)+".sh"), nil
+	return filepath.Join("capabilities", capability, "scripts", app.SlugOf(name)+".sh"), nil
 }
 
 // SetupStartsWith makes line the first line after the kit's source line in a setup script.
@@ -309,7 +308,7 @@ func (w *World) lineAmongSteps(line string, name string) error {
 
 func (w *World) onlyMarkdownSetup(name string, scriptSlug string) error {
 	assert.That(w != nil, "markdown setup runs on a world")
-	assert.That(slug.Of(name) == scriptSlug, "the script is named after the scenario")
+	assert.That(app.SlugOf(name) == scriptSlug, "the script is named after the scenario")
 	if err := w.CopySampleShop(); err != nil {
 		return err
 	}

@@ -11,7 +11,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 const (
@@ -59,7 +58,7 @@ func (s *state) checklistOnlyOf(name string) error {
 // each printing one line named after its scenario.
 func (s *state) bothHaveTeardowns() error {
 	for _, name := range []string{payWithSavedCard, threeDSChallenge} {
-		teardown := script(`ok "` + slug.Of(name) + ` torn down"`)
+		teardown := script(`ok "` + app.SlugOf(name) + ` torn down"`)
 		if err := s.writeTeardown(name, teardown); err != nil {
 			return err
 		}
@@ -123,7 +122,7 @@ func (s *state) restOfSetup() error {
 
 // startsWith makes line the named scenario's setup, followed by a line that leaves a marker.
 func (s *state) startsWith(name string, line string) error {
-	marker := "ran-" + slug.Of(name)
+	marker := "ran-" + app.SlugOf(name)
 	s.markers = append(s.markers, marker)
 	if err := s.writeSetup(name, scriptFrom(line, touch(marker))); err != nil {
 		return err
@@ -138,7 +137,8 @@ func (s *state) sameLoop() error {
 		threeDSChallenge: "from checkout/pay-with-saved-card",
 	}
 	for name, line := range loop {
-		if err := s.writeSetup(name, scriptFrom(line, `ok "`+slug.Of(name)+` ran"`)); err != nil {
+		if err := s.writeSetup(name,
+			scriptFrom(line, `ok "`+app.SlugOf(name)+` ran"`)); err != nil {
 			return err
 		}
 	}

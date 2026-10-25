@@ -11,7 +11,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 // missingImageAbout is the about.md "A story image that isn't on disk" writes: a paragraph on
@@ -82,7 +81,7 @@ func (s *state) setupShown() error {
 	if err != nil {
 		return err
 	}
-	script := filepath.Join("capabilities", "checkout", "scripts", slug.Of(onDisk.Name)+".sh")
+	script := filepath.Join("capabilities", "checkout", "scripts", app.SlugOf(onDisk.Name)+".sh")
 	want, err := s.ReadFile(script)
 	if err != nil {
 		return err
@@ -105,7 +104,7 @@ func (s *state) noSetup(name string) error {
 	}
 	scripts := filepath.Join(s.Capabilities(), "checkout", "scripts")
 	for _, extension := range []string{".sh", ".md", ".teardown.sh"} {
-		err := os.Remove(filepath.Join(scripts, slug.Of(name)+extension))
+		err := os.Remove(filepath.Join(scripts, app.SlugOf(name)+extension))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}

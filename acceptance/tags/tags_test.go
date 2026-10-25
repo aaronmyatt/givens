@@ -14,7 +14,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 const capability = "tags"
@@ -147,7 +146,7 @@ func (s *state) featureTagged(feature string, tag string) error {
 	if err := s.CopySampleShop(); err != nil {
 		return err
 	}
-	return s.addTag(slug.Of(feature), "Feature: "+feature, tag)
+	return s.addTag(app.SlugOf(feature), "Feature: "+feature, tag)
 }
 
 func (s *state) everyScenarioListed(feature string) error {
@@ -155,7 +154,7 @@ func (s *state) everyScenarioListed(feature string) error {
 	if err != nil {
 		return err
 	}
-	want, err := s.namesIn(slug.Of(feature))
+	want, err := s.namesIn(app.SlugOf(feature))
 	if err != nil {
 		return err
 	}
@@ -204,7 +203,7 @@ func (s *state) onlyThoseFound() error {
 // results alongside the ones tagged one by one.
 func (s *state) featureTagFound(tag string) error {
 	const feature = "Sign in"
-	if err := s.addTag(slug.Of(feature), "Feature: "+feature, tag); err != nil {
+	if err := s.addTag(app.SlugOf(feature), "Feature: "+feature, tag); err != nil {
 		return err
 	}
 	s.App, s.Window = nil, nil
@@ -214,7 +213,7 @@ func (s *state) featureTagFound(tag string) error {
 	if err := s.Search(tag); err != nil {
 		return err
 	}
-	fromFeature, err := s.namesIn(slug.Of(feature))
+	fromFeature, err := s.namesIn(app.SlugOf(feature))
 	if err != nil {
 		return err
 	}

@@ -12,8 +12,13 @@
 // scripts/entry.sh finds the section for a Feature, Rule or Scenario name. The workflow is
 // tasks/one-big-file/essay.md; how it got here is tasks/one-big-file/notes.md.
 //
-// Code outside this file that a story depends on, and why it's elsewhere:
-//   - internal/kit/givens.sh: bash, run in the developer's shell by every setup script.
+// Code outside this file and big_helpers.go that a story depends on, and why it's elsewhere.
+// Every other internal package has been folded in; this list is all that's left:
+//   - internal/kit: the kit, givens.sh, bash run in the developer's shell by every setup
+//     script, with kit.go, which embeds it and reads its version line. Its bats tests run on
+//     the file where it sits.
+//   - internal/assert: the assertions every package calls; the one place tigerlint lets code
+//     panic, so it stays a package of its own.
 //   - internal/tui, internal/termedit and cmd/givens: the edges. They import this package, so
 //     moving them in would make it depend on Bubble Tea; their stories have pointer sections.
 //   - internal/app/model: the data models, types and constants with no code: Drop in's
@@ -31,7 +36,6 @@
 //   - internal/app/starter: the starter capability and GIVENS.md that Open a project's
 //     StarterFiles and StarterGuide embed; files, not code, since Go embeds only files under
 //     the package's own folder.
-//   - internal/slug and kit: domain packages, each with one job and its own tests.
 
 package app
 
@@ -67,7 +71,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/browser"
 	"givens/internal/kit"
-	"givens/internal/slug"
 )
 
 // Feature: Copy a setup script
@@ -1846,7 +1849,7 @@ func (w *Window) moveToOwnCapability() error {
 	if source == "" {
 		return fmt.Errorf("no capability has an extra .feature file: %w", ErrNotFound)
 	}
-	name := slug.Of(strings.TrimSuffix(filepath.Base(source), ".feature"))
+	name := SlugOf(strings.TrimSuffix(filepath.Base(source), ".feature"))
 	if name == "" {
 		return fmt.Errorf("%s makes no folder name", filepath.Base(source))
 	}
@@ -4102,7 +4105,7 @@ func (w *Window) OpenBranch(name string) (*Window, error) {
 	assert.That(w != nil, "open branch runs on a window")
 	assert.That(w.kind == WindowProject, "only a project window has branches")
 	w.branchProblem = ""
-	key := slug.Of(name)
+	key := SlugOf(name)
 	if key == "" || len(name) > BranchNameLengthMax {
 		w.branchProblem = MessageNoBranch + name
 		return nil, nil
@@ -4160,9 +4163,9 @@ const branchesDirName = "branches"
 // "a/b" and "a-b", which slug the same, in different folders.
 func (a *App) branchCopy(origin string, name string) string {
 	assert.That(filepath.IsAbs(origin), "the origin is an absolute path")
-	assert.That(slug.Of(name) != "", "a branch's name has letters or digits")
+	assert.That(SlugOf(name) != "", "a branch's name has letters or digits")
 	return filepath.Join(a.config.AppDataDir, branchesDirName, shortHash(origin),
-		slug.Of(name)+"-"+shortHash(name))
+		SlugOf(name)+"-"+shortHash(name))
 }
 
 // removeBranchCopy deletes a closed branch window's copy, and its origin's folder once that's
@@ -6304,7 +6307,7 @@ func checkScenarios(path string, feature *messages.Feature) []ConventionProblem 
 	seen := make(map[string]string, len(scenarios))
 	for _, scenario := range scenarios {
 		line := scenario.Location.Line
-		key := slug.Of(scenario.Name)
+		key := SlugOf(scenario.Name)
 		if key == "" {
 			message := "scenario name has no letters or digits"
 			problems = append(problems, ConventionProblem{path, line, message})
@@ -6614,7 +6617,7 @@ func (w *Window) NewStory(draft model.StoryDraft) error {
 	if err := w.writable(); err != nil {
 		return err
 	}
-	name := slug.Of(draft.Name)
+	name := SlugOf(draft.Name)
 	if name == "" || w.project == nil {
 		return errors.New("a story needs a name with letters or digits, in an open project")
 	}
@@ -6660,7 +6663,7 @@ func (w *Window) NewScenario(draft model.ScenarioDraft) error {
 	if w.selectedCapability == "" || !ok {
 		return errors.New("select a capability to add a scenario to")
 	}
-	key := slug.Of(draft.Name)
+	key := SlugOf(draft.Name)
 	if key == "" || strings.Contains(draft.Name, "\n") {
 		return errors.New("a scenario needs a one-line name with letters or digits")
 	}
@@ -7025,7 +7028,7 @@ func (w *Window) Rename(name string, newName string) error {
 	if err := w.writable(); err != nil {
 		return err
 	}
-	if slug.Of(newName) == "" {
+	if SlugOf(newName) == "" {
 		return errors.New("a name needs letters or digits")
 	}
 	if capability, ok := w.findCapability(name); ok {
@@ -7053,7 +7056,7 @@ func (w *Window) Rename(name string, newName string) error {
 // updates from lines, unless another scenario still makes the old slug.
 func (w *Window) renameScenario(scenario LoadedScenario, newName string) error {
 	assert.That(scenario.Line > 0, "a loaded scenario has a line")
-	assert.That(slug.Of(newName) != "", "the new name makes a slug")
+	assert.That(SlugOf(newName) != "", "the new name makes a slug")
 	capability, ok := w.findCapability(scenario.Capability)
 	if !ok {
 		return fmt.Errorf("%s: %w", scenario.Capability, ErrNotFound)
@@ -7061,7 +7064,7 @@ func (w *Window) renameScenario(scenario LoadedScenario, newName string) error {
 	if err := renameLine(capability.FeaturePath, scenario.Line, newName); err != nil {
 		return err
 	}
-	newSlug := slug.Of(newName)
+	newSlug := SlugOf(newName)
 	if slugClash(capability, scenario) == "" && newSlug != scenario.Slug {
 		if err := moveSetup(capability.Dir, scenario.Slug, newSlug); err != nil {
 			return err
@@ -7155,8 +7158,8 @@ func (w *Window) updateFromLines(old string, replacement string) error {
 // scenarios start at Never run.
 func (w *Window) renameCapability(capability LoadedCapability, newName string) error {
 	assert.That(capability.Slug != "", "a capability has a slug")
-	assert.That(slug.Of(newName) != "", "the new name makes a slug")
-	newSlug := slug.Of(newName)
+	assert.That(SlugOf(newName) != "", "the new name makes a slug")
+	newSlug := SlugOf(newName)
 	if newSlug != capability.Slug {
 		if _, err := os.Stat(filepath.Join(w.path, newSlug)); err == nil {
 			return fmt.Errorf("there's already a %s folder", newSlug)

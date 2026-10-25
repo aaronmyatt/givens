@@ -12,7 +12,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/app/model"
-	"givens/internal/slug"
 )
 
 const (
@@ -61,16 +60,16 @@ func (s *state) markdownSetup(name string, content string) error {
 	}
 	s.scenario = name
 	scripts := filepath.Join("capabilities", "checkout", "scripts")
-	shell := filepath.Join(s.Project, scripts, slug.Of(name)+".sh")
+	shell := filepath.Join(s.Project, scripts, app.SlugOf(name)+".sh")
 	if err := os.Remove(shell); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return s.WriteFile(filepath.Join(scripts, slug.Of(name)+".md"), content)
+	return s.WriteFile(filepath.Join(scripts, app.SlugOf(name)+".md"), content)
 }
 
 func (s *state) markdownOnly(name string, scriptSlug string) error {
-	if slug.Of(name) != scriptSlug {
-		return fmt.Errorf("%q's setup is %s.md, not %s.md", name, slug.Of(name), scriptSlug)
+	if app.SlugOf(name) != scriptSlug {
+		return fmt.Errorf("%q's setup is %s.md, not %s.md", name, app.SlugOf(name), scriptSlug)
 	}
 	return s.markdownSetup(name, world.PayInAppSetup)
 }
@@ -160,8 +159,8 @@ func (s *state) doneOnLastCard() error {
 
 // scriptAndMarkdown gives name a script that prints one line, and the spec's markdown cards.
 func (s *state) scriptAndMarkdown(name string, shell string, markdown string) error {
-	if shell != slug.Of(name) || markdown != slug.Of(name) {
-		return fmt.Errorf("%q's setup files are named %s, not %s/%s", name, slug.Of(name),
+	if shell != app.SlugOf(name) || markdown != app.SlugOf(name) {
+		return fmt.Errorf("%q's setup files are named %s, not %s/%s", name, app.SlugOf(name),
 			shell, markdown)
 	}
 	if err := s.markdownSetup(name, world.PayInAppSetup); err != nil {
@@ -382,8 +381,8 @@ func hasCopy(card model.SetupCard) bool {
 // markdownHolding makes name's setup only scripts/<slug>.md, holding exactly content, as
 // "Write setup steps" leaves it before a step is written.
 func (s *state) markdownHolding(name string, scriptSlug string, content string) error {
-	if slug.Of(name) != scriptSlug {
-		return fmt.Errorf("%q's setup is %s.md, not %s.md", name, slug.Of(name), scriptSlug)
+	if app.SlugOf(name) != scriptSlug {
+		return fmt.Errorf("%q's setup is %s.md, not %s.md", name, app.SlugOf(name), scriptSlug)
 	}
 	return s.markdownSetup(name, content+"\n")
 }

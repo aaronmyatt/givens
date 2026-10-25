@@ -15,7 +15,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 const capability = "use-givens-from-the-terminal"
@@ -208,7 +207,7 @@ func (s *state) sameAsErrorStates() error {
 	}
 	view := make([]string, 0, len(printed))
 	for _, scenario := range s.Window.ListedScenarios() {
-		view = append(view, slug.Of(scenario.Capability)+"/"+scenario.Slug)
+		view = append(view, app.SlugOf(scenario.Capability)+"/"+scenario.Slug)
 	}
 	slices.Sort(view)
 	if len(view) == 0 || !slices.Equal(printed, view) {
@@ -239,7 +238,7 @@ func (s *state) shopScenarios() ([]listed, error) {
 					kind = "error state"
 				}
 			}
-			path := folder + "/" + slug.Of(scenario.Name)
+			path := folder + "/" + app.SlugOf(scenario.Name)
 			items = append(items, listed{Path: path, Kind: kind, Status: "Never run"})
 		}
 	}

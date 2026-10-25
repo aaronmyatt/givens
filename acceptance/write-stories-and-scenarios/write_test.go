@@ -17,7 +17,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/app/model"
-	"givens/internal/slug"
 )
 
 const capability = "write-stories-and-scenarios"
@@ -182,7 +181,7 @@ func (s *state) newStory(name string, asA string, iWant string, soThat string) e
 
 // storyCreated checks the new .feature file line by line, and that it follows GIVENS.md.
 func (s *state) storyCreated(folder string, file string, featureLine string) error {
-	if folder != slug.Of(s.story.Name) || file != folder+".feature" {
+	if folder != app.SlugOf(s.story.Name) || file != folder+".feature" {
 		return fmt.Errorf("%s/%s isn't named after %q", folder, file, s.story.Name)
 	}
 	path := filepath.Join("capabilities", folder, file)
@@ -259,7 +258,7 @@ func (s *state) newScenario(capabilityName string, draft model.ScenarioDraft) er
 		return err
 	}
 	s.subject = draft.Name
-	s.featureBefore, err = s.ReadFile(featurePath(slug.Of(capabilityName)))
+	s.featureBefore, err = s.ReadFile(featurePath(app.SlugOf(capabilityName)))
 	if err != nil {
 		return err
 	}
@@ -304,7 +303,7 @@ func (s *state) blockAdded(name string, tag string) error {
 }
 
 func (s *state) scriptCreated(file string) error {
-	if file != slug.Of(s.subject)+".sh" {
+	if file != app.SlugOf(s.subject)+".sh" {
 		return fmt.Errorf("%s isn't named after %q", file, s.subject)
 	}
 	text, err := s.ReadFile(filepath.Join("capabilities", "checkout", "scripts", file))
@@ -370,7 +369,7 @@ func (s *state) noSetupYet(name string) error {
 	}
 	scripts := filepath.Join(s.Capabilities(), "checkout", "scripts")
 	for _, extension := range []string{".sh", ".md", ".teardown.sh"} {
-		err := os.Remove(filepath.Join(scripts, slug.Of(name)+extension))
+		err := os.Remove(filepath.Join(scripts, app.SlugOf(name)+extension))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -383,7 +382,7 @@ func (s *state) noSetupYet(name string) error {
 }
 
 func (s *state) markdownSetupCreated(file string) error {
-	if file != slug.Of(s.subject)+".md" {
+	if file != app.SlugOf(s.subject)+".md" {
 		return fmt.Errorf("%s isn't named after %q", file, s.subject)
 	}
 	text, err := s.ReadFile(filepath.Join("capabilities", "checkout", "scripts", file))

@@ -12,7 +12,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 // fromPayWithSavedCard is the line that makes 3-D Secure challenge's setup build on Pay with
@@ -110,7 +109,7 @@ func (s *state) ensureHelper(capabilitySlug string) error {
 
 // capabilityNamed returns the slug of the capability called name, or "" for a scenario.
 func (s *state) capabilityNamed(name string) (string, error) {
-	capabilitySlug := slug.Of(name)
+	capabilitySlug := app.SlugOf(name)
 	_, err := os.Stat(filepath.Join(s.Project, featurePath(capabilitySlug)))
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
@@ -212,7 +211,7 @@ func (s *state) renameIt(newName string, confirms string) error {
 }
 
 func (s *state) scenarioLineUpdated(file string) error {
-	if file != slug.Of(s.renamedTo)+".sh" {
+	if file != app.SlugOf(s.renamedTo)+".sh" {
 		return fmt.Errorf("%s isn't named after %q", file, s.renamedTo)
 	}
 	text, err := s.ReadFile(featurePath(s.actedOn))
@@ -234,9 +233,9 @@ func (s *state) scenarioLineUpdated(file string) error {
 	if renamed != s.scriptBefore {
 		return fmt.Errorf("%s holds %q, not the old script %q", file, renamed, s.scriptBefore)
 	}
-	_, err = os.Stat(filepath.Join(s.Project, scripts, slug.Of(s.renamedFrom)+".sh"))
+	_, err = os.Stat(filepath.Join(s.Project, scripts, app.SlugOf(s.renamedFrom)+".sh"))
 	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("%s.sh is still there: %v", slug.Of(s.renamedFrom), err)
+		return fmt.Errorf("%s.sh is still there: %v", app.SlugOf(s.renamedFrom), err)
 	}
 	return nil
 }
@@ -265,11 +264,11 @@ func (s *state) fromLineUpdated() error {
 	if err != nil {
 		return err
 	}
-	want := "from checkout/" + slug.Of(s.renamedTo)
+	want := "from checkout/" + app.SlugOf(s.renamedTo)
 	if !slices.Contains(lines, want) {
 		return fmt.Errorf("3-D Secure challenge's setup has the from lines %q, not %q", lines, want)
 	}
-	if old := "from checkout/" + slug.Of(s.renamedFrom); slices.Contains(lines, old) {
+	if old := "from checkout/" + app.SlugOf(s.renamedFrom); slices.Contains(lines, old) {
 		return fmt.Errorf("3-D Secure challenge's setup still has %q", old)
 	}
 	return nil
@@ -309,7 +308,7 @@ func (s *state) listedInPlaceOf(newName string, oldName string) error {
 
 // folderRenamed expects every file the capability had, under its new folder and name.
 func (s *state) folderRenamed(folder string, file string) error {
-	if folder != slug.Of(s.renamedTo) || file != folder+".feature" {
+	if folder != app.SlugOf(s.renamedTo) || file != folder+".feature" {
 		return fmt.Errorf("%s/%s isn't named after %q", folder, file, s.renamedTo)
 	}
 	_, err := os.Stat(filepath.Join(s.Capabilities(), s.actedOn))
@@ -343,7 +342,7 @@ func (s *state) folderRenamed(folder string, file string) error {
 }
 
 func (s *state) scenariosShow(status string) error {
-	_, names, err := s.scenarioSteps(slug.Of(s.renamedTo))
+	_, names, err := s.scenarioSteps(app.SlugOf(s.renamedTo))
 	if err != nil {
 		return err
 	}
@@ -373,7 +372,7 @@ func (s *state) lineBecomes(line string) error {
 	if len(lines) < 2 || lines[1] != line {
 		return fmt.Errorf("Accept invite's setup doesn't start with %q: %q", line, text)
 	}
-	if old := "from " + slug.Of(s.renamedFrom) + "/"; strings.Contains(text, old) {
+	if old := "from " + app.SlugOf(s.renamedFrom) + "/"; strings.Contains(text, old) {
 		return fmt.Errorf("Accept invite's setup still has %q: %q", old, text)
 	}
 	return nil

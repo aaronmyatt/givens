@@ -26,6 +26,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	gherkin "github.com/cucumber/gherkin/go/v42"
@@ -33,7 +34,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/slug"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -1399,6 +1399,43 @@ func joinOr(words []string) string {
 	return strings.Join(words[:len(words)-1], ", ") + " or " + words[len(words)-1]
 }
 
+// From internal/slug, which turns names into the slugs that name files and run keys.
+//
+// The rule (capabilities/GIVENS.md, "Names and slugs"): lower case; letters and digits in any
+// language are kept; every run of other characters becomes one hyphen; hyphens are trimmed from
+// the ends. "Card declined" gives "card-declined"; "Carte refusée" gives "carte-refusée".
+// The loader below keys scenarios and example blocks by it; Gherkin files, Open a project, the
+// terminal's check, Write stories and the acceptance steps call it too. A name's bound is
+// app's NameLengthMax.
+
+// SlugOf returns the slug of name. A name with no letters or digits gives "".
+func SlugOf(name string) string {
+	assert.That(utf8.ValidString(name), "a name is valid UTF-8")
+	assert.That(len(name) <= NameLengthMax, "a name fits in NameLengthMax bytes")
+
+	var out strings.Builder
+	out.Grow(len(name))
+	hyphen := false
+	// A range loop is bounded by len(name). unicode.IsLetter/IsDigit cover every script.
+	// Ref: https://pkg.go.dev/unicode#IsLetter
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if hyphen && out.Len() > 0 {
+				out.WriteByte('-')
+			}
+			out.WriteRune(unicode.ToLower(r))
+			hyphen = false
+		} else {
+			hyphen = true
+		}
+	}
+
+	result := out.String()
+	assert.That(!strings.HasPrefix(result, "-"), "a slug never starts with a hyphen")
+	assert.That(!strings.HasSuffix(result, "-"), "a slug never ends with a hyphen")
+	return result
+}
+
 // From internal/project, which loads a capabilities folder into the capabilities, scenarios,
 // tags and setup files Givens shows and runs. It reads; it never writes. Every story reads the
 // project it loads: reload and findCapabilities load it, as do `givens list` and `givens run`
@@ -1634,7 +1671,7 @@ func (p *LoadedProject) Find(key string) (LoadedScenario, error) {
 			}
 		}
 	}
-	assert.That(len(key) <= slug.NameLengthMax*2, "a key is two slugs")
+	assert.That(len(key) <= NameLengthMax*2, "a key is two slugs")
 	return LoadedScenario{}, fmt.Errorf("%s: %w", key, ErrNoScenario)
 }
 
@@ -1727,7 +1764,7 @@ func loadScenario(
 ) LoadedScenario {
 	assert.That(scenario != nil, "the scenario is parsed")
 	assert.That(scenario.Location != nil, "a parsed scenario has a location")
-	key := slug.Of(scenario.Name)
+	key := SlugOf(scenario.Name)
 	tags := tagNames(append(append([]*messages.Tag{}, scenario.Tags...), inherited...))
 	built := LoadedScenario{
 		Name: scenario.Name, Slug: key, Capability: capability.Slug, Rule: rule,
@@ -1811,7 +1848,7 @@ func examplesOf(parsed []*messages.Examples) []ExamplesBlock {
 	assert.That(len(parsed) <= ScenariosPerFeatureMax, "examples stay bounded")
 	blocks := make([]ExamplesBlock, 0, len(parsed))
 	for _, block := range parsed {
-		built := ExamplesBlock{Name: block.Name, Slug: slug.Of(block.Name)}
+		built := ExamplesBlock{Name: block.Name, Slug: SlugOf(block.Name)}
 		if block.TableHeader != nil {
 			built.Header = tableRowsOf([]*messages.TableRow{block.TableHeader})[0]
 		}
@@ -1983,7 +2020,7 @@ func (w *Window) findScenario(name string) (LoadedScenario, bool) {
 func (w *Window) findIn(capabilityName string, name string) (LoadedScenario, bool) {
 	assert.That(w.project != nil, "find in runs on a loaded project")
 	assert.That(name != "", "a scenario has a name")
-	want := slug.Of(name)
+	want := SlugOf(name)
 	for _, bySlug := range []bool{false, true} {
 		for _, capability := range w.project.Capabilities {
 			if capabilityName != "" && capability.Name != capabilityName &&

@@ -14,7 +14,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 const capability = "read-a-capability"
@@ -184,7 +183,7 @@ func (s *state) selectScenario(name string) error {
 func (s *state) ensureSetup(name string) error {
 	scripts := filepath.Join("capabilities", "checkout", "scripts")
 	for _, extension := range []string{".sh", ".md"} {
-		_, err := os.Stat(filepath.Join(s.Project, scripts, slug.Of(name)+extension))
+		_, err := os.Stat(filepath.Join(s.Project, scripts, app.SlugOf(name)+extension))
 		if err == nil {
 			return nil
 		}
@@ -193,7 +192,7 @@ func (s *state) ensureSetup(name string) error {
 		}
 	}
 	setup := world.KitSource + "\nseed_shopper\nseed_cart 1\nmock_payments --decline\n"
-	return s.WriteFile(filepath.Join(scripts, slug.Of(name)+".sh"), setup)
+	return s.WriteFile(filepath.Join(scripts, app.SlugOf(name)+".sh"), setup)
 }
 
 func (s *state) shownScenario() (*app.Window, app.Scenario, diskScenario, error) {

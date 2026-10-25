@@ -11,7 +11,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/app/model"
-	"givens/internal/slug"
 )
 
 // Limits. Polling stays short so a scenario fails in seconds, not minutes.
@@ -220,7 +219,7 @@ func (s *state) runKeyOf(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return capability + "/" + slug.Of(name), nil
+	return capability + "/" + app.SlugOf(name), nil
 }
 
 // markAll marks every checklist item: Givens and Whens "done", Thens "pass".

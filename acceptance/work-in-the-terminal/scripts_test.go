@@ -10,7 +10,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/slug"
 )
 
 // scriptSteps are setup scripts and helpers from the TUI: s on a scenario, and the Helpers
@@ -71,7 +70,7 @@ func (s *state) noSetupYet(name string) error {
 	}
 	scripts := filepath.Join(s.Capabilities(), "checkout", "scripts")
 	for _, extension := range []string{".sh", ".md", ".teardown.sh"} {
-		err := os.Remove(filepath.Join(scripts, slug.Of(name)+extension))
+		err := os.Remove(filepath.Join(scripts, app.SlugOf(name)+extension))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
