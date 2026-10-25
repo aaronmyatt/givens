@@ -137,3 +137,23 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   caller, besides the dead `InstallCommand`. It moves with Drop in (slice 12).
 - No app code serves only one of these three stories: the edges call other stories' functions.
 - Sections 9, 8 and 9 lines. big.go 583, big_helpers.go 134. 7 of 17.
+
+## Update the kit moves in (2026-10-25)
+- kitupdate.go is gone. All of it is the section, between Trust and Use Givens from the
+  terminal: the kit limits, `KitVersionPrefix`, `KitRelease`, `ShipKits` and `shippedKits`
+  at the top (every scenario uses them), then `kitState` and `kitMessages` under "An update is
+  available" and "The project's kit is newer than Givens", `updateKit` under "Update the kit"
+  and "The kit was edited by hand", and `restoreKit` under "A missing kit is put back".
+  big.go imports internal/kit now.
+- Seam cut: the "Update kit" offer was four lines inline in core glue's `allOffers`
+  (offers.go). It's now `kitOffers` in the section, which `allOffers` calls, like
+  `todoOffers`. `Choose`'s `case OfferUpdateKit` stays in the dispatcher.
+- Not cut: `restoreKit`'s calls in project.go's `reload` and `refresh`, and `kitMessages`'
+  call in snapshot.go, are one line each in core glue; the opening comment points at them.
+  App's `kits` and Window's `kitProblem` fields stay in app.go and window.go's types.
+- `ShipKits`'s callers: the update-the-kit steps and the archived serve. app.go only names
+  it in the `kits` field's comment. Nothing else in the live tree calls it.
+- `KitVersionPrefix` is also read by Open a project's steps (folders_test.go checks a new
+  folder's kit starts with it). That's step code, not app code, so it stayed in the section,
+  not big_helpers.go.
+- Section 169 lines, big_helpers.go +0. big.go 753, big_helpers.go 134. 8 of 17.

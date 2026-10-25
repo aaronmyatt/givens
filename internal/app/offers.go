@@ -46,10 +46,7 @@ func (w *Window) allOffers() []string {
 		offers = append(offers, w.editor.editorOffers()...)
 	}
 	if w.project != nil {
-		if messages := w.kitMessages(); len(messages) > 0 &&
-			strings.HasPrefix(messages[0], "Kit update available") {
-			offers = append(offers, OfferUpdateKit)
-		}
+		offers = append(offers, w.kitOffers()...)
 		offers = append(append(offers, OfferNewStory), w.runsOffers()...)
 		if w.selectedCapability != "" {
 			offers = append(offers, OfferNewScenario)
