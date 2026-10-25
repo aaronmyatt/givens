@@ -830,8 +830,8 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // read it too; so is RequiredCommands, which Drop in's precheck (dropin_run.go) also calls,
 // and so are the bash -n limits and bashError, which the editor's shellProblems
 // (editor_more.go) shares. The four "Changing …" scenarios and "Updating the kit keeps
-// scenarios verified" are internal/fingerprint, which status.go and Drop in's record
-// (dropin_record.go) call. Code elsewhere: Drop in's page shows elsewhere's message
+// scenarios verified" are internal/fingerprint, which statusFor (big_helpers.go) and Drop in's
+// record (dropin_record.go) call. Code elsewhere: Drop in's page shows elsewhere's message
 // (messages, dropin_page.go); core glue offers OfferEdit and runs editHelper (allOffers and
 // Choose, offers.go), selects a helper (selectNow, selection.go), and shows a helper and a
 // scenario's requirements (helperLabels and requirementLabels, snapshot.go). Helper and its
