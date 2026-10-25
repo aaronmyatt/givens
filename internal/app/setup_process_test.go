@@ -1,4 +1,4 @@
-package setup
+package app
 
 import (
 	"os"
@@ -9,18 +9,18 @@ import (
 )
 
 // script writes body to a .sh file in a temp folder and returns its request.
-func script(t *testing.T, body string) Request {
+func script(t *testing.T, body string) SetupRequest {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "setup.sh")
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return Request{Script: path, Dir: dir, Env: []string{"GIVENS_QUIET=1"}}
+	return SetupRequest{Script: path, Dir: dir, Env: []string{"GIVENS_QUIET=1"}}
 }
 
 func TestOutputAndExitCode(t *testing.T) {
-	process, err := Start(script(t, "echo one\necho \"two $GIVENS_QUIET\" >&2\nexit 3\n"))
+	process, err := StartSetup(script(t, "echo one\necho \"two $GIVENS_QUIET\" >&2\nexit 3\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +33,8 @@ func TestOutputAndExitCode(t *testing.T) {
 	}
 }
 
-func TestAnswer(t *testing.T) {
-	process, err := Start(script(t, "read -r name\necho \"hello $name\"\n"))
+func TestSetupAnswer(t *testing.T) {
+	process, err := StartSetup(script(t, "read -r name\necho \"hello $name\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestAnswer(t *testing.T) {
 // TestStopEndsTheGroup stops a script whose child would outlive it, and keeps its output.
 func TestStopEndsTheGroup(t *testing.T) {
 	request := script(t, "echo started\nsleep 30 &\nwait\n")
-	process, err := Start(request)
+	process, err := StartSetup(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestStopEndsTheGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, ended := process.Wait(time.Second)
-	if !ended || result.Err != ErrStopped || time.Since(began) > 5*time.Second {
+	if !ended || result.Err != ErrSetupStopped || time.Since(began) > 5*time.Second {
 		t.Fatalf("result = %+v, ended %v, took %v", result, ended, time.Since(began))
 	}
 	if got := process.Output(); !slices.Equal(got, []string{"started"}) {
@@ -74,7 +74,7 @@ func TestStopEndsTheGroup(t *testing.T) {
 
 // TestBackgroundChildDoesNotHang ends a setup whose leftover child holds the output open.
 func TestBackgroundChildDoesNotHang(t *testing.T) {
-	process, err := Start(script(t, "sleep 30 &\necho done\n"))
+	process, err := StartSetup(script(t, "sleep 30 &\necho done\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

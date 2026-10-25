@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, setup, tags, slug, kit and starter:
+//   - internal/spec, project, runs, tags, slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -63,7 +63,6 @@ import (
 	"givens/internal/kit"
 	"givens/internal/project"
 	"givens/internal/runs"
-	"givens/internal/setup"
 	"givens/internal/slug"
 	"givens/internal/spec"
 	"givens/internal/starter"
@@ -147,7 +146,8 @@ func (w *Window) copyFromSearch() error {
 // rowName, since Views' unverifiedRows lists an outline's rows with them; removeArguments,
 // which Open a project's CloseWindow calls, and scratchDir, the folder it removes, which Mix
 // shell's run blocks share; ParseMarkdownSetup, which reads a setup done by hand for the cards,
-// as runBlocksIn and `givens run` do; RequiredCommands, which precheck checks; and
+// as runBlocksIn and `givens run` do; StartSetup and SetupProcess, which run each script, as
+// they run Mix shell's run blocks; RequiredCommands, which precheck checks; and
 // scenarioWarning, which shows examplesWarning and a @timeout tag that can't be read
 // (MessageTimeoutTag). StatusOf (big_helpers.go) sums up an outline with outlineStatus. Read a
 // capability's run history lists a run's files with runFiles.
@@ -201,7 +201,7 @@ type Session struct {
 	row      []runs.Pair // the outline row's values, or nil
 	examples string      // the row's Examples block's slug, or ""
 
-	process  *setup.Process
+	process  *SetupProcess
 	block    *blockRun // a markdown card's run block running now, or nil
 	scripts  []string  // scripts still to run after the current one: teardown, then setup
 	teardown bool      // the script running now is the teardown
@@ -353,7 +353,7 @@ func (s *Session) start() {
 	if s.teardown {
 		s.earlier = append(s.earlier, "→ teardown")
 	}
-	process, err := setup.Start(setup.Request{
+	process, err := StartSetup(SetupRequest{
 		Script: script, Dir: filepath.Dir(s.window.path), Env: s.env,
 	})
 	if err != nil {
@@ -386,7 +386,7 @@ func (s *Session) poll() {
 	s.readOutput()
 	s.resume()
 	switch {
-	case result.Err == setup.ErrStopped:
+	case result.Err == ErrSetupStopped:
 		s.status = SessionStopped
 	case result.Err != nil:
 		s.fail("Setup failed: " + result.Err.Error())
@@ -2913,7 +2913,8 @@ func (s RunStore) removeFile(name string) error {
 // it runs; it and markMarkdownCard move on with runNextCard, and ChooseOnCard's "Open" calls
 // openLink. cardLines shows runState; poll and Wait poll a running block; "Stop" (choose) and
 // leaveSession call stopBlock. In big_helpers.go: runBlocksIn, since Share setup's setupTexts
-// reads run blocks as script lines too; scratchDir, which Drop in's argument files share; and
+// reads run blocks as script lines too; StartSetup and SetupProcess, which run a block as they
+// run Drop in's scripts; scratchDir, which Drop in's argument files share; and
 // RequiredCommands, which adds Chrome through chromeRequired. runNextCard and openLink came in
 // with this story and hold Drop in's part too: a card that waits, the checklist once every card
 // is marked, and the default browser when the Givens browser isn't open. Session's block and
@@ -2927,7 +2928,7 @@ const cardOutputLinesMax = 1000
 type blockRun struct {
 	card    int   // the card's index in Session.cards
 	waiting []int // the card's run blocks still to run, as indices into its Blocks
-	process *setup.Process
+	process *SetupProcess
 	parsed  int // output lines already moved into the card
 }
 
@@ -3012,7 +3013,7 @@ func (w *Window) openLink(link string) error {
 func runLanguage(block FencedBlock) string {
 	assert.That(len(block.Code) <= MarkdownSetupBytesMax, "a block stays bounded")
 	assert.That(block.Line >= 0, "a block has a line")
-	return setup.BlockLanguage(block.Language, block.Run, block.Closed)
+	return BlockLanguage(block.Language, block.Run, block.Closed)
 }
 
 // runNextCard moves on through the markdown cards: the first one not yet marked runs its
@@ -3049,9 +3050,9 @@ func (s *Session) startBlock(card int, waiting []int) error {
 	}
 	// GIVENS_SCRIPT_AS makes the kit load the capability's own helpers, as for its .sh.
 	stands := strings.TrimSuffix(s.scenario.SetupCards, ".md") + ".sh"
-	process, err := setup.Start(setup.Request{
+	process, err := StartSetup(SetupRequest{
 		Script: script, Dir: filepath.Dir(s.window.path),
-		Env: append(append(s.env[:0:0], s.env...), setup.ScriptAsEnv+"="+stands),
+		Env: append(append(s.env[:0:0], s.env...), ScriptAsEnv+"="+stands),
 	})
 	if err != nil {
 		s.fail("Setup couldn't start: " + err.Error())
@@ -3070,8 +3071,8 @@ func (s *Session) blockScript(card int, block int) (string, error) {
 		return "", err
 	}
 	code := s.cards[card].Blocks[block]
-	language := setup.BlockLanguage(code.Language, code.Run, code.Copyable)
-	return setup.WriteBlock(dir, "card-"+strconv.Itoa(card)+"-block-"+strconv.Itoa(block),
+	language := BlockLanguage(code.Language, code.Run, code.Copyable)
+	return WriteRunBlock(dir, "card-"+strconv.Itoa(card)+"-block-"+strconv.Itoa(block),
 		filepath.Join(s.window.path, "_shared", "givens.sh"), language, code.Code)
 }
 
@@ -3116,7 +3117,7 @@ func (s *Session) pollBlock() {
 	s.block = nil
 	step, steps := run.card-s.markdownFrom+1, len(s.cards)-s.markdownFrom
 	switch {
-	case errors.Is(result.Err, setup.ErrStopped):
+	case errors.Is(result.Err, ErrSetupStopped):
 		s.status = SessionStopped
 	case result.Err != nil:
 		s.fail("Setup failed: " + result.Err.Error())
@@ -3160,6 +3161,58 @@ func UsesBrowser(text string) bool {
 	assert.That(len(text) <= ScriptSizeBytesMax*HelpersMax, "text stays bounded")
 	assert.That(browserLine != nil, "the pattern is compiled")
 	return browserLine.MatchString(text)
+}
+
+// From internal/setup: a setup card's "bash run" or "js run" block runs as a script of
+// Givens's own: the kit, then the block's code, or in_browser of it for JavaScript. Drop in
+// and givens run (runBlocks, cmd/givens/run.go) both write it here, so a block acts the same
+// in the app and in a terminal.
+
+// ScriptAsEnv names the setup a run block stands for, so the kit loads that capability's
+// own helpers, as for its .sh. See GIVENS_SCRIPT in internal/kit/givens.sh.
+const ScriptAsEnv = "GIVENS_SCRIPT_AS"
+
+// BlockLanguage says how a fenced block runs: "bash", "js", or "" when it doesn't.
+func BlockLanguage(language string, run bool, closed bool) string {
+	assert.That(len(language) < 64, "a language is one word")
+	assert.That(!strings.ContainsAny(language, " \n"), "a language is one word")
+	if !run || !closed {
+		return ""
+	}
+	switch language {
+	case "bash", "sh":
+		return "bash"
+	case "js", "javascript":
+		return "js"
+	}
+	return ""
+}
+
+// WriteRunBlock writes the script a run block runs as into dir, named after name, and returns
+// its path. kit is the capabilities folder's givens.sh; language is BlockLanguage's.
+func WriteRunBlock(dir string, name string, kit string, language string, code string) (string,
+	error) {
+	assert.That(filepath.IsAbs(dir) && filepath.IsAbs(kit), "the folders are absolute")
+	assert.That(language == "bash" || language == "js", "only a run block is written")
+	base := filepath.Join(dir, name)
+	body := "source " + QuoteBashWord(kit) + "\n" + code + "\n"
+	if language == "js" {
+		if err := os.WriteFile(base+".js", []byte(code), 0o644); err != nil {
+			return "", err
+		}
+		body = "source " + QuoteBashWord(kit) + "\nin_browser \"$(cat " +
+			QuoteBashWord(base+".js") + ")\"\n"
+	}
+	return base + ".sh", os.WriteFile(base+".sh", []byte(body), 0o644)
+}
+
+// QuoteBashWord quotes text as one bash word.
+// Ref: https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html
+func QuoteBashWord(text string) string {
+	assert.That(!strings.ContainsRune(text, 0), "a word has no NUL")
+	quoted := "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+	assert.That(len(quoted) >= len(text)+2, "the quotes are added")
+	return quoted
 }
 
 // Feature: Open a project

@@ -712,3 +712,25 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   two errors in ParseMarkdownSetup).
 - markdown_test.go is internal/app/markdown_test.go; run_test.go is markdown_run_test.go.
 - big.go 6,884 lines (+38), big_helpers.go 1,242 (+158).
+
+## internal/setup folds in (2026-10-25)
+- internal/setup is gone. setup.go and process.go, in that order, are the end of
+  big_helpers.go under the package doc: Drop in runs its scripts with `StartSetup` and
+  `SetupProcess`, and Mix shell its run blocks. blocks.go (`ScriptAsEnv`, `BlockLanguage`,
+  `WriteRunBlock`, `QuoteBashWord`) is the end of Mix shell's section: its other caller is
+  runBlocks in cmd/givens/run.go, which is Mix shell's "Run cards in a terminal". Drop in's
+  and Mix shell's opening comments name the big_helpers.go part.
+- Renames: `Process` -> `SetupProcess`, `Start` -> `StartSetup`, `Request` -> `SetupRequest`,
+  `Result` -> `SetupResult`, `ErrStopped` -> `ErrSetupStopped` (its text is "setup was
+  stopped"), `DurationMax`, `OutputLinesMax`, `LineLengthBytesMax` and `EnvMax` get a `Setup`
+  prefix, `WriteBlock` -> `WriteRunBlock`, `Quote` -> `QuoteBashWord`; the test `TestAnswer` ->
+  `TestSetupAnswer` (Drop in's ask cards have answers too). `pipes`, `newPipes`, `stopGrace`,
+  `drainWait`, `ScriptAsEnv`, `BlockLanguage` and the methods kept theirs.
+- The package doc's "internal/app chooses the script" became "its callers choose the script".
+- Surprise: cmd/givens imported internal/setup as `setupkit`, since runSetup has a local
+  `setup`; fold.py expects the package's own name before each reference, so the alias was
+  turned back to `setup` first (runBlocks, the user, has no local of that name). It calls
+  `app.BlockLanguage`, `app.WriteRunBlock` and `app.ScriptAsEnv` now.
+- setup_test.go is internal/app/setup_process_test.go. Two lines the longer names pushed past
+  100 columns were wrapped.
+- big.go 6,937 lines (+53), big_helpers.go 1,522 (+280).

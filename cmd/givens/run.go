@@ -13,7 +13,6 @@ import (
 	"givens/internal/app"
 	"givens/internal/assert"
 	"givens/internal/project"
-	setupkit "givens/internal/setup"
 )
 
 // answerBytesMax bounds one line typed at a markdown step.
@@ -129,7 +128,7 @@ func runBlocks(root string, path string, step app.MarkdownStep) (bool, int) {
 	assert.That(strings.HasSuffix(path, ".md"), "a markdown setup is read")
 	ran := false
 	for index, block := range step.Blocks {
-		language := setupkit.BlockLanguage(block.Language, block.Run, block.Closed)
+		language := app.BlockLanguage(block.Language, block.Run, block.Closed)
 		if language == "" {
 			continue
 		}
@@ -139,12 +138,12 @@ func runBlocks(root string, path string, step app.MarkdownStep) (bool, int) {
 			complain(err)
 			return ran, exitProblems
 		}
-		script, err := setupkit.WriteBlock(dir, fmt.Sprintf("step-%d-block-%d", step.Number,
+		script, err := app.WriteRunBlock(dir, fmt.Sprintf("step-%d-block-%d", step.Number,
 			index), filepath.Join(root, "_shared", "givens.sh"), language, block.Code)
 		code := exitProblems
 		if err == nil {
 			stands := strings.TrimSuffix(path, ".md") + ".sh"
-			code = runScript(root, script, setupkit.ScriptAsEnv+"="+stands)
+			code = runScript(root, script, app.ScriptAsEnv+"="+stands)
 		}
 		_ = os.RemoveAll(dir)
 		if code != exitOK {

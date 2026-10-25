@@ -10,6 +10,7 @@
 package app
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -21,6 +22,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -1239,4 +1242,281 @@ func (s *Session) removeArguments() {
 	if s.argumentsDir != "" {
 		_ = os.RemoveAll(s.argumentsDir)
 	}
+}
+
+// From internal/setup, which runs one setup script: bash, in its own process group, with
+// GIVENS_* variables, its output read line by line, answers written to its stdin, and a stop
+// that ends the script and everything it started. Drop in runs setups with it and Mix shell
+// its run blocks.
+//
+// It decides nothing about what a scenario means; its callers choose the script, the
+// variables and when to show "Still running".
+
+// Limits. Tiger Style: put a limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	// SetupDurationMax ends a setup nobody stopped. "Keep waiting" waits up to here.
+	SetupDurationMax = time.Hour
+	// SetupOutputLinesMax bounds the lines kept; later lines are counted, not kept.
+	SetupOutputLinesMax = 10000
+	// SetupLineLengthBytesMax bounds one output line; a longer line is cut.
+	SetupLineLengthBytesMax = 64 << 10
+	// SetupEnvMax bounds the variables a request adds.
+	SetupEnvMax = 256
+	// stopGrace is how long Stop waits after SIGTERM before SIGKILL.
+	stopGrace = 2 * time.Second
+	// drainWait is how long output may stay open after the script exits, held by something it
+	// left running in the background.
+	drainWait = time.Second
+)
+
+// ErrSetupStopped is the SetupResult.Err of a setup ended by Stop or by SetupDurationMax.
+var ErrSetupStopped = errors.New("setup was stopped")
+
+// SetupRequest is one script to run.
+type SetupRequest struct {
+	Script string   // absolute path to a .sh file
+	Dir    string   // where it runs: the project's folder
+	Env    []string // NAME=value pairs added to Givens's own environment
+}
+
+// SetupResult is how a finished setup ended.
+type SetupResult struct {
+	ExitCode int   // the script's exit code; -1 when it was stopped or killed
+	Err      error // nil, ErrSetupStopped, or why it couldn't run to its end
+}
+
+// SetupProcess is one running setup.
+type SetupProcess struct {
+	command *exec.Cmd
+	stdin   *os.File
+	done    chan struct{}
+
+	mutex   sync.Mutex
+	lines   []string
+	dropped int
+	stopped bool
+	result  SetupResult
+}
+
+// StartSetup runs request's script and returns at once. Read its progress with Output and Done.
+func StartSetup(request SetupRequest) (*SetupProcess, error) {
+	assert.That(filepath.IsAbs(request.Script), "the script path is absolute")
+	assert.That(filepath.IsAbs(request.Dir), "the folder is absolute")
+	if len(request.Env) > SetupEnvMax {
+		return nil, fmt.Errorf("setup has %d variables, more than %d", len(request.Env),
+			SetupEnvMax)
+	}
+	command := exec.Command("bash", request.Script)
+	command.Dir = request.Dir
+	command.Env = append(os.Environ(), request.Env...)
+	// Setpgid puts the script in a new process group, so Stop can signal everything it
+	// started. Ref: https://pkg.go.dev/syscall#SysProcAttr
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	pipes, err := newPipes()
+	if err != nil {
+		return nil, err
+	}
+	command.Stdin, command.Stdout, command.Stderr = pipes.stdinRead, pipes.outWrite,
+		pipes.outWrite
+	if err := command.Start(); err != nil {
+		pipes.closeAll()
+		return nil, err
+	}
+	// The child holds its own copies now; closing ours lets the reader see the end of output.
+	_ = pipes.stdinRead.Close()
+	_ = pipes.outWrite.Close()
+	process := &SetupProcess{
+		command: command, stdin: pipes.stdinWrite, done: make(chan struct{}),
+		lines: make([]string, 0, 64),
+	}
+	go process.run(pipes.outRead)
+	assert.That(command.Process != nil, "a started command has a process")
+	return process, nil
+}
+
+// pipes are the script's stdin and its combined stdout and stderr.
+type pipes struct {
+	stdinRead, stdinWrite, outRead, outWrite *os.File
+}
+
+// newPipes opens both pipes. Ref: https://pkg.go.dev/os#Pipe
+func newPipes() (pipes, error) {
+	stdinRead, stdinWrite, err := os.Pipe()
+	if err != nil {
+		return pipes{}, err
+	}
+	outRead, outWrite, err := os.Pipe()
+	if err != nil {
+		_ = stdinRead.Close()
+		_ = stdinWrite.Close()
+		return pipes{}, err
+	}
+	assert.That(stdinRead != nil && stdinWrite != nil, "the stdin pipe is open")
+	assert.That(outRead != nil && outWrite != nil, "the output pipe is open")
+	return pipes{stdinRead, stdinWrite, outRead, outWrite}, nil
+}
+
+// closeAll closes every end, for a script that never started.
+func (p pipes) closeAll() {
+	assert.That(p.stdinRead != nil, "the pipes were opened")
+	assert.That(p.outRead != nil, "the pipes were opened")
+	for _, file := range []*os.File{p.stdinRead, p.stdinWrite, p.outRead, p.outWrite} {
+		_ = file.Close()
+	}
+}
+
+// run reads output to its end, waits for the script, and closes done.
+func (p *SetupProcess) run(output *os.File) {
+	assert.That(p != nil, "run runs on a process")
+	assert.That(output != nil, "the output pipe is open")
+	limit := time.AfterFunc(SetupDurationMax, func() { _ = p.Stop() })
+	defer limit.Stop()
+	drained := make(chan struct{})
+	go p.read(output, drained)
+	err := p.command.Wait()
+	select {
+	case <-drained:
+	case <-time.After(drainWait):
+		// Something the script left running still holds the output open: end it.
+		_ = syscall.Kill(-p.command.Process.Pid, syscall.SIGKILL)
+		_ = output.Close()
+		<-drained
+	}
+	_ = p.stdin.Close()
+	p.finish(err)
+}
+
+// read appends each output line until the pipe closes.
+func (p *SetupProcess) read(output *os.File, drained chan struct{}) {
+	assert.That(p != nil, "read runs on a process")
+	assert.That(drained != nil, "read signals when it's done")
+	defer close(drained)
+	defer func() { _ = output.Close() }()
+	reader := bufio.NewReaderSize(output, 4096)
+	// bound: ReadString returns an error at the end of output, which ends the loop.
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			p.add(strings.TrimRight(line, "\r\n"))
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// add keeps one line, cut to SetupLineLengthBytesMax, while fewer than SetupOutputLinesMax are
+// kept.
+func (p *SetupProcess) add(line string) {
+	assert.That(p != nil, "add runs on a process")
+	if len(line) > SetupLineLengthBytesMax {
+		line = line[:SetupLineLengthBytesMax]
+	}
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if len(p.lines) >= SetupOutputLinesMax {
+		p.dropped++
+		return
+	}
+	p.lines = append(p.lines, line)
+	assert.That(len(p.lines) <= SetupOutputLinesMax, "kept lines stay bounded")
+}
+
+// finish records how the script ended and closes done.
+func (p *SetupProcess) finish(err error) {
+	assert.That(p != nil, "finish runs on a process")
+	p.mutex.Lock()
+	result := SetupResult{ExitCode: p.command.ProcessState.ExitCode()}
+	var exit *exec.ExitError
+	switch {
+	case p.stopped:
+		result = SetupResult{ExitCode: -1, Err: ErrSetupStopped}
+	case err != nil && !errors.As(err, &exit):
+		result.Err = err
+	}
+	p.result = result
+	p.mutex.Unlock()
+	close(p.done)
+	assert.That(result.Err != nil || result.ExitCode >= 0, "a script that ran has an exit code")
+}
+
+// Output is a copy of the lines read so far.
+func (p *SetupProcess) Output() []string {
+	assert.That(p != nil, "output runs on a process")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	lines := make([]string, len(p.lines))
+	copy(lines, p.lines)
+	assert.That(len(lines) <= SetupOutputLinesMax, "output stays bounded")
+	return lines
+}
+
+// Dropped counts the lines read after SetupOutputLinesMax were kept.
+func (p *SetupProcess) Dropped() int {
+	assert.That(p != nil, "dropped runs on a process")
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	assert.That(p.dropped >= 0, "a count is never negative")
+	return p.dropped
+}
+
+// Done is closed once the script has ended and its output is read.
+func (p *SetupProcess) Done() <-chan struct{} {
+	assert.That(p != nil, "done runs on a process")
+	assert.That(p.done != nil, "the process was started")
+	return p.done
+}
+
+// Wait waits up to limit for the script to end. It returns the SetupResult and true when it has,
+// or false when it's still running.
+func (p *SetupProcess) Wait(limit time.Duration) (SetupResult, bool) {
+	assert.That(p != nil, "wait runs on a process")
+	assert.That(limit > 0, "a wait has a limit")
+	select {
+	case <-p.done:
+		p.mutex.Lock()
+		defer p.mutex.Unlock()
+		return p.result, true
+	case <-time.After(limit):
+		return SetupResult{}, false
+	}
+}
+
+// Answer writes one line to the script's stdin, for a card that asks a question.
+func (p *SetupProcess) Answer(text string) error {
+	assert.That(p != nil, "answer runs on a process")
+	assert.That(!strings.Contains(text, "\n"), "an answer is one line")
+	_, err := p.stdin.WriteString(text + "\n")
+	return err
+}
+
+// Stop ends the script and everything it started: SIGTERM to its process group, then SIGKILL
+// after a grace period. Output read so far is kept. Stopping a finished script does nothing.
+// Ref: https://man7.org/linux/man-pages/man2/kill.2.html (a negative pid names a group)
+func (p *SetupProcess) Stop() error {
+	assert.That(p != nil, "stop runs on a process")
+	assert.That(p.command.Process != nil, "the process was started")
+	select {
+	case <-p.done:
+		return nil
+	default:
+	}
+	p.mutex.Lock()
+	p.stopped = true
+	p.mutex.Unlock()
+	group := -p.command.Process.Pid
+	if err := syscall.Kill(group, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	select {
+	case <-p.done:
+		return nil
+	case <-time.After(stopGrace):
+	}
+	if err := syscall.Kill(group, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	<-p.done
+	return nil
 }
