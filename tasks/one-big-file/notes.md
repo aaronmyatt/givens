@@ -331,3 +331,14 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   it's Drop in's record as much as this story's. It sits here because `keepRun` is its only
   caller; the narrower seam (only the off-main branch) would have sent it, `keepsRunsOffMain`
   and `afterRunsChange` to big_helpers.go.
+
+## Wave A: three agents at once (2026-10-25)
+- Share setup; Read a capability + Gherkin files; Open a project + Keep runs off main, each
+  in its own worktree off f5eca2a, with no shared file owned by two agents.
+- Share setup merged first, by itself. The next two branches clashed in code: both import
+  blocks, the end of big_helpers.go (every slice appends its helpers there), project.go (two
+  agents removing neighbouring code), plus the end of notes.md. Each clash was "keep both
+  sides"; each branch was rebased in turn onto main and re-checked.
+- Finding: big.go's sections stay apart by folder order, but the import blocks and the end of
+  big_helpers.go are hot spots every slice touches. After this, the developer asked for the
+  rest to go one at a time.
