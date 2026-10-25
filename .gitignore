@@ -4,6 +4,8 @@
 # Go build output and test caches stay out of git.
 /givens
 *.test
+# delve's test builds, like debug.test3142091023.
+debug.test*
 *.out
 .claude/settings.local.json
 
