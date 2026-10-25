@@ -813,3 +813,31 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   opening comments named internal/project; they name LoadProject and loadScenario now. big.go's
   header list drops project.
 - big.go 7,540 lines (-1, an import), big_helpers.go 2,585 (+465), 34% of big.go.
+
+## internal/spec folds in (2026-10-25)
+- internal/spec is gone. Parsing is in big_helpers.go before the project loader, under the
+  package doc: the limits, `ScenariosIn`, `ParseFeature`, `ErrNoFeature`, `ParseFeatureText`,
+  `FeatureScenarios` and explain.go (`ExplainParseError` and its pattern): the loader, Write
+  stories' editor and `givens list` parse with it, and the steps list scenarios with
+  `ScenariosIn`. The conventions check (`ConventionProblem`, `CheckCapabilities`,
+  `checkCapability`, `CheckFeature`, `checkStory`, `checkScenarios`, `timeoutTagRegexp`) is
+  the end of Use Givens from the terminal's pointer section: LoadProject runs it into
+  Problems, and only runCheck (`givens check`, "Check passes" and "Check finds a problem") reads
+  them. Same call as the watcher: the helper is the shared way in, the check is one story's.
+- No clashes. Renames: `Check` -> `CheckCapabilities`, `Problem` -> `ConventionProblem`
+  (beside model's HelperProblem), `Explain` -> `ExplainParseError`, `Scenarios` ->
+  `FeatureScenarios` (app's `Scenarios` reads as the window's), `timeoutTag` ->
+  `timeoutTagRegexp` and `parseErrorLine` -> `parseErrorLineRegexp` (beside
+  `MessageTimeoutTag` and the loader's `parseErrorOf`). `ScenariosIn`, `ParseFeature`,
+  `ParseFeatureText`, `CheckFeature`, `ErrNoFeature` and the limits kept theirs. The test
+  `TestExplain` -> `TestExplainParseError`.
+- timeoutTagRegexp's `//tiger:allow-global` moved to its doc comment, as helpers' regexps did:
+  the longer name pushed the line past 100 columns.
+- 11 acceptance suites, the acceptance root (TestBigFile, the spec test), cmd/givens and
+  tools/pickles call `app.` now; tools/pickles now builds with all of app's imports, chromedp
+  included. Gherkin files', the terminal pointer's opening comments and the loader's doc name
+  ParseFeature and CheckCapabilities; big.go's header list is internal/slug, kit and starter.
+- explain_test.go is internal/app/explain_parse_error_test.go.
+- Surprise: a failed fold script's `rm` ran anyway (two shell lines, not `&&`); spec.go and
+  explain.go were rebuilt from HEAD with the same renames, and the build matched.
+- big.go 7,696 lines (+156), big_helpers.go 2,740 (+155), 36% of big.go.

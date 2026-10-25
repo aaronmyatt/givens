@@ -19,7 +19,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/spec"
 	"givens/internal/tui"
 )
 
@@ -166,7 +165,7 @@ func (s *state) countsShown() error {
 		if err != nil {
 			return err
 		}
-		scenarios, err := spec.ScenariosIn(path)
+		scenarios, err := app.ScenariosIn(path)
 		if err != nil {
 			return err
 		}

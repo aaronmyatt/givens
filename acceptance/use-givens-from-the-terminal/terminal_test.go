@@ -14,8 +14,8 @@ import (
 	"testing"
 
 	"givens/acceptance/world"
+	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 const capability = "use-givens-from-the-terminal"
@@ -176,7 +176,7 @@ func (s *state) everyFileValid() error {
 	if err := s.CopySampleShop(); err != nil {
 		return err
 	}
-	problems, err := spec.Check(s.Capabilities())
+	problems, err := app.CheckCapabilities(s.Capabilities())
 	if err != nil {
 		return err
 	}
@@ -225,9 +225,9 @@ func (s *state) shopScenarios() ([]listed, error) {
 	if err != nil {
 		return nil, err
 	}
-	items := make([]listed, 0, spec.ScenariosPerFeatureMax)
+	items := make([]listed, 0, app.ScenariosPerFeatureMax)
 	for _, feature := range features {
-		scenarios, err := spec.ScenariosIn(feature)
+		scenarios, err := app.ScenariosIn(feature)
 		if err != nil {
 			return nil, err
 		}

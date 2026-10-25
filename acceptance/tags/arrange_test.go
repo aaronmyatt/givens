@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"givens/internal/app"
-	"givens/internal/spec"
 )
 
 // tagScenario adds a tag to a scenario in whichever sample shop capability holds it.
@@ -54,7 +53,7 @@ func (s *state) addTag(folder string, header string, tag string) error {
 	if err := s.WriteFile(rel, strings.Join(lines, "\n")); err != nil {
 		return err
 	}
-	if _, err := spec.ScenariosIn(filepath.Join(s.Project, rel)); err != nil {
+	if _, err := app.ScenariosIn(filepath.Join(s.Project, rel)); err != nil {
 		return fmt.Errorf("the tagged %s doesn't parse: %w", rel, err)
 	}
 	return nil
@@ -79,7 +78,7 @@ func hasTagAbove(lines []string, prefix string, tag string) bool {
 
 // namesIn lists, sorted, the scenario names in a sample shop capability.
 func (s *state) namesIn(folder string) ([]string, error) {
-	scenarios, err := spec.ScenariosIn(filepath.Join(s.Capabilities(), folder, folder+".feature"))
+	scenarios, err := app.ScenariosIn(filepath.Join(s.Capabilities(), folder, folder+".feature"))
 	if err != nil {
 		return nil, err
 	}

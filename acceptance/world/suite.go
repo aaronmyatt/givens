@@ -12,9 +12,9 @@ import (
 
 	"github.com/cucumber/godog"
 
+	"givens/internal/app"
 	"givens/internal/assert"
 	"givens/internal/browser"
-	"givens/internal/spec"
 )
 
 // Step is one step definition: a regular expression over the step's text (without its
@@ -87,7 +87,7 @@ func CheckStepsDefined(t *testing.T, capability string, steps Steps) {
 	for _, definition := range definitions {
 		patterns = append(patterns, regexp.MustCompile(definition.Pattern))
 	}
-	scenarios, err := spec.ScenariosIn(FeaturePath(root, capability))
+	scenarios, err := app.ScenariosIn(FeaturePath(root, capability))
 	if err != nil {
 		t.Fatal(err)
 	}

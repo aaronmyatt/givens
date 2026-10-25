@@ -9,7 +9,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/spec"
 )
 
 // choseInEarlierApp answers the trust prompt in an earlier run of Givens on this scenario's
@@ -90,7 +89,7 @@ func (s *state) dropInWithoutRunning() error {
 	if err != nil {
 		return err
 	}
-	scenarios, err := spec.ScenariosIn(filepath.Join(s.Capabilities(), "checkout",
+	scenarios, err := app.ScenariosIn(filepath.Join(s.Capabilities(), "checkout",
 		"checkout.feature"))
 	if err != nil {
 		return err

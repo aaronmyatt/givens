@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	messages "github.com/cucumber/messages/go/v34"
+	"givens/internal/app"
 
-	"givens/internal/spec"
+	messages "github.com/cucumber/messages/go/v34"
 )
 
 // bigFile tells Givens's stories in order, relative to this package, and bigHelpersFile holds
@@ -113,12 +113,12 @@ func readStories() (map[string]story, error) {
 	}
 	stories := make(map[string]story, len(paths))
 	for order, path := range paths {
-		feature, err := spec.ParseFeature(path)
+		feature, err := app.ParseFeature(path)
 		if err != nil {
 			return nil, err
 		}
 		told := story{path: strings.TrimPrefix(path, "../"), order: order, rules: rulesOf(feature)}
-		for _, scenario := range spec.Scenarios(feature) {
+		for _, scenario := range app.FeatureScenarios(feature) {
 			told.scenarios = append(told.scenarios, scenario.Name)
 		}
 		stories[feature.Name] = told

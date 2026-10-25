@@ -11,7 +11,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/spec"
 )
 
 // listed is one line of `givens list`, and one object of `givens list --json`.
@@ -67,7 +66,7 @@ func runList(args []string) int {
 // listScenarios loads the project around the working folder and lists the scenarios filter
 // matches, in capability then file order.
 func listScenarios(filter app.TagExpression) ([]listed, error) {
-	assert.That(spec.ScenariosPerFeatureMax > 0, "scenarios are bounded")
+	assert.That(app.ScenariosPerFeatureMax > 0, "scenarios are bounded")
 	root, err := findCapabilities(".")
 	if err != nil {
 		return nil, err
@@ -92,7 +91,7 @@ func listScenarios(filter app.TagExpression) ([]listed, error) {
 			})
 		}
 	}
-	assert.That(len(items) <= spec.CapabilitiesMax*spec.ScenariosPerFeatureMax, "bounded")
+	assert.That(len(items) <= app.CapabilitiesMax*app.ScenariosPerFeatureMax, "bounded")
 	return items, nil
 }
 
@@ -130,7 +129,7 @@ func runCheck(args []string) int {
 }
 
 // describe says one problem as `givens check` prints it, the parser's own words made plain.
-func describe(root string, problem spec.Problem) string {
+func describe(root string, problem app.ConventionProblem) string {
 	assert.That(filepath.IsAbs(root), "root is absolute")
 	assert.That(problem.Message != "", "a problem says what's wrong")
 	path := problem.Path
@@ -139,7 +138,7 @@ func describe(root string, problem spec.Problem) string {
 	}
 	line, message := problem.Line, problem.Message
 	if line == 0 && strings.Contains(message, "expected:") {
-		line, message = spec.Explain(errors.New(message))
+		line, message = app.ExplainParseError(errors.New(message))
 	}
 	return fmt.Sprintf("%s line %d: %s", path, line, message)
 }

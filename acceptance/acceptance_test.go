@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"givens/internal/spec"
+	"givens/internal/app"
 )
 
 // capabilitiesDir is Givens's own spec, relative to this package. Each capability's scenarios
@@ -19,7 +19,7 @@ func TestSpecConventions(t *testing.T) {
 		capabilitiesDir, "../internal/starter", "../testdata/sample-shop/capabilities",
 	}
 	for _, root := range roots {
-		problems, err := spec.Check(root)
+		problems, err := app.CheckCapabilities(root)
 		if err != nil {
 			t.Fatalf("reading %s: %v", root, err)
 		}
@@ -38,7 +38,7 @@ func TestWorkInProgress(t *testing.T) {
 	}
 	wip, total := 0, 0
 	for _, path := range paths {
-		scenarios, err := spec.ScenariosIn(path)
+		scenarios, err := app.ScenariosIn(path)
 		if err != nil {
 			t.Fatal(err)
 		}

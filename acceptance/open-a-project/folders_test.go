@@ -13,7 +13,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 	"givens/internal/starter"
 )
 
@@ -194,7 +193,7 @@ func (s *state) gotStarter(name string) error {
 
 // setupsFor expects scripts/<slug>.sh or scripts/<slug>.md for each scenario in a capability.
 func setupsFor(dir string) error {
-	scenarios, err := spec.ScenariosIn(filepath.Join(dir, filepath.Base(dir)+".feature"))
+	scenarios, err := app.ScenariosIn(filepath.Join(dir, filepath.Base(dir)+".feature"))
 	if err != nil {
 		return err
 	}

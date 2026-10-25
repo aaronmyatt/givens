@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"givens/acceptance/world"
+	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 // fromPayWithSavedCard is the line that makes 3-D Secure challenge's setup build on Pay with
@@ -56,7 +56,7 @@ func (s *state) arrangeSetups() error {
 		return err
 	}
 	for _, feature := range features {
-		scenarios, err := spec.ScenariosIn(feature)
+		scenarios, err := app.ScenariosIn(feature)
 		if err != nil {
 			return err
 		}

@@ -15,7 +15,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 const capability = "tags"
@@ -345,7 +344,7 @@ func (s *state) taggedScenarios(tag string) ([]string, error) {
 			return nil, err
 		}
 		featureTagged := hasTagAbove(strings.Split(string(text), "\n"), "Feature:", tag)
-		scenarios, err := spec.ScenariosIn(feature)
+		scenarios, err := app.ScenariosIn(feature)
 		if err != nil {
 			return nil, err
 		}

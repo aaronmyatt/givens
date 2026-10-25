@@ -13,7 +13,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/app/model"
-	"givens/internal/spec"
 )
 
 // notAStep is Givens's wording of the Gherkin parser's error for a line in a scenario that
@@ -90,7 +89,7 @@ func (s *state) ensureStepUses(step string, want int) error {
 	}
 	uses := 0
 	for _, feature := range features {
-		scenarios, err := spec.ScenariosIn(feature)
+		scenarios, err := app.ScenariosIn(feature)
 		if err != nil {
 			return err
 		}

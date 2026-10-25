@@ -17,8 +17,8 @@ import (
 	gherkin "github.com/cucumber/gherkin/go/v42"
 	messages "github.com/cucumber/messages/go/v34"
 
+	"givens/internal/app"
 	"givens/internal/assert"
-	"givens/internal/spec"
 )
 
 // Exit codes. Ref: https://pkg.go.dev/os#Exit
@@ -79,6 +79,6 @@ func compile(path string) ([]*messages.Pickle, error) {
 		return nil, err
 	}
 	pickles := gherkin.Pickles(*document, path, ids.NewId)
-	assert.That(len(pickles) <= spec.ScenariosPerFeatureMax*64, "pickles stay bounded")
+	assert.That(len(pickles) <= app.ScenariosPerFeatureMax*64, "pickles stay bounded")
 	return pickles, nil
 }

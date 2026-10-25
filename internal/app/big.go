@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, slug, kit and starter:
+//   - internal/slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -57,12 +57,14 @@ import (
 	"time"
 	"unicode/utf8"
 
+	gherkin "github.com/cucumber/gherkin/go/v42"
+	messages "github.com/cucumber/messages/go/v34"
+
 	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/browser"
 	"givens/internal/kit"
 	"givens/internal/slug"
-	"givens/internal/spec"
 	"givens/internal/starter"
 )
 
@@ -811,7 +813,7 @@ func (w *Window) fromProblem(scenario LoadedScenario) (string, error) {
 	visits := 0
 	// A loop is reported the first time a slug repeats on a path.
 	// bound: visits stop at the most scenarios a project can hold.
-	for len(stack) > 0 && visits <= spec.CapabilitiesMax*spec.ScenariosPerFeatureMax {
+	for len(stack) > 0 && visits <= CapabilitiesMax*ScenariosPerFeatureMax {
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		visits++
@@ -1701,17 +1703,17 @@ func AttachedFiles(capabilities string, run Run) ([]string, error) {
 // Feature: Gherkin files
 //
 // capabilities/gherkin-files. Givens reads each capability's one .feature file with the official
-// Cucumber Gherkin parser (internal/spec, read into a project by LoadProject in big_helpers.go), so
-// a test runner and Givens read the same scenarios. A file that doesn't parse, or a second .feature
-// file in a folder, is a warning on the capability with its fix. Code elsewhere: slugClash and
-// scenarioWarning, which warns on a scenario as shown, are in big_helpers.go, since Write stories'
-// rename and Drop in's @timeout and Examples warnings use them too; scenarioOffers (offers.go)
-// offers only "Copy" on a clashing slug. capabilityOf and scenarioOf (project.go) and Sidebar
-// (window.go) show the warnings; core glue's allOffers and Choose (offers.go) call gherkinOffers,
-// editBrokenFeature and moveToOwnCapability, and OfferMoveToOwnCapability is with the page offers
-// there. "Comments are kept" is Write stories' editor (Save, and Edit in big_helpers.go), "Step
-// definitions are left alone" is LoadProject's (big_helpers.go), and "A test runner reads the same
-// files" is cucumber-js.
+// Cucumber Gherkin parser (ParseFeature, read into a project by LoadProject, both in
+// big_helpers.go), so a test runner and Givens read the same scenarios. A file that doesn't parse,
+// or a second .feature file in a folder, is a warning on the capability with its fix. Code
+// elsewhere: slugClash and scenarioWarning, which warns on a scenario as shown, are in
+// big_helpers.go, since Write stories' rename and Drop in's @timeout and Examples warnings use them
+// too; scenarioOffers (offers.go) offers only "Copy" on a clashing slug. capabilityOf and
+// scenarioOf (project.go) and Sidebar (window.go) show the warnings; core glue's allOffers and
+// Choose (offers.go) call gherkinOffers, editBrokenFeature and moveToOwnCapability, and
+// OfferMoveToOwnCapability is with the page offers there. "Comments are kept" is Write stories'
+// editor (Save, and Edit in big_helpers.go), "Step definitions are left alone" is LoadProject's
+// (big_helpers.go), and "A test runner reads the same files" is cucumber-js.
 
 // Scenario: Rules group scenarios
 
@@ -5220,7 +5222,7 @@ func setupText(scenario LoadedScenario) (string, error) {
 // from line naming no scenario, and a loop, end the chain: Drop in reports both before running.
 func fromChain(loaded *LoadedProject, scenario LoadedScenario) ([]LoadedScenario, error) {
 	assert.That(loaded != nil, "the project is loaded")
-	assert.That(len(loaded.Capabilities) <= spec.CapabilitiesMax, "capabilities stay bounded")
+	assert.That(len(loaded.Capabilities) <= CapabilitiesMax, "capabilities stay bounded")
 	chain := make([]LoadedScenario, 0, 4)
 	seen := map[string]bool{scenario.Key(): true}
 	queue := []LoadedScenario{scenario}
@@ -6101,11 +6103,12 @@ func (w *Window) restoreKit() {
 
 // Feature: Use Givens from the terminal
 //
-// capabilities/use-givens-from-the-terminal. A pointer: the commands are cmd/givens, an edge
-// that imports this package, so their code isn't here, except PlainMarkdown at the end. list
-// and check are cmd/givens/list.go (runList, runCheck); run, with steps by hand and code blocks
-// in a terminal, is cmd/givens/run.go (runSetup, runBlocks); main.go routes each command. "List
-// by tag" parses its expression with ParseTagExpression (big_helpers.go).
+// capabilities/use-givens-from-the-terminal. A pointer: the commands are cmd/givens, an edge that
+// imports this package, so their code isn't here, except the conventions check `givens check`
+// reports and PlainMarkdown, at the end. list and check are cmd/givens/list.go (runList, runCheck);
+// run, with steps by hand and code blocks in a terminal, is cmd/givens/run.go (runSetup,
+// runBlocks); main.go routes each command. "List by tag" parses its expression with
+// ParseTagExpression (big_helpers.go).
 
 // From internal/markdown: a markdown step's text as `givens run` prints it (printStep,
 // cmd/givens/run.go).
@@ -6124,6 +6127,159 @@ func PlainMarkdown(text string) string {
 	plain = strings.ReplaceAll(strings.ReplaceAll(plain, "`", ""), "**", "")
 	assert.That(!strings.Contains(plain, "`"), "no inline code marks are left")
 	return plain
+}
+
+// From internal/spec: the conventions check behind "Check passes" and "Check finds a problem".
+// LoadProject (big_helpers.go) runs it into a project's Problems, which runCheck
+// (cmd/givens/list.go) prints. The conventions are written down in capabilities/GIVENS.md;
+// parsing is ParseFeature's, in big_helpers.go.
+
+// timeoutTagRegexp matches @timeout:90s and @timeout:5m.
+//
+//tiger:allow-global compiled once
+var timeoutTagRegexp = regexp.MustCompile(`^@timeout:[0-9]+[sm]$`)
+
+// ConventionProblem is one broken convention, with where it is.
+type ConventionProblem struct {
+	Path    string
+	Line    int64
+	Message string
+}
+
+func (p ConventionProblem) String() string {
+	assert.That(p.Path != "", "a problem names its file")
+	assert.That(p.Message != "", "a problem says what's wrong")
+	return fmt.Sprintf("%s:%d: %s", p.Path, p.Line, p.Message)
+}
+
+// CheckCapabilities reads every capability folder directly under root and returns the problems
+// found. An error means root itself couldn't be read; broken files are problems, not errors.
+func CheckCapabilities(root string) ([]ConventionProblem, error) {
+	assert.That(root != "", "root is a path")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) > CapabilitiesMax {
+		return nil, fmt.Errorf("%s holds %d entries, more than %d",
+			root, len(entries), CapabilitiesMax)
+	}
+	assert.That(len(entries) <= CapabilitiesMax, "entries are bounded from here on")
+
+	problems := make([]ConventionProblem, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		// _shared, runs and hidden folders hold helpers and history, not capabilities.
+		hidden := strings.HasPrefix(name, "_") || strings.HasPrefix(name, ".")
+		if !entry.IsDir() || hidden || name == "runs" {
+			continue
+		}
+		found, err := checkCapability(filepath.Join(root, name))
+		if err != nil {
+			return nil, err
+		}
+		problems = append(problems, found...)
+	}
+	return problems, nil
+}
+
+// checkCapability checks one folder: one .feature file named after it, valid and conventional.
+// A folder with no .feature file isn't a capability (it may hold a runner's step definitions).
+func checkCapability(dir string) ([]ConventionProblem, error) {
+	assert.That(dir != "", "dir is a path")
+	features, err := filepath.Glob(filepath.Join(dir, "*.feature"))
+	if err != nil {
+		return nil, err
+	}
+	want := filepath.Join(dir, filepath.Base(dir)+".feature")
+	problems := make([]ConventionProblem, 0, len(features))
+	for _, path := range features {
+		assert.That(strings.HasSuffix(path, ".feature"), "the glob only returns .feature files")
+		if path != want {
+			message := "isn't read: a capability has one .feature file, named after its folder"
+			problems = append(problems, ConventionProblem{Path: path, Line: 1, Message: message})
+			continue
+		}
+		found, err := CheckFeature(path)
+		if err != nil {
+			return nil, err
+		}
+		problems = append(problems, found...)
+	}
+	return problems, nil
+}
+
+// CheckFeature parses one .feature file and checks its story, scenario names and tags.
+func CheckFeature(path string) ([]ConventionProblem, error) {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(source) > FeatureFileSizeBytesMax {
+		return []ConventionProblem{{Path: path, Line: 1, Message: "file is larger than 4 MiB"}}, nil
+	}
+	// ParseGherkinDocument returns parse errors with their line numbers in the message.
+	// Ref: https://pkg.go.dev/github.com/cucumber/gherkin/go/v42#ParseGherkinDocument
+	ids := &messages.Incrementing{}
+	document, err := gherkin.ParseGherkinDocument(strings.NewReader(string(source)), ids.NewId)
+	if err != nil {
+		return []ConventionProblem{{Path: path, Line: 0, Message: err.Error()}}, nil
+	}
+	if document.Feature == nil {
+		return []ConventionProblem{{Path: path, Line: 1, Message: "has no Feature"}}, nil
+	}
+	problems := checkStory(path, document.Feature)
+	problems = append(problems, checkScenarios(path, document.Feature)...)
+	assert.That(document.Feature.Name != "" || len(problems) > 0, "a nameless Feature is reported")
+	return problems, nil
+}
+
+// checkStory requires the As a, I want and So that lines in the Feature's description.
+func checkStory(path string, feature *messages.Feature) []ConventionProblem {
+	assert.That(feature != nil, "feature is parsed")
+	assert.That(feature.Location != nil, "feature has a location")
+	problems := make([]ConventionProblem, 0, 4)
+	if feature.Name == "" {
+		problems = append(problems,
+			ConventionProblem{path, feature.Location.Line, "Feature has no name"})
+	}
+	for _, part := range []string{"As a", "I want", "So that"} {
+		if !strings.Contains(feature.Description, part) {
+			message := fmt.Sprintf("story has no %q line in the Feature description", part)
+			problems = append(problems, ConventionProblem{path, feature.Location.Line, message})
+		}
+	}
+	return problems
+}
+
+// checkScenarios requires unique slugs across the file, Rules included, and well-formed tags.
+func checkScenarios(path string, feature *messages.Feature) []ConventionProblem {
+	assert.That(feature != nil, "feature is parsed")
+	scenarios := FeatureScenarios(feature)
+	assert.That(len(scenarios) <= ScenariosPerFeatureMax, "scenarios per feature stay bounded")
+
+	problems := make([]ConventionProblem, 0, len(scenarios))
+	seen := make(map[string]string, len(scenarios))
+	for _, scenario := range scenarios {
+		line := scenario.Location.Line
+		key := slug.Of(scenario.Name)
+		if key == "" {
+			message := "scenario name has no letters or digits"
+			problems = append(problems, ConventionProblem{path, line, message})
+		} else if other, ok := seen[key]; ok {
+			message := fmt.Sprintf("%q and %q both make the slug %s", other, scenario.Name, key)
+			problems = append(problems, ConventionProblem{Path: path, Line: line, Message: message})
+		}
+		seen[key] = scenario.Name
+		for _, tag := range scenario.Tags {
+			if strings.HasPrefix(tag.Name, "@timeout") && !timeoutTagRegexp.MatchString(tag.Name) {
+				message := "@timeout must look like @timeout:90s or @timeout:5m"
+				problems = append(problems, ConventionProblem{path, tag.Location.Line, message})
+			}
+		}
+	}
+	return problems
 }
 
 // Feature: Views
@@ -6750,8 +6906,8 @@ func (e *Editor) markParseErrors() {
 	if !strings.HasSuffix(e.path, ".feature") {
 		return
 	}
-	if _, err := spec.ParseFeature(e.path); err != nil {
-		line, message := spec.Explain(err)
+	if _, err := ParseFeature(e.path); err != nil {
+		line, message := ExplainParseError(err)
 		e.marks = append(e.marks, model.EditorMark{Line: int(line), Message: capitalized(message)})
 	}
 }
@@ -6777,8 +6933,8 @@ func (e *Editor) Problems() []model.EditorMark {
 	if !strings.HasSuffix(e.path, ".feature") {
 		return []model.EditorMark{}
 	}
-	if _, err := spec.ParseFeatureText(e.text); err != nil {
-		line, message := spec.Explain(err)
+	if _, err := ParseFeatureText(e.text); err != nil {
+		line, message := ExplainParseError(err)
 		return []model.EditorMark{{Line: int(line), Message: capitalized(message)}}
 	}
 	return []model.EditorMark{}

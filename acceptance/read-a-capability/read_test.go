@@ -15,7 +15,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 const capability = "read-a-capability"
@@ -62,10 +61,10 @@ type diskScenario struct {
 	Steps []string // keyword and text: "Given a signed-in shopper with one item in the cart"
 }
 
-// checkoutScenarios parses checkout.feature with the Gherkin parser, through internal/spec.
+// checkoutScenarios parses checkout.feature with the Gherkin parser, through app.ScenariosIn.
 func (s *state) checkoutScenarios() ([]diskScenario, error) {
 	feature := filepath.Join(s.Capabilities(), "checkout", "checkout.feature")
-	scenarios, err := spec.ScenariosIn(feature)
+	scenarios, err := app.ScenariosIn(feature)
 	if err != nil {
 		return nil, err
 	}

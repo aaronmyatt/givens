@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	messages "github.com/cucumber/messages/go/v34"
+	"givens/internal/app"
 
-	"givens/internal/spec"
+	messages "github.com/cucumber/messages/go/v34"
 )
 
 const (
@@ -163,7 +163,7 @@ func (s *state) expectedChecks(name string) ([]string, []string, error) {
 		return nil, nil, err
 	}
 	path := filepath.Join(s.Capabilities(), capability, capability+".feature")
-	scenarios, err := spec.ScenariosIn(path)
+	scenarios, err := app.ScenariosIn(path)
 	if err != nil {
 		return nil, nil, err
 	}

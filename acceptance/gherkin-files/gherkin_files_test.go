@@ -12,7 +12,6 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 const (
@@ -393,7 +392,7 @@ func (s *state) loadsNormally(name string) error {
 // namesInFeature lists the scenario names in a sample shop .feature file, read with the same
 // parser Givens uses.
 func (s *state) namesInFeature(folder string, file string) ([]string, error) {
-	scenarios, err := spec.ScenariosIn(filepath.Join(s.Capabilities(), folder, file))
+	scenarios, err := app.ScenariosIn(filepath.Join(s.Capabilities(), folder, file))
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +409,7 @@ func (s *state) writeCheckout(lines []string) error {
 	if err := s.WriteFile(checkoutPath, strings.Join(lines, "\n")+"\n"); err != nil {
 		return err
 	}
-	_, err := spec.ScenariosIn(filepath.Join(s.Project, checkoutPath))
+	_, err := app.ScenariosIn(filepath.Join(s.Project, checkoutPath))
 	if err != nil {
 		return fmt.Errorf("the arranged checkout.feature doesn't parse: %w", err)
 	}

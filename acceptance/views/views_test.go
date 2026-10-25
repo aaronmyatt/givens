@@ -17,7 +17,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/spec"
 )
 
 const capability = "views"
@@ -78,7 +77,7 @@ func (s *state) projectScenarios() ([]diskScenario, error) {
 			return nil, fmt.Errorf("parsing %s: %w", feature, err)
 		}
 		featureError := hasErrorTag(document.Feature.Tags)
-		for _, scenario := range spec.Scenarios(document.Feature) {
+		for _, scenario := range app.FeatureScenarios(document.Feature) {
 			found = append(found, diskScenario{
 				Name: scenario.Name, Capability: document.Feature.Name,
 				Error: featureError || hasErrorTag(scenario.Tags),

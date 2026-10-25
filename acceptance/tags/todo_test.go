@@ -10,7 +10,7 @@ import (
 	messages "github.com/cucumber/messages/go/v34"
 
 	"givens/acceptance/world"
-	"givens/internal/spec"
+	"givens/internal/app"
 )
 
 // todoSteps are the steps of the to do flag's scenarios: "A scenario flagged to do", "Flag a
@@ -128,7 +128,7 @@ func (s *state) notFlagged() error {
 // ownTags lists the tags on the lines above a scenario's Scenario: line, as the parser reads
 // them. Ref: https://github.com/cucumber/messages
 func ownTags(path string, name string) ([]string, error) {
-	scenarios, err := spec.ScenariosIn(path)
+	scenarios, err := app.ScenariosIn(path)
 	if err != nil {
 		return nil, err
 	}

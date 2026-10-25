@@ -10,7 +10,6 @@ import (
 	"givens/internal/app"
 	"givens/internal/assert"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 // KitSource is the line every setup script starts with.
@@ -239,7 +238,7 @@ func (w *World) ScenarioCapability(name string) (string, error) {
 		return "", err
 	}
 	for _, feature := range features {
-		scenarios, err := spec.ScenariosIn(feature)
+		scenarios, err := app.ScenariosIn(feature)
 		if err != nil {
 			return "", err
 		}

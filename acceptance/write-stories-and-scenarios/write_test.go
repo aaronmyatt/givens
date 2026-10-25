@@ -18,7 +18,6 @@ import (
 	"givens/internal/app"
 	"givens/internal/app/model"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 const capability = "write-stories-and-scenarios"
@@ -99,7 +98,7 @@ func featurePath(capabilitySlug string) string {
 
 // scenarioNames lists a .feature file's scenarios with their steps, keyword included.
 func (s *state) scenarioSteps(capabilitySlug string) (map[string][]string, []string, error) {
-	scenarios, err := spec.ScenariosIn(filepath.Join(s.Project, featurePath(capabilitySlug)))
+	scenarios, err := app.ScenariosIn(filepath.Join(s.Project, featurePath(capabilitySlug)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -203,7 +202,7 @@ func (s *state) storyCreated(folder string, file string, featureLine string) err
 	if !slices.Equal(lines, want) {
 		return fmt.Errorf("%s holds %q, not %q", path, lines, want)
 	}
-	problems, err := spec.CheckFeature(filepath.Join(s.Project, path))
+	problems, err := app.CheckFeature(filepath.Join(s.Project, path))
 	if err != nil {
 		return err
 	}
@@ -272,7 +271,7 @@ func (s *state) newScenario(capabilityName string, draft model.ScenarioDraft) er
 
 // blockAdded checks the new block, and that every other scenario is as it was.
 func (s *state) blockAdded(name string, tag string) error {
-	scenarios, err := spec.ScenariosIn(filepath.Join(s.Project, featurePath("checkout")))
+	scenarios, err := app.ScenariosIn(filepath.Join(s.Project, featurePath("checkout")))
 	if err != nil {
 		return err
 	}

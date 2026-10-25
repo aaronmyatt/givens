@@ -1,11 +1,11 @@
-package spec
+package app
 
 import (
 	"errors"
 	"testing"
 )
 
-func TestExplain(t *testing.T) {
+func TestExplainParseError(t *testing.T) {
 	cases := []struct {
 		message string
 		line    int64
@@ -21,7 +21,7 @@ func TestExplain(t *testing.T) {
 		{"no Feature", 0, "no Feature"},
 	}
 	for _, c := range cases {
-		line, got := Explain(errors.New(c.message))
+		line, got := ExplainParseError(errors.New(c.message))
 		if line != c.line || got != c.want {
 			t.Errorf("Explain(%q) = %d, %q; want %d, %q", c.message, line, got, c.line, c.want)
 		}

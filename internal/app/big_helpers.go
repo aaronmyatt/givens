@@ -21,18 +21,19 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
 
+	gherkin "github.com/cucumber/gherkin/go/v42"
 	messages "github.com/cucumber/messages/go/v34"
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/slug"
-	"givens/internal/spec"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -1235,7 +1236,7 @@ func scenarioWarning(capability LoadedCapability, scenario LoadedScenario) strin
 // makes too, or "". Runs and setup files are named by slug, so neither scenario can use them.
 func slugClash(capability LoadedCapability, scenario LoadedScenario) string {
 	assert.That(scenario.Capability == capability.Slug, "the scenario is in the capability")
-	assert.That(len(capability.Scenarios) <= spec.ScenariosPerFeatureMax, "scenarios bounded")
+	assert.That(len(capability.Scenarios) <= ScenariosPerFeatureMax, "scenarios bounded")
 	for _, other := range capability.Scenarios {
 		if other.Slug == scenario.Slug && other.Line != scenario.Line {
 			return "Both names make the slug " + scenario.Slug
@@ -1244,14 +1245,168 @@ func slugClash(capability LoadedCapability, scenario LoadedScenario) string {
 	return ""
 }
 
+// From internal/spec, which reads .feature files with the official Cucumber Gherkin parser, so
+// Givens accepts exactly what test runners accept. The loader below, Write stories' editor and
+// `givens list` (cmd/givens) parse with it, and the steps in acceptance/ list scenarios with
+// ScenariosIn. Checking a capabilities folder against capabilities/GIVENS.md, which `givens
+// check` reports, is CheckCapabilities, in Use Givens from the terminal's section of big.go.
+// Ref: https://github.com/cucumber/gherkin
+
+// Limits. Tiger Style: put a limit on everything, so a runaway folder fails loudly.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	CapabilitiesMax         = 1000
+	ScenariosPerFeatureMax  = 1000
+	FeatureFileSizeBytesMax = 4 << 20
+)
+
+// ScenariosIn parses one .feature file and lists its scenarios, Rules included.
+func ScenariosIn(path string) ([]*messages.Scenario, error) {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	feature, err := ParseFeature(path)
+	if err != nil {
+		return nil, err
+	}
+	scenarios := FeatureScenarios(feature)
+	assert.That(len(scenarios) <= ScenariosPerFeatureMax, "scenarios per feature stay bounded")
+	return scenarios, nil
+}
+
+// ParseFeature parses one .feature file and returns its Feature. A file too large, not valid
+// Gherkin, or with no Feature is an error.
+// Ref: https://pkg.go.dev/github.com/cucumber/gherkin/go/v42#ParseGherkinDocument
+func ParseFeature(path string) (*messages.Feature, error) {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(source) > FeatureFileSizeBytesMax {
+		return nil, fmt.Errorf("%s is larger than 4 MiB", path)
+	}
+	feature, err := ParseFeatureText(string(source))
+	if errors.Is(err, ErrNoFeature) {
+		return nil, fmt.Errorf("%s has no Feature", path)
+	}
+	return feature, err
+}
+
+// ErrNoFeature is a .feature file's text with no Feature: line.
+var ErrNoFeature = errors.New("has no Feature")
+
+// ParseFeatureText parses a .feature file's text, as ParseFeature does a file: an editor's
+// text, before it's saved.
+func ParseFeatureText(source string) (*messages.Feature, error) {
+	assert.That(utf8.ValidString(source), "a feature is text")
+	assert.That(len(source) <= FeatureFileSizeBytesMax*2, "the text stays bounded")
+	if len(source) > FeatureFileSizeBytesMax {
+		return nil, errors.New("is larger than 4 MiB")
+	}
+	ids := &messages.Incrementing{}
+	document, err := gherkin.ParseGherkinDocument(strings.NewReader(source), ids.NewId)
+	if err != nil {
+		return nil, err
+	}
+	if document.Feature == nil {
+		return nil, ErrNoFeature
+	}
+	assert.That(document.Feature.Location != nil, "a parsed Feature has a location")
+	return document.Feature, nil
+}
+
+// FeatureScenarios lists a Feature's scenarios in file order, including those inside Rule blocks.
+func FeatureScenarios(feature *messages.Feature) []*messages.Scenario {
+	assert.That(feature != nil, "feature is parsed")
+	scenarios := make([]*messages.Scenario, 0, len(feature.Children))
+	for _, child := range feature.Children {
+		assert.That(child != nil, "the parser never returns a nil child")
+		if child.Scenario != nil {
+			scenarios = append(scenarios, child.Scenario)
+		}
+		if child.Rule == nil {
+			continue
+		}
+		for _, ruleChild := range child.Rule.Children {
+			if ruleChild.Scenario != nil {
+				scenarios = append(scenarios, ruleChild.Scenario)
+			}
+		}
+	}
+	return scenarios
+}
+
+// parseErrorLineRegexp matches one error in the Gherkin parser's message:
+// "(17:5): expected: #EOF, #StepLine, …, got 'Check the order is pending'".
+// Ref: https://github.com/cucumber/gherkin/blob/main/go/errors.go
+const parseErrorPattern = `\((\d+):\d+\): (?:expected: ([^\n]*?), got '[^\n]*'|([^\n]*))`
+
+var parseErrorLineRegexp = regexp.MustCompile(parseErrorPattern) //tiger:allow-global compiled once
+
+// expectedWords says, in plain words and in this order, the tokens worth naming. Tokens a
+// person wouldn't type at that point, like #EOF or #TableRow, are left out.
+func expectedWords() [][2]string {
+	words := [][2]string{
+		{"#StepLine", "a step"},
+		{"#TagLine", "a tag"},
+		{"#Comment", "a comment"},
+		{"#ScenarioLine", "a new scenario"},
+		{"#FeatureLine", "Feature:"},
+	}
+	assert.That(len(words) <= 8, "joinOr takes a short list")
+	assert.That(words[0][0] == "#StepLine", "a step is named first")
+	return words
+}
+
+// ExplainParseError turns the Gherkin parser's error into the first line it names and a message a
+// person can act on: "expected a step, a tag, a comment or a new scenario". A message it can't
+// read is passed on as it is, at line 0.
+func ExplainParseError(err error) (int64, string) {
+	assert.That(err != nil, "only an error is explained")
+	assert.That(err.Error() != "", "an error has a message")
+	match := parseErrorLineRegexp.FindStringSubmatch(err.Error())
+	if match == nil {
+		return 0, err.Error()
+	}
+	line, convertErr := strconv.ParseInt(match[1], 10, 64)
+	if convertErr != nil {
+		return 0, err.Error()
+	}
+	if match[2] == "" {
+		return line, match[3]
+	}
+	tokens := strings.Split(match[2], ", ")
+	words := make([]string, 0, len(tokens))
+	for _, pair := range expectedWords() {
+		for _, token := range tokens {
+			if token == pair[0] {
+				words = append(words, pair[1])
+			}
+		}
+	}
+	if len(words) == 0 {
+		return line, "this line isn't valid Gherkin"
+	}
+	return line, "expected " + joinOr(words)
+}
+
+// joinOr joins words as "a, b or c".
+func joinOr(words []string) string {
+	assert.That(len(words) > 0, "there are words to join")
+	assert.That(len(words) <= 8, "a short list")
+	if len(words) == 1 {
+		return words[0]
+	}
+	return strings.Join(words[:len(words)-1], ", ") + " or " + words[len(words)-1]
+}
+
 // From internal/project, which loads a capabilities folder into the capabilities, scenarios,
 // tags and setup files Givens shows and runs. It reads; it never writes. Every story reads the
 // project it loads: reload and findCapabilities load it, as do `givens list` and `givens run`
 // (cmd/givens). Window's Capability and Scenario are what a window shows of a LoadedCapability
 // and a LoadedScenario (capabilityOf and scenarioOf, project.go).
 //
-// The layout it reads is written down in capabilities/GIVENS.md. Parsing is internal/spec's, so
-// what Givens loads is what spec.Check judges and what test runners accept.
+// The layout it reads is written down in capabilities/GIVENS.md. Parsing is ParseFeature's,
+// above, so what Givens loads is what CheckCapabilities judges and what test runners accept.
 
 // Limits. Tiger Style: put a limit on everything.
 // Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
@@ -1274,7 +1429,7 @@ type LoadedProject struct {
 	Root         string             // the capabilities folder, absolute
 	Capabilities []LoadedCapability // sorted by folder name
 	Helpers      []string           // _shared/*.sh at the root, sorted; the kit included
-	Problems     []spec.Problem
+	Problems     []ConventionProblem
 }
 
 // LoadedCapability is one folder holding <slug>/<slug>.feature.
@@ -1305,9 +1460,9 @@ func LoadProject(root string) (*LoadedProject, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) > spec.CapabilitiesMax {
+	if len(entries) > CapabilitiesMax {
 		return nil, fmt.Errorf("%s holds %d entries, more than %d",
-			absolute, len(entries), spec.CapabilitiesMax)
+			absolute, len(entries), CapabilitiesMax)
 	}
 	project := &LoadedProject{Root: absolute}
 	project.Capabilities = make([]LoadedCapability, 0, len(entries))
@@ -1322,7 +1477,7 @@ func LoadProject(root string) (*LoadedProject, error) {
 	if project.Helpers, err = helperFiles(absolute); err != nil {
 		return nil, err
 	}
-	if project.Problems, err = spec.Check(absolute); err != nil {
+	if project.Problems, err = CheckCapabilities(absolute); err != nil {
 		return nil, err
 	}
 	assert.That(len(project.Capabilities) <= len(entries), "each capability is an entry")
@@ -1361,7 +1516,7 @@ func loadCapability(dir string) LoadedCapability {
 	}
 	capability.Helpers = helpers
 	capability.Ignored = otherFeatures(dir, capability.FeaturePath)
-	feature, err := spec.ParseFeature(capability.FeaturePath)
+	feature, err := ParseFeature(capability.FeaturePath)
 	if err != nil {
 		capability.ParseError = parseErrorOf(capability.FeaturePath, err)
 		capability.Name = featureNameIn(capability.FeaturePath, name)
@@ -1397,7 +1552,7 @@ func otherFeatures(dir string, own string) []string {
 func parseErrorOf(path string, err error) string {
 	assert.That(err != nil, "only an error is described")
 	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
-	line, message := spec.Explain(err)
+	line, message := ExplainParseError(err)
 	if line > 0 {
 		return fmt.Sprintf("%s line %d: %s", filepath.Base(path), line, message)
 	}
@@ -1410,7 +1565,7 @@ func featureNameIn(path string, fallback string) string {
 	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
 	assert.That(fallback != "", "there's a name to fall back on")
 	text, err := os.ReadFile(path)
-	if err != nil || len(text) > spec.FeatureFileSizeBytesMax {
+	if err != nil || len(text) > FeatureFileSizeBytesMax {
 		return fallback
 	}
 	for _, line := range strings.Split(string(text), "\n") {
@@ -1425,7 +1580,7 @@ func featureNameIn(path string, fallback string) string {
 
 // storyLines picks the As a, I want and So that lines out of a Feature's description.
 func storyLines(description string) []string {
-	assert.That(len(description) <= spec.FeatureFileSizeBytesMax, "a description fits its file")
+	assert.That(len(description) <= FeatureFileSizeBytesMax, "a description fits its file")
 	lines := strings.Split(description, "\n")
 	story := make([]string, 0, 3)
 	for _, line := range lines {
@@ -1561,7 +1716,7 @@ func loadScenarios(capability LoadedCapability, feature *messages.Feature) []Loa
 			}
 		}
 	}
-	assert.That(len(scenarios) <= spec.ScenariosPerFeatureMax, "scenarios stay bounded")
+	assert.That(len(scenarios) <= ScenariosPerFeatureMax, "scenarios stay bounded")
 	return scenarios
 }
 
@@ -1597,7 +1752,7 @@ func loadScenario(
 
 // readScenarioTags reads @error and @timeout out of a scenario's tags.
 func readScenarioTags(tags []string) (bool, time.Duration) {
-	assert.That(len(tags) <= spec.ScenariosPerFeatureMax, "tags stay bounded")
+	assert.That(len(tags) <= ScenariosPerFeatureMax, "tags stay bounded")
 	isError := false
 	stillRunning := StillRunningDefault
 	for _, tag := range tags {
@@ -1632,7 +1787,7 @@ func timeoutOf(tag string) time.Duration {
 
 // stepsOf copies parsed steps into GherkinSteps.
 func stepsOf(parsed []*messages.Step) []GherkinStep {
-	assert.That(len(parsed) <= spec.ScenariosPerFeatureMax, "steps stay bounded")
+	assert.That(len(parsed) <= ScenariosPerFeatureMax, "steps stay bounded")
 	steps := make([]GherkinStep, 0, len(parsed))
 	for _, step := range parsed {
 		built := GherkinStep{
@@ -1653,7 +1808,7 @@ func stepsOf(parsed []*messages.Step) []GherkinStep {
 
 // examplesOf copies a Scenario Outline's Examples blocks.
 func examplesOf(parsed []*messages.Examples) []ExamplesBlock {
-	assert.That(len(parsed) <= spec.ScenariosPerFeatureMax, "examples stay bounded")
+	assert.That(len(parsed) <= ScenariosPerFeatureMax, "examples stay bounded")
 	blocks := make([]ExamplesBlock, 0, len(parsed))
 	for _, block := range parsed {
 		built := ExamplesBlock{Name: block.Name, Slug: slug.Of(block.Name)}
@@ -1669,7 +1824,7 @@ func examplesOf(parsed []*messages.Examples) []ExamplesBlock {
 
 // tableRowsOf copies table rows into cell values.
 func tableRowsOf(parsed []*messages.TableRow) [][]string {
-	assert.That(len(parsed) <= spec.ScenariosPerFeatureMax, "rows stay bounded")
+	assert.That(len(parsed) <= ScenariosPerFeatureMax, "rows stay bounded")
 	rows := make([][]string, 0, len(parsed))
 	for _, row := range parsed {
 		cells := make([]string, 0, len(row.Cells))
@@ -1684,7 +1839,7 @@ func tableRowsOf(parsed []*messages.TableRow) [][]string {
 
 // tagNames lists tag names in order, without repeats.
 func tagNames(tags []*messages.Tag) []string {
-	assert.That(len(tags) <= spec.ScenariosPerFeatureMax, "tags stay bounded")
+	assert.That(len(tags) <= ScenariosPerFeatureMax, "tags stay bounded")
 	names := make([]string, 0, len(tags))
 	seen := make(map[string]bool, len(tags))
 	for _, tag := range tags {
