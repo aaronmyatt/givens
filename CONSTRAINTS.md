@@ -28,8 +28,6 @@ adapted to Go. Every rule a tool can check is checked, on every edit and every c
 | The kit's bats tests pass under bash 3.2 | this project | `scripts/check.sh kit` |
 | Feature files follow `capabilities/GIVENS.md` | this project | `go test ./acceptance` |
 | Tests pass, scenarios without `@wip` included | this project | `go test ./...` |
-| Swift is swift-format-clean: 100 columns, doc comments on public names, no force unwraps | Tiger Style, adapted | `scripts/check.sh swift` |
-| The macOS app's Gherkin suites pass, `@wip` skipped, every step defined | this project | `swift test --package-path macos` |
 
 ## Allowed exceptions
 
@@ -65,7 +63,7 @@ Followed in review. From Tiger Style unless noted.
 
 | When | What runs | Blocks |
 | --- | --- | --- |
-| Claude edits a file | `.claude/hooks/after-edit.sh`: gofmt + tigerlint on the package, swift-format for `.swift`, the spec test for `.feature`, the allowlist for `go.mod`, shellcheck for scripts | the edit's result is sent back to Claude to fix |
+| Claude edits a file | `.claude/hooks/after-edit.sh`: gofmt + tigerlint on the package, the spec test for `.feature`, the allowlist for `go.mod`, shellcheck for scripts | the edit's result is sent back to Claude to fix |
 | Claude finishes a turn | `.claude/hooks/before-stop.sh`: `scripts/check.sh` | Claude keeps working until it passes |
 | `git commit` | `.githooks/pre-commit`: `scripts/check.sh` | the commit |
 | Any time | `scripts/check.sh` (or `scripts/check.sh lint` for one check) | nothing; it reports |

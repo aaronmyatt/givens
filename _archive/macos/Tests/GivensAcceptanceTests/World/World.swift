@@ -46,19 +46,71 @@ final class World {
     var editedPath: URL?
     var editedText = ""
 
+    /// What serve and the steps' commands run with on top of the suite's own: the scenario's
+    /// folder for Givens browsers, headless. Per serve, as the suites run side by side.
+    var environment: [String: String]
+    /// tools/fakeshop, once a browser step starts it; see shopURL.
+    private var shop: Process?
+    private var shopAddress = ""
+
     init() throws {
         dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("givens-scenario-\(UUID().uuidString)", isDirectory: true)
         appData = dir.appendingPathComponent("app-data", isDirectory: true)
         trash = FakeTrash(directory: dir.appendingPathComponent("Trash", isDirectory: true))
         try FileManager.default.createDirectory(at: appData, withIntermediateDirectories: true)
+        environment = [
+            "GIVENS_BROWSERS": dir.appendingPathComponent("browsers").path,
+            "GIVENS_HEADLESS": "1",
+        ]
     }
 
     /// Stops serve and removes the scenario's folder.
     func tearDown() {
         precondition(dir.lastPathComponent.hasPrefix("givens-scenario-"), "only a scenario folder")
         app?.stop()
-        try? FileManager.default.removeItem(at: dir)
+        closeBrowser()
+        // Chrome's helpers can still write in its profile for a moment after it quits.
+        for _ in 0..<50 {
+            if (try? FileManager.default.removeItem(at: dir)) != nil { return }
+            if !FileManager.default.fileExists(atPath: dir.path) { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
+    /// Quits the sample shop's Givens browser, if a step started one, and the fake shop.
+    private func closeBrowser() {
+        shop?.terminate()
+        let browsers = dir.appendingPathComponent("browsers")
+        guard let project, FileManager.default.fileExists(atPath: browsers.path),
+            let givens = try? Toolchain.givens()
+        else { return }
+        _ = try? Shell.run(
+            "\(Shell.quote(givens.path)) browser close", in: project,
+            environment: environment.merging(["GIVENS_ROOT": capabilities.path]) { $1 })
+    }
+
+    /// The fake shop's address, starting tools/fakeshop the first time: it prints its address
+    /// on its first line. Mirrors acceptance/world's ShopFor.
+    func shopURL() throws -> String {
+        if !shopAddress.isEmpty { return shopAddress }
+        let process = Process()
+        process.executableURL = try Toolchain.binaries().appendingPathComponent("fakeshop")
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try process.run()
+        shop = process
+        var line = Data()
+        for _ in 0..<256 {
+            let byte = pipe.fileHandleForReading.readData(ofLength: 1)
+            if byte.isEmpty || byte == Data("\n".utf8) { break }
+            line.append(byte)
+        }
+        shopAddress = String(decoding: line, as: UTF8.self)
+        guard shopAddress.hasPrefix("http://") else {
+            throw StepFailure("fakeshop printed \(shopAddress)")
+        }
+        return shopAddress
     }
 
     /// The sample shop's capabilities folder.
@@ -100,7 +152,8 @@ final class World {
         // not how fast setup must be; the steps time setup themselves.
         let serve = ServeClient.Configuration(
             executable: try Toolchain.givens(), appDataDirectory: appData, testSeams: true,
-            callTimeout: .seconds(Self.setupWaitSeconds + Self.callMarginSeconds))
+            callTimeout: .seconds(Self.setupWaitSeconds + Self.callMarginSeconds),
+            environment: environment)
         app = AppModel(serve: serve, platform: platform)
     }
 
@@ -110,6 +163,24 @@ final class World {
         try startApp()
         if !untrusted { try await app?.markTrusted(capabilities.path) }
         window = try await app?.open(capabilities.path)
+        try await waitForRunsSync(window)
+    }
+
+    /// How many 50 ms polls a step waits for the sync a project's opening starts: 10 s, as
+    /// RunsSyncWaitMax in acceptance/world. The remotes the steps make are folders.
+    static let runsSyncPollsMax = 200
+
+    /// Waits for the sync on open, as a developer waits for "Syncing runs with origin" to go,
+    /// so the next step sees the runs it brought. Serve pushes the snapshot that drops it.
+    func waitForRunsSync(_ window: WindowModel?) async throws {
+        guard let window else { return }
+        for _ in 0..<Self.runsSyncPollsMax {
+            if !window.visible.contains(where: { $0.contains("Syncing runs with origin") }) {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw StepFailure("the sync on open was still going after 10 s")
     }
 
     /// The window under test, opening the sample shop when nothing is open yet.
@@ -164,7 +235,7 @@ final class World {
     func run(_ command: String) throws {
         let directory = cwd ?? project ?? dir
         let path = pathPrepend + [try Toolchain.binaries()]
-        let result = try Shell.run(command, in: directory, path: path)
+        let result = try Shell.run(command, in: directory, path: path, environment: environment)
         output = result.output
         exitCode = result.status
     }

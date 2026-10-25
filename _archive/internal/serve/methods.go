@@ -47,7 +47,9 @@ type params struct {
 	AsA        string           `json:"asA"`
 	IWant      string           `json:"iWant"`
 	SoThat     string           `json:"soThat"`
-	Error      string           `json:"error"` // "true" or "false"
+	Error      string           `json:"error"`     // "true" or "false"
+	Runs       string           `json:"runs"`      // a whole number, for window.setRunLimits
+	Megabytes  string           `json:"megabytes"` // a whole number, for window.setRunLimits
 }
 
 // table maps each method in ServeProtocol.swift to its internal/app call.

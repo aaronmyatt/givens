@@ -13,6 +13,8 @@ scenarios, sets up each scenario's starting state, and walks a developer through
 - `internal/app/`: the core the TUI, the CLI and the steps all drive; mostly stubs that
   return `ErrNotImplemented` until built. `internal/tui/`: the TUI. `cmd/givens/`: the CLI.
   `tools/tigerlint/`: the linter.
+- `_archive/`: the macOS SwiftUI app and its `givens serve` bridge, archived; Go tooling
+  skips it and nothing builds or checks it.
 - `testdata/sample-shop/`: the pretend project most scenarios start from.
 - `todo.txt` and `tasks/<slug>/`: the backlog, worked with the `txtodo-backlog` skill.
 

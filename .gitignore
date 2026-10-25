@@ -7,9 +7,9 @@
 *.out
 .claude/settings.local.json
 
-# SwiftPM build output for the macOS app.
-macos/.build/
-macos/.swiftpm/
+# SwiftPM build output for the archived macOS app.
+_archive/macos/.build/
+_archive/macos/.swiftpm/
 
 # txtodo's local daemon state (op log, device keys, token hashes); todo.txt and tasks/ are the backlog.
 .txtodo/
@@ -19,5 +19,5 @@ macos/.swiftpm/
 # The sample shop's test runner, installed by scripts/runner.sh.
 /.cache/
 
-# Givens.app, built by scripts/build-app.sh.
+# Givens.app, built by the archived _archive/scripts/build-app.sh.
 /build/

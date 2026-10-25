@@ -59,7 +59,9 @@ func (s *Server) needs() map[string]handler {
 		"window.editorPreview":        s.onEditor(editorPreview),
 		"window.delete":               s.onWindow(deleteItem),
 		// capabilities/keep-runs-off-main: Needs/keep-runs-off-main.swift.
-		"window.syncRuns": s.onWindow(syncRuns),
+		"window.syncRuns":     s.onWindow(syncRuns),
+		"window.runLimits":    s.onWindow(runLimits),
+		"window.setRunLimits": s.onWindow(setRunLimits),
 	}
 }
 
@@ -267,6 +269,35 @@ func syncRuns(window *app.Window, _ params) (any, error) {
 		return nil, fmt.Errorf("%w: only a project window has runs", ErrBadRequest)
 	}
 	return nil, window.SyncRuns()
+}
+
+// runLimitsValue is window.runLimits's value. Swift's RunLimits.
+type runLimitsValue struct {
+	Runs      int `json:"runs"`
+	Megabytes int `json:"megabytes"`
+}
+
+func runLimits(window *app.Window, _ params) (any, error) {
+	assert.That(window != nil, "run limits runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	limits, err := window.RunLimits()
+	if err != nil {
+		return nil, err
+	}
+	return runLimitsValue{Runs: limits.Runs, Megabytes: limits.Megabytes}, nil
+}
+
+// setRunLimits takes the limits as numbers in strings, as the dialog's fields give them.
+func setRunLimits(window *app.Window, given params) (any, error) {
+	assert.That(window != nil, "set run limits runs on a window")
+	assert.That(window.ID() != "", "a window has an id")
+	count, countErr := strconv.Atoi(given.Runs)
+	megabytes, megabytesErr := strconv.Atoi(given.Megabytes)
+	if countErr != nil || megabytesErr != nil {
+		return nil, fmt.Errorf("%w: each limit is a whole number, not %q and %q",
+			ErrBadRequest, given.Runs, given.Megabytes)
+	}
+	return nil, window.SetRunLimits(runs.Limits{Runs: count, Megabytes: megabytes})
 }
 
 func branches(window *app.Window, _ params) (any, error) {

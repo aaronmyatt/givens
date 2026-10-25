@@ -12,6 +12,8 @@ public struct CodeBlockRecord: Decodable, Sendable, Equatable {
     public let code: String
     /// False while the fence never closes.
     public let copyable: Bool
+    /// True for a "bash run" or "js run" block, which Givens runs by itself.
+    public let run: Bool
 }
 
 /// One card on the Drop in page: a by_hand or ask step, or a markdown step. Mirrors
@@ -39,6 +41,8 @@ public struct SetupCardRecord: Decodable, Sendable, Equatable {
     public let mark: String
     /// Why the card is marked, like an unclosed code fence; or "".
     public let warning: String
+    /// What the card's run blocks printed, in order.
+    public let output: [String]
 }
 
 /// One Examples row on an outline's Drop in page. Mirrors internal/app's DropInRow.

@@ -90,6 +90,34 @@ private func keepRunsArrangeSteps(_ s: KeepRunsState) -> [StepDefinition] {
         def(#"^"([^"]*)" has (\d+) runs recorded, each with a screenshot$"#) { call in
             try await s.recordedRuns(call[0], Int(call[1]) ?? 0)
         },
+        def(#"^the sample shop is a git repository with a remote that doesn't answer$"#) { _ in
+            try await s.remoteSilent()
+        },
+        def(#"^a developer opens it in Givens$"#) { _ in try await s.openTimed() },
+        def(#"^it has a branch "([^"]*)"$"#) { call in
+            guard let project = w.project else { throw StepFailure("no sample shop copied") }
+            try keepRunsGit(["branch", call[0]], in: project)
+        },
+        def(#"^they open the branch "([^"]*)"$"#) { call in
+            let window = try await w.front()
+            try await window.openBranch(call[0])
+            guard let front = w.app?.front, front.id != window.id else {
+                throw StepFailure("no window opened for \(call[0]): \(window.visible)")
+            }
+            (w.window, w.session) = (front, nil)
+        },
+        def(#"^a developer chooses "Change run limits" and sets (\d+) runs and (\d+) MB$"#) {
+            call in
+            let window = try await w.front()
+            try expect(window.offers, "Change run limits", "the offers")
+            try await window.choose("Change run limits")
+            // The sheet starts from the ref's limits: the defaults, as nothing changed them.
+            let limits = try await window.runLimits()
+            guard limits.runs == 1000, limits.megabytes == 250 else {
+                throw StepFailure("the sheet starts from \(limits), not the defaults")
+            }
+            try await window.setRunLimits(runs: Int(call[0]) ?? 0, megabytes: Int(call[1]) ?? 0)
+        },
     ]
 }
 
@@ -138,6 +166,38 @@ private func keepRunsCheckSteps(_ s: KeepRunsState) -> [StepDefinition] {
         },
         def(#"^they don't see "([^"]*)"$"#) { call in
             try expectNot(try await w.front().visible, call[0], "the window")
+        },
+        def(#"^the window opens within two seconds, showing "([^"]*)"$"#) { call in
+            guard s.opening <= .seconds(2) else {
+                throw StepFailure("opening took \(s.opening), more than 2 seconds")
+            }
+            try expect(try await w.front().visible, call[0], "the window")
+        },
+        def(#"^once the sync gives up, they don't see "([^"]*)"$"#) { call in
+            // The sync gives up after runref.OpenTimeout, 8 s; serve then pushes a snapshot.
+            for _ in 0..<240 {
+                if !(try await w.front().visible).contains(where: { $0.contains(call[0]) }) {
+                    return
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            try expectNot(try await w.front().visible, call[0], "the window")
+        },
+        def(#"^the remote's refs/givens/runs has a limit of (\d+) runs and (\d+) MB$"#) {
+            call in
+            guard let remote = s.remote else { throw StepFailure("the shop has no remote") }
+            let text = try keepRunsGit(["show", "refs/givens/runs:limits"], in: remote)
+            let want = "runs \(call[0])\nmegabytes \(call[1])"
+            guard text == want else {
+                throw StepFailure("the ref's limits file says \(text), not \(want)")
+            }
+        },
+        def(#"^it holds (\d+) runs of "([^"]*)"$"#) { call in
+            let key = try s.runKey(call[1])
+            let found = try s.remoteRuns().filter { $0.key == key }.count
+            guard found == Int(call[0]) else {
+                throw StepFailure("the remote holds \(found) runs of \(key), not \(call[0])")
+            }
         },
         def(#"^the remote's refs/givens/runs holds the newest (\d+) runs of "([^"]*)"$"#) {
             call in try keepRunsHoldsNewest(s, Int(call[0]) ?? 0, call[1])

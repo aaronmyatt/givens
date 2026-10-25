@@ -5,7 +5,7 @@
 #   scripts/check.sh             # every check
 #   scripts/check.sh deps lint   # only the named checks
 #
-# Checks: fmt deps vet lint shell kit runner test swift
+# Checks: fmt deps vet lint shell kit runner test
 # Strict mode: stop on any failing command, unset variable or failed pipe.
 # Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
 set -euo pipefail
@@ -69,18 +69,9 @@ check_runner() { scripts/runner.sh; }
 
 check_test() { go test ./...; }
 
-check_swift() {
-  # swift-format ships with the Swift 6 toolchain; its config is macos/.swift-format.
-  # Ref: https://github.com/swiftlang/swift-format#readme
-  swift format lint --strict --recursive macos/Package.swift macos/Sources macos/Tests
-  # Builds the macOS app and runs its Gherkin suites; GIVENS_TAGS picks scenarios as for go test.
-  # Ref: https://docs.swift.org/swiftpm/documentation/packagemanagerdocs/swifttest
-  swift test --package-path macos
-}
-
 checks=("$@")
 if [ ${#checks[@]} -eq 0 ]; then
-  checks=(fmt deps vet lint shell kit runner test swift)
+  checks=(fmt deps vet lint shell kit runner test)
 fi
 for name in "${checks[@]}"; do
   echo "== $name"

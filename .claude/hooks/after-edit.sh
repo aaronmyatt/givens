@@ -17,7 +17,7 @@ fail() {
 }
 
 case "$file" in
-  */testdata/*)
+  */testdata/* | */_archive/*)
     exit 0
     ;;
   *.go)
@@ -25,14 +25,6 @@ case "$file" in
     gofmt -w "$file"
     if ! out=$(go run ./tools/tigerlint "$(dirname "$file")" 2>&1); then
       fail "tigerlint found problems in $file's package (see CONSTRAINTS.md):" "$out"
-    fi
-    ;;
-  *.swift)
-    # Format in place, then lint against macos/.swift-format, like gofmt + tigerlint for Go.
-    # Ref: https://github.com/swiftlang/swift-format#readme
-    swift format format -i "$file"
-    if ! out=$(swift format lint --strict "$file" 2>&1); then
-      fail "swift-format found problems in $file (see macos/.swift-format):" "$out"
     fi
     ;;
   *.feature)

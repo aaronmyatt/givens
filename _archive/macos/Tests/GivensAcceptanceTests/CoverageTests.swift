@@ -17,6 +17,7 @@ import Testing
     static let windowless: [String: String] = [
         "the-kit": "the kit is bash run in a terminal; its feature says none need the app",
         "use-givens-from-the-terminal": "the givens command, run without opening the app",
+        "work-in-the-terminal": "the givens command's TUI and $EDITOR, with no window",
     ]
 
     @Test func everyCapabilityIsCoveredOrExcused() throws {

@@ -294,18 +294,19 @@ private func shareSetupChanges(_ s: ShareSetupBetweenScenariosState) -> [StepDef
             try w.writeFile(
                 script, try w.readFile(script) + "ok \"set the cart's currency to GBP\"\n")
         },
-        def(#"^the sample shop's kit is updated from version 1 to 2$"#) { _ in
-            // Rewrites the version line and adds a function, as an update from 1 to 2 would.
+        def(#"^the sample shop's kit is updated to the next version$"#) { _ in
+            // Rewrites the version line and adds a function, as a real update would.
             let path = "capabilities/_shared/givens.sh"
             guard let text = try? w.readFile(path) else {
                 throw StepFailure("the sample shop has no kit: internal/kit/givens.sh isn't built")
             }
             var lines = text.components(separatedBy: "\n")
-            guard let at = lines.firstIndex(of: "# givens kit 1") else {
-                throw StepFailure("expected the kit at version 1 (`# givens kit 1`): \(lines[0])")
-            }
-            lines[at] = "# givens kit 2"
-            try w.writeFile(path, lines.joined(separator: "\n") + "\n_givens_version_2() { :; }\n")
+            let prefix = "# givens kit "
+            guard lines[0].hasPrefix(prefix), let version = Int(lines[0].dropFirst(prefix.count))
+            else { throw StepFailure("expected the kit's version line: \(lines[0])") }
+            lines[0] = prefix + String(version + 1)
+            try w.writeFile(
+                path, lines.joined(separator: "\n") + "\n_givens_next_version() { :; }\n")
         },
     ]
 }

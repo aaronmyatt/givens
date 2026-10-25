@@ -30,14 +30,15 @@ enum Toolchain {
     /// The `givens` command, for ServeClient and for steps that run it in a shell.
     static func givens() throws -> URL { try binaries().appendingPathComponent("givens") }
 
-    /// Builds cmd/givens and tools/pickles into a temporary folder.
+    /// Builds cmd/givens, tools/pickles and tools/fakeshop into a temporary folder.
     /// Ref: https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies
     private static func build() throws -> URL {
         let bin = FileManager.default.temporaryDirectory
             .appendingPathComponent("givens-swift-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let (status, output) = try Shell.run(
-            "go build -o \(Shell.quote(bin.path))/ ./cmd/givens ./tools/pickles", in: root)
+            "go build -o \(Shell.quote(bin.path))/ ./cmd/givens ./tools/pickles ./tools/fakeshop",
+            in: root)
         guard status == 0 else { throw StepFailure("go build failed:\n\(output)") }
         precondition(FileManager.default.fileExists(atPath: bin.path + "/givens"), "built givens")
         return bin
@@ -67,14 +68,15 @@ enum Shell {
     /// Runs `command` with bash in `directory`, with the folders in `path` first on PATH.
     /// A non-zero exit isn't an error; callers check the status.
     static func run(
-        _ command: String, in directory: URL, path: [URL] = [], stderr: Bool = true
+        _ command: String, in directory: URL, path: [URL] = [], stderr: Bool = true,
+        environment extra: [String: String] = [:]
     ) throws -> (status: Int32, output: String) {
         precondition(!command.isEmpty, "a command is given")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = ["-c", command]
         process.currentDirectoryURL = directory
-        var environment = ProcessInfo.processInfo.environment
+        var environment = ProcessInfo.processInfo.environment.merging(extra) { $1 }
         let prefix = path.map(\.path) + [environment["PATH"] ?? "/usr/bin:/bin"]
         environment["PATH"] = prefix.joined(separator: ":")
         process.environment = environment

@@ -42,11 +42,14 @@ public final class ServeClient {
         public let testSeams: Bool
         /// The longest one call may take.
         public let callTimeout: Duration
+        /// Variables serve gets on top of the app's own, like the acceptance suites' folder
+        /// for Givens browsers.
+        public let environment: [String: String]
 
         /// Makes a configuration.
         public init(
             executable: URL, appDataDirectory: URL, testSeams: Bool = false,
-            callTimeout: Duration = .seconds(10)
+            callTimeout: Duration = .seconds(10), environment: [String: String] = [:]
         ) {
             precondition(executable.isFileURL, "serve is a local command")
             precondition(appDataDirectory.isFileURL, "app data is a local folder")
@@ -54,6 +57,7 @@ public final class ServeClient {
             self.appDataDirectory = appDataDirectory
             self.testSeams = testSeams
             self.callTimeout = callTimeout
+            self.environment = environment
         }
     }
 
@@ -130,7 +134,9 @@ public final class ServeClient {
         let child = Process()
         child.executableURL = configuration.executable
         child.arguments = ["serve", "--app-data", configuration.appDataDirectory.path]
-        var environment = ProcessInfo.processInfo.environment
+        var environment = ProcessInfo.processInfo.environment.merging(
+            configuration.environment
+        ) { $1 }
         environment["GIVENS_TEST_SEAMS"] = configuration.testSeams ? "1" : nil
         child.environment = environment
         let input = Pipe()

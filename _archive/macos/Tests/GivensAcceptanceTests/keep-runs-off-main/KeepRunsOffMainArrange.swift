@@ -51,6 +51,8 @@ final class KeepRunsState {
     var times: [String] = []
     /// Those a trim was expected to drop.
     var dropped: [String] = []
+    /// How long the last timed open took.
+    var opening: Duration = .zero
 
     init(_ w: World) { self.w = w }
 
@@ -89,6 +91,28 @@ final class KeepRunsState {
         try await window.close()
         (w.window, w.session) = (nil, nil)
         w.window = try await app.open(w.capabilities.path)
+        try await w.waitForRunsSync(w.window)
+    }
+
+    /// Makes the shop a git repository whose remote takes the connection and never answers:
+    /// git's ext transport runs a command that only sleeps.
+    /// Ref: https://git-scm.com/docs/git-remote-ext
+    func remoteSilent() async throws {
+        try await gitWithRemote()
+        guard let project = w.project else { throw StepFailure("no sample shop copied") }
+        try keepRunsGit(["config", "protocol.ext.allow", "always"], in: project)
+        try keepRunsGit(["remote", "set-url", "origin", "ext::sh -c sleep% 30"], in: project)
+    }
+
+    /// Opens the shop as a developer would, timing it, and doesn't wait for the sync.
+    func openTimed() async throws {
+        try w.startApp()
+        guard let app = w.app else { throw StepFailure("no app started") }
+        try await app.markTrusted(w.capabilities.path)
+        let clock = ContinuousClock()
+        let start = clock.now
+        w.window = try await app.open(w.capabilities.path)
+        opening = clock.now - start
     }
 
     /// Chooses "Move runs off main" and confirms it, from the project: a Drop in still open is
@@ -126,7 +150,9 @@ final class KeepRunsState {
         let app = AppModel(serve: serve, platform: platform)
         let capabilities = folder.appendingPathComponent("capabilities").path
         try await app.markTrusted(capabilities)
-        other = KeepRunsDevice(app: app, window: try await app.open(capabilities))
+        let window = try await app.open(capabilities)
+        try await w.waitForRunsSync(window)
+        other = KeepRunsDevice(app: app, window: window)
     }
 
     /// Runs a step against the other device's app and window, then stops that app.

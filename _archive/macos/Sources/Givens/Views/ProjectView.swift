@@ -24,7 +24,7 @@ enum Placement {
     static let story = ["Edit about.md", "Add about.md"]
     /// The toolbar's runs button, while capabilities/runs still holds runs. "Share runs"
     /// isn't here: it goes in the banner, beside the count of runs waiting to be shared.
-    static let runs = ["Move runs off main"]
+    static let runs = ["Move runs off main", "Change run limits"]
 }
 
 /// How often a window shares its runs kept off main and fetches other devices'.
@@ -36,6 +36,7 @@ let runsSyncSeconds = 300
 struct ProjectView: View {
     let window: WindowModel
     @State private var dialog: AuthoringDialog?
+    @State private var limitsShown = false
 
     var body: some View {
         NavigationSplitView {
@@ -98,6 +99,16 @@ struct ProjectView: View {
                     .help("Move the runs in capabilities/runs to refs/givens/runs on origin")
                 }
             }
+            ToolbarItem(placement: .primaryAction) {
+                if window.offers.contains("Change run limits") {
+                    Button {
+                        limitsShown = true
+                    } label: {
+                        Label("Change run limits", systemImage: "gauge.with.dots.needle.33percent")
+                    }
+                    .help("How many runs, and MB of them, refs/givens/runs keeps")
+                }
+            }
         }
         // Runs kept off main are shared, and other devices' fetched, every few minutes, so
         // they show up without reopening the project. Ref:
@@ -110,6 +121,7 @@ struct ProjectView: View {
             }
         }
         .sheet(item: $dialog) { kind in AuthoringSheet(window: window, kind: kind) }
+        .sheet(isPresented: $limitsShown) { RunLimitsSheet(window: window) }
         .background {
             // A bare e opens the editor on the scenario or story on show. Only while nothing
             // that takes typing is on show, or the key would be taken from the text.
@@ -383,6 +395,47 @@ struct AuthoringSheet: View {
         }
         .padding(20)
         .frame(minWidth: 400)
+    }
+}
+
+/// The ref's limits: the newest runs it keeps, by count and by MB, whichever is fewer. It
+/// starts from the limits the ref has. Ref:
+/// https://developer.apple.com/documentation/swiftui/textfield/init(_:value:format:prompt:)
+struct RunLimitsSheet: View {
+    let window: WindowModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var runs = 0
+    @State private var megabytes = 0
+
+    /// What the limits do, under the sheet's title.
+    private static let explanation =
+        "refs/givens/runs keeps the newest runs, up to both limits. Every device trims to them."
+
+    var body: some View {
+        Form {
+            Text("Run limits").font(.title3).bold()
+            Text(Self.explanation).foregroundStyle(.secondary)
+            TextField("Runs", value: $runs, format: .number)
+            TextField("MB", value: $megabytes, format: .number)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save") {
+                    window.app.run("Run limits saved") { _ in
+                        try await window.setRunLimits(runs: runs, megabytes: megabytes)
+                    }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(runs < 1 || megabytes < 1)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 400)
+        .task {
+            guard let limits = try? await window.runLimits() else { return }
+            (runs, megabytes) = (limits.runs, limits.megabytes)
+        }
     }
 }
 
