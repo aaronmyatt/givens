@@ -5,9 +5,13 @@ import (
 	"os/exec"
 
 	"givens/internal/assert"
+	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/project"
 )
+
+// ChromeHint is the install hint for a setup with browser lines.
+const ChromeHint = "brew install --cask google-chrome"
 
 // RequiredCommands lists the commands a scenario's setup needs, whether each is installed, and
 // its install hint: the `need` lines in its script, the setups it builds on, and every helper
@@ -29,7 +33,14 @@ func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
 		all += text + "\n"
 	}
 	needs := helpers.Needs(all)
-	required := make([]RequiredCommand, 0, len(needs))
+	required := make([]RequiredCommand, 0, len(needs)+1)
+	// A browser line needs Chrome, as a need line needs its command.
+	if helpers.UsesBrowser(all) {
+		_, found := browser.Chrome()
+		required = append(required, RequiredCommand{
+			Command: "Chrome", Hint: ChromeHint, Installed: found,
+		})
+	}
 	for _, need := range needs {
 		// LookPath searches PATH as a shell would. Ref: https://pkg.go.dev/os/exec#LookPath
 		_, missing := exec.LookPath(need.Command)
@@ -55,6 +66,7 @@ func (w *Window) setupTexts(scenario project.Scenario) ([]string, error) {
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
+		texts = append(texts, runBlocksIn(current.SetupCards)...)
 		if current.Setup == "" {
 			continue
 		}

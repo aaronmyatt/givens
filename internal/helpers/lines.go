@@ -12,12 +12,23 @@ import (
 const (
 	needPattern = `(?m)^\s*need\s+([A-Za-z0-9_.+-]+)(?:\s+"([^"]*)"|\s+'([^']*)')?`
 	fromPattern = `(?m)^\s*from\s+([^\s/]+/[^\s/]+)((?:[ \t]+[A-Za-z_]\w*=\S*)*)[ \t]*$`
+	// browserPattern is a line calling one of the kit's browser functions, before any #.
+	browserPattern = `(?m)^[^#\n]*\b(browser_open|in_browser|app_action)\b`
 )
 
 var (
-	needLine = regexp.MustCompile(needPattern) //tiger:allow-global compiled once
-	fromLine = regexp.MustCompile(fromPattern) //tiger:allow-global compiled once
+	needLine    = regexp.MustCompile(needPattern)    //tiger:allow-global compiled once
+	fromLine    = regexp.MustCompile(fromPattern)    //tiger:allow-global compiled once
+	browserLine = regexp.MustCompile(browserPattern) //tiger:allow-global compiled once
 )
+
+// UsesBrowser is true when text calls browser_open, in_browser or app_action, which need
+// Chrome. See capabilities/mix-shell-browser-and-hand-steps.
+func UsesBrowser(text string) bool {
+	assert.That(len(text) <= FileSizeBytesMax*HelpersMax, "text stays bounded")
+	assert.That(browserLine != nil, "the pattern is compiled")
+	return browserLine.MatchString(text)
+}
 
 // Need is one `need <command> [hint]` line.
 type Need struct {

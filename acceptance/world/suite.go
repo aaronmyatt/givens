@@ -13,6 +13,7 @@ import (
 	"github.com/cucumber/godog"
 
 	"givens/internal/assert"
+	"givens/internal/browser"
 	"givens/internal/spec"
 )
 
@@ -46,6 +47,8 @@ func RunSuite(t *testing.T, capability string, steps Steps) {
 		t.Fatal(err)
 	}
 	bin := buildGivens(t, root)
+	// The Givens browser runs without a window, as in CI; each scenario's is in its folder.
+	t.Setenv(browser.HeadlessEnv, "1")
 	tags := os.Getenv("GIVENS_TAGS")
 	if tags == "" {
 		tags = "~@wip"
@@ -137,6 +140,20 @@ func (w *World) setUp(ctx context.Context, _ *godog.Scenario) (context.Context, 
 	w.Clipboard = &Clipboard{}
 	w.Trash = &Trash{Dir: filepath.Join(dir, "Trash")}
 	w.Clock = NewClock()
+	// Process-wide, so the scripts Drop in starts see them too. Scenarios run one at a time.
+	if err := os.Setenv(browser.DirEnv, filepath.Join(dir, "browsers")); err != nil {
+		return ctx, err
+	}
+	if err := os.Unsetenv(browser.ChromeEnv); err != nil {
+		return ctx, err
+	}
+	// A developer's own editor never opens from a step; FakeEditor sets one.
+	if err := os.Setenv("EDITOR", "false"); err != nil {
+		return ctx, err
+	}
+	if err := os.Unsetenv("VISUAL"); err != nil {
+		return ctx, err
+	}
 	return ctx, os.MkdirAll(w.AppData, 0o755)
 }
 
@@ -146,7 +163,10 @@ func (w *World) tearDown(
 ) (context.Context, error) {
 	assert.That(w != nil, "tear down runs on a world")
 	assert.That(strings.Contains(w.Dir, "givens-scenario-"), "only a scenario folder is removed")
-	if removeErr := os.RemoveAll(w.Dir); removeErr != nil {
+	if closeErr := w.closeBrowsers(); closeErr != nil {
+		return ctx, closeErr
+	}
+	if removeErr := removeAll(w.Dir); removeErr != nil {
 		return ctx, fmt.Errorf("removing %s: %w", w.Dir, removeErr)
 	}
 	// godog already reports the scenario's own error; returning it again would repeat it.
@@ -169,7 +189,14 @@ func (w *World) Run(command string) error {
 	}
 	run := exec.Command("bash", "-c", command)
 	run.Dir = dir
-	run.Env = append(os.Environ(), "PATH="+w.Bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// The command's own app keeps its data in the scenario's, and its clipboard, Trash and
+	// browser are files there too: see testEffectsEnv in cmd/givens.
+	run.Env = append(os.Environ(), "PATH="+w.Bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GIVENS_APP_DATA="+w.AppData, "GIVENS_TEST_SEAMS=1",
+		"GIVENS_TEST_EFFECTS="+filepath.Join(w.Dir, "effects"))
+	if err := os.MkdirAll(filepath.Join(w.Dir, "effects"), 0o755); err != nil {
+		return err
+	}
 	output, err := run.CombinedOutput()
 	w.Output = string(output)
 	w.ExitCode = run.ProcessState.ExitCode()

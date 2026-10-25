@@ -55,6 +55,9 @@ type World struct {
 	// every other scenario starts trusted, as if the developer chose "Trust" earlier.
 	Untrusted bool
 
+	Shop  *Shop // the fake web shop, once a browser step asks for it; see shop.go
+	edits int   // edits given to the fake editor so far; see editor.go
+
 	EditedPath string // the file the scenario last edited, for "the file is saved anyway"
 	EditedText string // what that edit saved
 }
@@ -115,8 +118,11 @@ func (w *World) StartApp() error {
 	if w.App != nil {
 		return nil
 	}
+	// Command is the built givens, which a Drop in gives setup as GIVENS_BIN; the running
+	// program here is the test binary.
 	core, err := app.New(app.Config{
 		AppDataDir: w.AppData, Clipboard: w.Clipboard, Trash: w.Trash, Clock: w.Clock,
+		Command: filepath.Join(w.Bin, "givens"),
 	})
 	w.App = core
 	return err
@@ -143,6 +149,21 @@ func (w *World) OpenSampleShop() error {
 		return fmt.Errorf("opening the sample shop: %w", err)
 	}
 	w.Window = window
+	return WaitForRunsSync(window)
+}
+
+// RunsSyncWaitMax is how long a step waits for the sync a project's opening starts. The
+// remotes the steps make are folders, so it's done in well under this.
+const RunsSyncWaitMax = 10 * time.Second
+
+// WaitForRunsSync waits for the sync on open, as a developer waits for "Syncing runs with
+// origin" to go, so the next step sees the runs it brought.
+func WaitForRunsSync(window *app.Window) error {
+	assert.That(window != nil, "a window is given")
+	assert.That(RunsSyncWaitMax > 0, "the wait has a limit")
+	if !window.WaitForRunsSync(RunsSyncWaitMax) {
+		return fmt.Errorf("the sync on open was still going after %s", RunsSyncWaitMax)
+	}
 	return nil
 }
 

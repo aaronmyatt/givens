@@ -51,8 +51,9 @@ type Session struct {
 	examples string      // the row's Examples block's slug, or ""
 
 	process  *setup.Process
-	scripts  []string // scripts still to run after the current one: teardown, then setup
-	teardown bool     // the script running now is the teardown
+	block    *blockRun // a markdown card's run block running now, or nil
+	scripts  []string  // scripts still to run after the current one: teardown, then setup
+	teardown bool      // the script running now is the teardown
 
 	skipTeardown bool   // "Run setup anyway" leaves a failing teardown out
 	argumentsDir string // where GIVENS_ARG_<n> files are, or ""
@@ -115,7 +116,8 @@ func (s *Session) Wait(limit time.Duration) string {
 	deadline := time.Now().Add(limit)
 	for polls := int64(0); polls <= int64(limit/pollInterval); polls++ {
 		// A session with no script running is waiting on a question, like the trust prompt.
-		if s.Status() != SessionRunning || s.process == nil || time.Now().After(deadline) {
+		idle := s.process == nil && s.block == nil
+		if s.Status() != SessionRunning || idle || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(pollInterval)
@@ -158,6 +160,10 @@ func (s *Session) start() {
 func (s *Session) poll() {
 	assert.That(s != nil, "poll runs on a session")
 	assert.That(s.window != nil, "a session belongs to a window")
+	if s.block != nil {
+		s.pollBlock()
+		return
+	}
 	if (s.status != SessionRunning && s.status != SessionWaiting) || s.process == nil {
 		return
 	}
@@ -238,4 +244,41 @@ func spokenDuration(limit time.Duration) string {
 		unit += "s"
 	}
 	return fmt.Sprintf("%d %s", count, unit)
+}
+
+// ScenarioKey is the Drop in's scenario as a run key, like checkout/card-declined, by which
+// the window finds it again.
+func (s *Session) ScenarioKey() string {
+	assert.That(s != nil, "scenario key runs on a session")
+	assert.That(s.scenario.Capability != "", "the scenario belongs to a capability")
+	return s.scenario.Key()
+}
+
+// Givens are the scenario's Given steps, Background first, placeholders filled in. Setup
+// does them, so they aren't on the checklist; the givens command's TUI shows them above it,
+// so the whole scenario reads on the Drop in page.
+func (s *Session) Givens() []string {
+	assert.That(s != nil, "givens runs on a session")
+	assert.That(s.scenario.Name != "", "the session has a scenario")
+	return givensOf(s.scenario, s.row)
+}
+
+// FileOf is the file an "Edit script", "Edit setup" or "Edit teardown" offer opens, as an
+// absolute path, or "" for any other offer. The givens command's TUI opens it in the
+// developer's editor, where the app opens its own.
+func (s *Session) FileOf(offer string) string {
+	assert.That(s != nil, "file of runs on a session")
+	assert.That(offer != "", "an offer has a label")
+	file := scenarioFileOf(offer)
+	if file == nil {
+		return ""
+	}
+	return file(s.scenario)
+}
+
+// Note is the run's note as written so far, which "Record run" keeps with the run.
+func (s *Session) Note() string {
+	assert.That(s != nil, "note runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	return s.note
 }

@@ -26,6 +26,7 @@ type CodeBlock struct {
 	Language string `json:"language"` // the fence's info string; it labels the Copy button
 	Code     string `json:"code"`     // exactly the code: no fences, no list number or indent
 	Copyable bool   `json:"copyable"` // false while the fence never closes
+	Run      bool   `json:"run"`      // "bash run" or "js run": Givens runs it by itself
 }
 
 // SetupCard is one card on the Drop in page: a by_hand or ask step, or a markdown step.
@@ -43,8 +44,10 @@ type SetupCard struct {
 	Offers  []string `json:"offers"`
 	Mark    string   `json:"mark"`    // "", "done" or "failed"
 	Warning string   `json:"warning"` // why the card is marked, like an unclosed fence
+	Output  []string `json:"output"`  // what its run blocks printed, in order
 
-	inline []string // inline code spans, which copy when clicked
+	inline    []string // inline code spans, which copy when clicked
+	runBlocks []int    // its run blocks, as indices into Blocks; see cards_run.go
 }
 
 // DropInRow is one Examples row on an outline's Drop in page.

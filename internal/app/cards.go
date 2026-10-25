@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"givens/internal/assert"
+	"givens/internal/browser"
 	"givens/internal/helpers"
 	"givens/internal/markdown"
 )
@@ -91,7 +92,7 @@ func (s *Session) addScriptCard(fields []string) {
 	}
 	card := SetupCard{
 		Kind: fields[0], Link: fields[2], Links: []string{}, Images: []string{},
-		Blocks: []CodeBlock{},
+		Blocks: []CodeBlock{}, Output: []string{},
 	}
 	if card.Kind == CardAsk {
 		card.Offers = []string{OfferContinue}
@@ -160,21 +161,28 @@ func (s *Session) addMarkdownCards() error {
 			Links:  append([]string{}, step.Links...),
 			Images: append([]string{}, step.Images...), Blocks: make([]CodeBlock, 0, 2),
 			Offers: []string{OfferDone, OfferFailed}, inline: step.Inline,
+			Output: []string{},
 		}
-		for _, block := range step.Blocks {
+		for index, block := range step.Blocks {
+			runs := runLanguage(block) != ""
 			card.Blocks = append(card.Blocks, CodeBlock{
-				Language: block.Language, Code: block.Code, Copyable: block.Closed,
+				Language: block.Language, Code: block.Code, Copyable: block.Closed, Run: runs,
 			})
+			if runs {
+				card.runBlocks = append(card.runBlocks, index)
+			}
 			if !block.Closed {
 				card.Warning = fmt.Sprintf("The code block starting on line %d never closes",
 					block.Line)
 			}
 		}
+		// A card that runs marks itself, so it has nothing to choose.
+		if len(card.runBlocks) > 0 {
+			card.Offers = []string{}
+		}
 		s.cards, s.snippets = append(s.cards, card), append(s.snippets, "")
 	}
-	s.status = SessionWaiting
-	s.waitingSince = s.window.app.config.Clock.Now()
-	return nil
+	return s.runNextCard()
 }
 
 // ChooseOnCard takes an action offered on one card, by the card's index in Cards: "Done",
@@ -191,10 +199,7 @@ func (s *Session) ChooseOnCard(card int, action string) error {
 	case OfferCopy:
 		return s.window.app.config.Clipboard.WriteText(s.snippets[card])
 	case OfferOpen:
-		if s.window.app.opener == nil {
-			return errors.New("nothing is set up to open links")
-		}
-		return s.window.app.opener.OpenURL(chosen.Link)
+		return s.window.openLink(chosen.Link)
 	}
 	if chosen.Mark != "" {
 		return fmt.Errorf("card %d is already marked %q", card, chosen.Mark)
@@ -251,14 +256,7 @@ func (s *Session) markMarkdownCard(card int, action string) error {
 	default:
 		return fmt.Errorf("%q isn't offered on a markdown card", action)
 	}
-	for _, other := range s.cards[s.markdownFrom:] {
-		if other.Mark == "" {
-			return nil
-		}
-	}
-	s.resume()
-	s.status, s.checklist = SessionReady, checklistOf(s.scenario, s.row)
-	return nil
+	return s.runNextCard()
 }
 
 // resume ends a wait at a card, adding the time waited so it doesn't count as slow.
@@ -315,4 +313,46 @@ func (s *Session) pendingCard() int {
 		}
 	}
 	return -1
+}
+
+// openLink opens a by_hand --url link: in the Givens browser while this project's is open,
+// so the step shares the session setup signed in to, or else in the default browser.
+// See capabilities/mix-shell-browser-and-hand-steps.
+func (w *Window) openLink(link string) error {
+	assert.That(w != nil, "open link runs on a window")
+	assert.That(link != "", "a card with a link is opened")
+	if profile, err := browser.Profile(w.path); err == nil && browser.Running(profile) {
+		return browser.Open(profile, link)
+	}
+	if w.app.opener == nil {
+		return errors.New("nothing is set up to open links")
+	}
+	return w.app.opener.OpenURL(link)
+}
+
+// CopyCard copies a card's code: its first closed code block, or else its first inline code
+// span. The givens command's TUI does it on c, where the app has a button per block and span.
+func (s *Session) CopyCard(card int) error {
+	assert.That(s != nil, "copy card runs on a session")
+	assert.That(len(s.cards) <= SetupCardsMax, "cards stay bounded")
+	if card < 0 || card >= len(s.cards) {
+		return fmt.Errorf("there's no card %d", card)
+	}
+	for index, block := range s.cards[card].Blocks {
+		if block.Copyable {
+			return s.CopyCodeBlock(card, index)
+		}
+	}
+	if len(s.cards[card].inline) > 0 {
+		return s.ClickInlineCode(card, s.cards[card].inline[0])
+	}
+	return errors.New("this card has no code to copy")
+}
+
+// PendingCard is the card waiting on the developer, as an index into Cards, or -1.
+func (s *Session) PendingCard() int {
+	assert.That(s != nil, "pending card runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	s.poll()
+	return s.pendingCard()
 }

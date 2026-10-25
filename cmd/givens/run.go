@@ -14,6 +14,7 @@ import (
 	"givens/internal/helpers"
 	"givens/internal/markdown"
 	"givens/internal/project"
+	setupkit "givens/internal/setup"
 )
 
 // answerBytesMax bounds one line typed at a markdown step.
@@ -45,28 +46,29 @@ func runSetup(args []string) int {
 	}
 	if scenario.Setup != "" {
 		if code := runScript(root, scenario.Setup); code != exitOK {
-			return code
+			return exitProblems
 		}
 	}
 	if scenario.SetupCards != "" {
-		return walkSteps(scenario.SetupCards, os.Stdin)
+		return walkSteps(root, scenario.SetupCards, os.Stdin)
 	}
 	return exitOK
 }
 
 // runScript runs a setup script with bash from the project's folder, with the terminal as
-// its stdin, stdout and stderr, and returns its exit code.
+// its stdin, stdout and stderr, and returns its exit code: 1 when it couldn't run.
 // Ref: https://pkg.go.dev/os/exec#Cmd
-func runScript(root string, script string) int {
+func runScript(root string, script string, env ...string) int {
 	assert.That(filepath.IsAbs(root), "root is absolute")
 	assert.That(filepath.IsAbs(script), "the script is absolute")
 	command := exec.Command("bash", script)
 	command.Dir = filepath.Dir(root)
+	command.Env = append(os.Environ(), env...)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	err := command.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		return exitProblems
+		return exit.ExitCode()
 	}
 	if err != nil {
 		complain(err)
@@ -76,8 +78,9 @@ func runScript(root string, script string) int {
 }
 
 // walkSteps prints a markdown setup's steps one at a time as plain text, each code block on
-// its own lines, and waits for Enter after each, or f if it failed.
-func walkSteps(path string, input io.Reader) int {
+// its own lines. A step with "bash run" or "js run" blocks runs them and moves on; any other
+// waits for Enter, or f if it failed.
+func walkSteps(root string, path string, input io.Reader) int {
 	assert.That(filepath.IsAbs(path), "the setup is absolute")
 	assert.That(input != nil, "answers come from somewhere")
 	text, err := helpers.ReadScript(path)
@@ -96,6 +99,15 @@ func walkSteps(path string, input io.Reader) int {
 	answers := bufio.NewReaderSize(input, answerBytesMax)
 	for _, step := range setup.Steps {
 		printStep(step)
+		ran, code := runBlocks(root, path, step)
+		if code != exitOK {
+			fmt.Printf("✗ Stopped at step %d of %d (exit %d)\n", step.Number, len(setup.Steps),
+				code)
+			return exitProblems
+		}
+		if ran {
+			continue
+		}
 		fmt.Print("Press Enter when done, or type f if it failed ")
 		answer, err := answers.ReadString('\n')
 		if err != nil && answer == "" {
@@ -109,6 +121,38 @@ func walkSteps(path string, input io.Reader) int {
 		}
 	}
 	return exitOK
+}
+
+// runBlocks runs a step's run blocks in order, as Drop in does, and says whether it had any
+// and the exit code of the first that failed.
+func runBlocks(root string, path string, step markdown.Step) (bool, int) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(strings.HasSuffix(path, ".md"), "a markdown setup is read")
+	ran := false
+	for index, block := range step.Blocks {
+		language := setupkit.BlockLanguage(block.Language, block.Run, block.Closed)
+		if language == "" {
+			continue
+		}
+		ran = true
+		dir, err := os.MkdirTemp("", "givens-run-")
+		if err != nil {
+			complain(err)
+			return ran, exitProblems
+		}
+		script, err := setupkit.WriteBlock(dir, fmt.Sprintf("step-%d-block-%d", step.Number,
+			index), filepath.Join(root, "_shared", "givens.sh"), language, block.Code)
+		code := exitProblems
+		if err == nil {
+			stands := strings.TrimSuffix(path, ".md") + ".sh"
+			code = runScript(root, script, setupkit.ScriptAsEnv+"="+stands)
+		}
+		_ = os.RemoveAll(dir)
+		if code != exitOK {
+			return ran, code
+		}
+	}
+	return ran, exitOK
 }
 
 // printStep prints one step: its number and plain text, then each code block exactly as it

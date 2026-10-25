@@ -53,8 +53,11 @@ func (w *Window) leaveSession() error {
 	session := w.session
 	assert.That(session.window == w, "the Drop in is this window's")
 	w.session = nil
-	session.removeArguments()
 	session.scripts = nil
+	if err := session.stopBlock(); err != nil {
+		return err
+	}
+	session.removeArguments()
 	if session.process == nil {
 		return nil
 	}

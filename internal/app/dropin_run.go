@@ -63,7 +63,9 @@ func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardo
 		w.session.removeArguments()
 	}
 	w.session = session
-	runsScripts := found.Setup != "" || found.Teardown != ""
+	// A markdown setup's run blocks are code too, so they're asked about as a script is.
+	runsScripts := found.Setup != "" || found.Teardown != "" ||
+		len(runBlocksIn(found.SetupCards)) > 0
 	switch {
 	case runsScripts && refused:
 		session.scriptsOff()
@@ -113,7 +115,13 @@ func (s *Session) begin() error {
 	if err != nil {
 		return err
 	}
-	s.env = append(s.env, arguments...)
+	// The kit's browser functions run Givens's own givens, so a Drop in needn't find one on
+	// the PATH.
+	command, err := s.window.app.givensCommand()
+	if err != nil {
+		return err
+	}
+	s.env = append(append(s.env, arguments...), "GIVENS_BIN="+command)
 	for _, script := range []string{s.scenario.Teardown, s.scenario.Setup} {
 		if script != "" && !(s.skipTeardown && script == s.scenario.Teardown) {
 			s.scripts = append(s.scripts, script)
@@ -128,7 +136,8 @@ func (s *Session) begin() error {
 }
 
 // setupEnv is the variables a Drop in runs setup with. GIVENS_QUIET hides the "your turn"
-// lines, which the checklist shows instead; GIVENS_UI makes by_hand and ask cards.
+// lines, which the checklist shows instead; GIVENS_UI makes by_hand and ask cards. begin adds
+// GIVENS_BIN and the arguments' files.
 // See capabilities/the-kit/about.md.
 func setupEnv(scenario project.Scenario, row []runs.Pair) []string {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
@@ -146,11 +155,13 @@ func setupEnv(scenario project.Scenario, row []runs.Pair) []string {
 func (w *Window) precheck(scenario project.Scenario) (string, []string, error) {
 	assert.That(w.project != nil, "a Drop in runs in a loaded project")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
-	if scenario.Setup == "" {
+	if scenario.Setup == "" && len(runBlocksIn(scenario.SetupCards)) == 0 {
 		return "", nil, nil
 	}
-	if problem, err := w.fromProblem(scenario); err != nil || problem != "" {
-		return problem, nil, err
+	if scenario.Setup != "" {
+		if problem, err := w.fromProblem(scenario); err != nil || problem != "" {
+			return problem, nil, err
+		}
 	}
 	required, err := w.RequiredCommands(scenario.Capability + "/" + scenario.Name)
 	if err != nil {
@@ -191,6 +202,27 @@ func checklistOf(scenario project.Scenario, row []runs.Pair) []CheckItem {
 		}
 	}
 	return items
+}
+
+// givensOf are a scenario's Given steps, Background first, each And and But after a Given
+// with them, placeholders filled in: what setup sets up, which the checklist leaves out.
+func givensOf(scenario project.Scenario, row []runs.Pair) []string {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	givens := make([]string, 0, len(scenario.Background)+len(scenario.Steps))
+	for _, steps := range [][]project.Step{scenario.Background, scenario.Steps} {
+		kind := "given"
+		for _, step := range steps {
+			switch step.Keyword {
+			case "Given", "When", "Then":
+				kind = strings.ToLower(step.Keyword)
+			}
+			if kind == "given" {
+				givens = append(givens, step.Keyword+" "+fillPlaceholders(step.Text, row))
+			}
+		}
+	}
+	return givens
 }
 
 // unquote takes the quotes off one bash word, as the kit would see it: 'x' or "x".

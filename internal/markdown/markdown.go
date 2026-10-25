@@ -26,7 +26,9 @@ const (
 	itemPattern   = `^(\d+)\.\s+(.*)$`
 	linkPattern   = `(!?)\[([^\]]*)\]\(([^)\s]*)\)`
 	inlinePattern = "`([^`]+)`"
-	fencePattern  = "^\\s*(```+|~~~+)\\s*([A-Za-z0-9_+-]*)\\s*$"
+	// A fence's info string: its language, then any other words, like "run".
+	// Ref: https://spec.commonmark.org/0.31.2/#info-string
+	fencePattern = "^\\s*(```+|~~~+)\\s*([A-Za-z0-9_+-]*)((?:[ \\t]+[^\\s`]+)*)\\s*$"
 )
 
 var (
@@ -38,7 +40,8 @@ var (
 
 // Block is one fenced code block.
 type Block struct {
-	Language string // the fence's info string: "bash", "js", or ""
+	Language string // the info string's first word: "bash", "js", or ""
+	Run      bool   // the info string's next word is "run": Givens runs the block itself
 	Code     string // exactly the code: no fences, no list indent
 	Closed   bool   // false when the fence never closes
 	Line     int    // the opening fence's line, counting from 1
@@ -91,8 +94,9 @@ func Parse(text string) (Setup, error) {
 			continue
 		}
 		if match := fence.FindStringSubmatch(line); match != nil {
-			current.Blocks = append(current.Blocks,
-				Block{Language: match[2], Line: index + 1})
+			words := strings.Fields(match[3])
+			current.Blocks = append(current.Blocks, Block{Language: match[2],
+				Run: len(words) > 0 && words[0] == "run", Line: index + 1})
 			open, indent = &current.Blocks[len(current.Blocks)-1], leadingSpaces(line)
 			continue
 		}

@@ -33,9 +33,18 @@ Sourcing it:
 | `ask <name> <prompt>` | Stops setup until the user types a value, then sets that variable | `ask INVITE_CODE "Paste the invite code"` |
 | `when_mode` | Is true when the script was run with `--when` | `if when_mode; then …; exit 0; fi` |
 | `when_command` | Prints the command that runs this script with `--when` | `when_you "run this: $(when_command)"` |
+| `browser_open <url>` | Opens the page in the Givens browser, starting it if needed, and waits for it to load | `browser_open "http://localhost:3000/cart"` |
+| `in_browser <js>` | Runs JavaScript in that page, waits for a promise, prints the result (a string as is, else JSON) | `ORDER="$(in_browser 'window.app.lastOrderId()')"` |
+| `app_action <name> [json]` | Calls `window.app.<name>(json)` in that page and prints what it returns | `app_action signIn '{"email":"sam@example.com"}'` |
 
 The first of `first_you`, `when_you` or `then_check` to run prints a "Your turn" heading. All
 three print nothing when `GIVENS_QUIET=1`.
+
+The Givens browser is Chrome with a profile of Givens's own for this project, so your own
+Chrome and its sign-ins are left alone. It stays open after setup, so you carry on in it. The
+browser functions call `givens browser`, as bash can't speak the DevTools Protocol; a problem
+stops setup with `✗ in_browser: <what went wrong>`. See
+capabilities/mix-shell-browser-and-hand-steps.
 
 ## Variables
 
@@ -49,5 +58,7 @@ three print nothing when `GIVENS_QUIET=1`.
 | `GIVENS_SCENARIO` | Givens, and `from` | The run key, like `checkout/card-declined` |
 | `GIVENS_EX_<column>` | Givens, and `from` | The chosen Examples row's value for that column |
 | `GIVENS_ARG_<n>` | Givens | Path to a file holding the nth doc string or data table (as CSV) |
+| `GIVENS_BIN` | Givens when you drop in | The givens the browser functions run; without it, givens on the PATH |
+| `GIVENS_CHROME` | You | Another Chromium-based browser for the Givens browser, like Brave or Edge |
 
 Names starting with `_givens` or `_g_` are the kit's own and may change.

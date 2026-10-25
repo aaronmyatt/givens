@@ -1,12 +1,12 @@
 Feature: The kit
   As a developer writing or running setup scripts
-  I want the kit to behave the same in Givens and in a terminal
-  So that a script I try by hand acts the same when Givens runs it
+  I want the kit to behave the same when Givens runs a script and when I run it myself
+  So that a script I try by hand acts the same in a Drop in
 
   The kit is `capabilities/_shared/givens.sh`: one file, written for bash 3.2, copied unchanged
   into every project. Every setup script sources it on its first line. See about.md for its
   functions and variables. Each scenario here maps to one bats test (bats is a test runner for
-  bash). None need the app. `--when` doesn't run setup again: it assumes the developer is
+  bash). None need Givens itself. `--when` doesn't run setup again: it assumes the developer is
   mid-flow, with setup already done.
 
   @error

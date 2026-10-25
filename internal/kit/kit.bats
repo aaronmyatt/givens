@@ -164,3 +164,63 @@ ok "carried on"'
   [ "$status" -ne 0 ]
   [ "$output" = "✗ by_hand needs someone at the keyboard" ]
 }
+
+# fake_givens [exit code] [problem]: puts a givens on the PATH that logs its arguments to
+# $calls, prints ord_42 for browser eval, and fails with the problem when asked to.
+fake_givens() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  calls="$BATS_TEST_TMPDIR/calls"
+  cat > "$BATS_TEST_TMPDIR/bin/givens" <<FAKE
+#!/bin/bash
+echo "\$*" >> "$calls"
+if [ "${1:-0}" != "0" ]; then echo "${2:-}" >&2; exit "${1:-0}"; fi
+if [ "\$2" = "eval" ]; then echo ord_42; fi
+FAKE
+  chmod +x "$BATS_TEST_TMPDIR/bin/givens"
+  PATH="$BATS_TEST_TMPDIR/bin:/usr/bin:/bin"
+}
+
+@test "Browser lines in a terminal" {
+  fake_givens
+  script browser 'browser_open "http://localhost:3000/cart"
+ORDER="$(in_browser "window.app.lastOrderId()")"
+app_action signIn '"'"'{"email":"sam@example.com"}'"'"'
+ok "order $ORDER"'
+  run /bin/bash "$root/shop/scripts/browser.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '✓ opened http://localhost:3000/cart\n✓ order ord_42')" ]
+  [ "$(cat "$calls")" = "$(printf '%s\n' 'browser open http://localhost:3000/cart' \
+    'browser eval window.app.lastOrderId()' 'browser action signIn {"email":"sam@example.com"}')" ]
+}
+
+@test "The JavaScript throws" {
+  fake_givens 1 "window.app.nope is not a function"
+  script throws 'ORDER="$(in_browser "window.app.nope()")"; ok "carried on"'
+  run /bin/bash "$root/shop/scripts/throws.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = "✗ in_browser: window.app.nope is not a function" ]
+}
+
+@test "The page has no such app action" {
+  fake_givens 1 "the page has no window.app.refund"
+  script refund 'app_action refund '"'"'{"order":"ord_42"}'"'"'; ok "carried on"'
+  run /bin/bash "$root/shop/scripts/refund.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = "✗ app_action refund: the page has no window.app.refund" ]
+}
+
+@test "The givens command isn't installed" {
+  script nogivens 'browser_open "http://localhost:3000/cart"; ok "carried on"'
+  PATH="/usr/bin:/bin" run /bin/bash "$root/shop/scripts/nogivens.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = '✗ needs givens: run scripts/install.sh in a Givens checkout' ]
+}
+
+@test "Givens's own givens is used when you drop in" {
+  fake_givens
+  mv "$BATS_TEST_TMPDIR/bin/givens" "$BATS_TEST_TMPDIR/own-givens"
+  script own 'browser_open "http://localhost:3000/cart"'
+  GIVENS_BIN="$BATS_TEST_TMPDIR/own-givens" run /bin/bash "$root/shop/scripts/own.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "✓ opened http://localhost:3000/cart" ]
+}

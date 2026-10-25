@@ -1,7 +1,7 @@
 // Package thekit runs capabilities/the-kit. The kit is capabilities/_shared/givens.sh, built
-// from internal/kit/givens.sh; these steps need no app. Each Given writes a small setup script
-// into the sample shop, each When runs it with bash, and each Then reads its output. Steps
-// shared with other capabilities are in acceptance/world.
+// from internal/kit/givens.sh; these steps need neither the givens command nor its core. Each
+// Given writes a small setup script into the sample shop, each When runs it with bash, and each
+// Then reads its output. Steps shared with other capabilities are in acceptance/world.
 package thekit
 
 import (

@@ -1,4 +1,4 @@
-# givens kit 1
+# givens kit 3
 # shellcheck shell=bash
 # The Givens kit. Every setup script sources it on its first line:
 #
@@ -15,7 +15,10 @@ set -euo pipefail
 # BASH_SOURCE[0] is this file; BASH_SOURCE[1] is the script that sourced it.
 # Ref: https://www.gnu.org/software/bash/manual/html_node/Bash-Variables.html#index-BASH_005fSOURCE
 GIVENS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GIVENS_SCRIPT="${BASH_SOURCE[1]:-}"
+# A setup card's run block runs from a file of Givens's own, so Givens names the setup it
+# stands for in GIVENS_SCRIPT_AS; it's dropped at once, so scripts it starts don't inherit it.
+GIVENS_SCRIPT="${GIVENS_SCRIPT_AS:-${BASH_SOURCE[1]:-}}"
+unset GIVENS_SCRIPT_AS
 export GIVENS_ROOT GIVENS_SCRIPT
 
 # --when reruns a script for its When part only; see when_mode. "${1+"$@"}" is "$@" without
@@ -178,6 +181,53 @@ from() {
     if [ -f "${_g_script%.sh}.teardown.sh" ]; then bash "${_g_script%.sh}.teardown.sh"; fi
     bash "$_g_script"
   )
+}
+
+# The Givens browser: Chrome with a profile of Givens's own for this project, which setup
+# drives and the developer carries on in. bash can't speak the DevTools Protocol's websocket,
+# so the givens command does the talking. Givens sets GIVENS_BIN to its own givens when you
+# drop in; in a terminal, givens is found on the PATH.
+# See capabilities/mix-shell-browser-and-hand-steps in the Givens repo.
+
+# _givens_browser <kit function> <givens browser arguments…>: runs givens browser with its
+# result on stdout. A problem stops setup with "✗ <kit function>: <problem>" on stderr, so
+# X="$(in_browser …)" never holds it, and set -e stops the script there.
+_givens_browser() {
+  local _g_what="$1" _g_err _g_problem
+  shift
+  if [ -z "${GIVENS_BIN:-}" ]; then
+    need givens 'run scripts/install.sh in a Givens checkout' >&2
+  fi
+  _g_err="$(mktemp "${TMPDIR:-/tmp}/givens-browser.XXXXXX")"
+  if "${GIVENS_BIN:-givens}" browser "$@" 2>"$_g_err"; then
+    rm -f "$_g_err"
+    return 0
+  fi
+  _g_problem="$(cat "$_g_err")"
+  rm -f "$_g_err"
+  fail "$_g_what: $_g_problem" >&2
+}
+
+# browser_open <url>: opens url in the Givens browser, starting it if it isn't open, and
+# waits for the page to load.
+browser_open() {
+  if [ -z "${1:-}" ]; then fail "browser_open needs a URL" >&2; fi
+  _givens_browser browser_open open "$1"
+  ok "opened $1"
+}
+
+# in_browser <javascript>: runs JavaScript in the Givens browser's page, waits for a promise
+# it returns, and prints the result: a string as it is, anything else as JSON.
+in_browser() {
+  if [ -z "${1:-}" ]; then fail "in_browser needs JavaScript to run" >&2; fi
+  _givens_browser in_browser eval "$1"
+}
+
+# app_action <name> [json]: calls window.app.<name>(json) in the Givens browser's page, the
+# function the app sets in its dev builds, and prints its result as in_browser does.
+app_action() {
+  if [ -z "${1:-}" ]; then fail "app_action needs the name of a window.app function" >&2; fi
+  _givens_browser "app_action $1" action "$@"
 }
 
 # _givens_key <script>: the run key of a setup script's path, like checkout/card-declined.
