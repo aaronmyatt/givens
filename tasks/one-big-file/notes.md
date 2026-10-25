@@ -435,3 +435,30 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   `givensBin` its one live story caller is this section; the other is the dead
   `InstallCommand`, which windows.go now holds alone. The header gains internal/browser.
 - Section 250 lines, big_helpers.go +39. big.go 4,101, big_helpers.go 716. 16 of 17.
+
+## Drop into a scenario moves in (2026-10-25)
+- Five commits, as the plan says. The section is between Copy a setup script and Gherkin files.
+- a) Run and timeouts. session.go is gone; dropin_run.go keeps only `fromProblem` and
+  `outlineWithoutRow`, for c. At the section's top: session.go's states and page offers,
+  `pollInterval`, `CheckItem`, the `Session` type and `Window.Session`. Then `DropIn`, `dropIn`,
+  `startSession`, `begin`, `setupEnv`, `start`, `poll`, `finishScripts` and the session's
+  accessors (`Status`, `Output`, `Wait`, `Checklist`, `ScenarioKey`, `Givens` with `givensOf`,
+  `FileOf`, `Note`) under "Drop in" and "The setup script fails"; `precheck` under "A command
+  the setup needs isn't installed"; `stillRunning` and `spokenDuration` under the three timeout
+  scenarios; `firstYouLine` and `unquote` under "Steps done by hand come first".
+- To big_helpers.go: `checklistOf`, `fail` and `restart`. Mix shell's `runNextCard` shows the
+  checklist with `checklistOf`, its `startBlock` and `pollBlock` call `fail`, and Trust's
+  `trustThisProject` calls `restart`. Same call as `scratchDir`: a Session method a guest
+  story calls is shared code.
+- `begin` stays, though its one caller is Trust's `runTrusted`. That's a seam cut out of
+  `startSession`, which only decides whether `begin` runs; `begin` is the Drop in itself. Rule
+  used: a seam's call back into its host doesn't move the host's code. (`writeRun` went the
+  other way in Keep runs off main, but half of it was that story's own work.)
+- The Session states and the page offers stay in the section, though Mix shell and Trust set
+  `SessionWaiting`, `SessionReady` and `SessionStopped`: they name Drop in's states, as a label
+  stays with its story.
+- No seams cut. The `Session` type and `CheckItem` moved with the code: session.go wasn't a
+  types-only file. The header lists dropin.go, which stays: Drop in's data model.
+- Mix shell's and Share setup's opening comments pointed at dropin_run.go and session.go; they
+  name the functions only now.
+- Section 450 lines, big_helpers.go +49. big.go 4,554, big_helpers.go 765.

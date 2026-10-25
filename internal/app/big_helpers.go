@@ -714,3 +714,52 @@ func (s *Session) scratchDir() (string, error) {
 	}
 	return s.argumentsDir, nil
 }
+
+// checklistOf is what the developer does once setup is done: first_you lines from the setup
+// script, then the When and Then steps in the order they're written. And and But take the
+// kind before them.
+func checklistOf(scenario project.Scenario, row []runs.Pair) []CheckItem {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	items := make([]CheckItem, 0, len(scenario.Steps)+2)
+	if scenario.Setup != "" {
+		if text, err := helpers.ReadScript(scenario.Setup); err == nil {
+			for _, match := range firstYouLine.FindAllStringSubmatch(text, -1) {
+				items = append(items, CheckItem{Text: "First, " + unquote(match[1]),
+					Kind: "given"})
+			}
+		}
+	}
+	kind := "given"
+	for _, step := range scenario.Steps {
+		switch step.Keyword {
+		case "Given", "When", "Then":
+			kind = strings.ToLower(step.Keyword)
+		}
+		if kind != "given" {
+			text := step.Keyword + " " + fillPlaceholders(step.Text, row)
+			items = append(items, CheckItem{Text: text, Kind: kind})
+		}
+	}
+	return items
+}
+
+// fail ends the session with a message and no checklist.
+func (s *Session) fail(message string) {
+	assert.That(message != "", "a failure says what failed")
+	assert.That(s.status != SessionReady, "a finished setup doesn't fail afterwards")
+	s.status, s.message, s.checklist = SessionFailed, message, nil
+}
+
+// restart drops in again to the same scenario and row: "Try again" and "Reset state".
+func (s *Session) restart(skipTeardown bool) error {
+	assert.That(s != nil, "restart runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	scenario, ok := s.window.findScenario(s.scenario.Capability + "/" + s.scenario.Name)
+	if !ok {
+		return fmt.Errorf("%s: %w", s.scenario.Name, ErrNotFound)
+	}
+	_, err := s.window.startSession(scenario, outlineRow{values: s.row, examples: s.examples},
+		skipTeardown)
+	return err
+}

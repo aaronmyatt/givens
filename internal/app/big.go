@@ -21,6 +21,8 @@
 //     data model with no code, so it stays a file of its own.
 //   - edit.go: Write stories' types (Editor, StoryDraft, ScenarioDraft, EditorMark,
 //     StepSuggestion, PreviewLine) and the editing limits. A data model, so it stays apart too.
+//   - dropin.go: Drop in's types (URLOpener, CodeBlock, SetupCard, DropInRow) and its card
+//     limits and kinds. A data model too.
 //   - internal/browser: Mix shell's Chrome of Givens's own, a wrapper on chromedp, the
 //     third-party CDP client; a package of its own, so the dependency stays in one place.
 
@@ -114,6 +116,456 @@ func (w *Window) copyFromSearch() error {
 		return w.copySetup(found)
 	}
 	return errors.New("no scenario is listed to copy")
+}
+
+// Feature: Drop into a scenario
+//
+// capabilities/drop-into-a-scenario. A Drop in runs a scenario's setup with the kit's quiet
+// mode, teardown first, and walks the developer through its When and Then steps as a
+// checklist, then records the run. A Session is one Drop in; dropin.go holds its data model
+// (the card limits and kinds, URLOpener, CodeBlock, SetupCard and DropInRow). Drop in calls the
+// stories that came out of it: trustOf and runTrusted (Trust a project) before setup runs, and
+// runTrusted calls begin back; keepRun (Keep runs off main) to record; givensBin, runBlocksIn
+// and pollBlock (Mix shell, browser and hand steps) for GIVENS_BIN and run blocks; elsewhere
+// (Share setup between scenarios) on a failed setup's page. In big_helpers.go: checklistOf,
+// fail and restart, since Mix shell's cards and Trust's "Trust this project" call them too;
+// RequiredCommands, which precheck checks; and scenarioWarning, which shows a @timeout tag
+// that can't be read (MessageTimeoutTag). Not here yet: dropin_record.go and dropin_files.go
+// (record and attach), the builds-on check in dropin_run.go and addTeardown in offers.go,
+// cards.go and dropin_page.go (cards and the page), rows.go, arguments.go and examples.go
+// (outlines and rows), and leaveSession (selection.go).
+
+// Session states.
+const (
+	SessionRunning = "running" // setup is running
+	SessionWaiting = "waiting" // setup is paused at a card: by_hand, ask, or a markdown step
+	SessionReady   = "ready"   // setup finished; the checklist is shown
+	SessionFailed  = "failed"  // setup or a card failed; no checklist
+	SessionStopped = "stopped" // the developer chose "Stop"
+)
+
+// Drop in page actions.
+const (
+	OfferResetState     = "Reset state"
+	OfferEditTeardown   = "Edit teardown"
+	OfferRunSetupAnyway = "Run setup anyway"
+	OfferAddTeardown    = "Add teardown"
+	OfferStop           = "Stop"
+	OfferKeepWaiting    = "Keep waiting"
+	OfferTryAgain       = "Try again"
+	OfferEditScript     = "Edit script"
+)
+
+// pollInterval is how often Wait looks at a running setup.
+const pollInterval = 20 * time.Millisecond
+
+// CheckItem is one line of a Drop in checklist.
+type CheckItem struct {
+	Text string `json:"text"` // the step as shown, placeholders filled in
+	Kind string `json:"kind"` // "given" (done by hand), "when" or "then"
+	Mark string `json:"mark"` // "", "done", "pass" or "fail"
+}
+
+// Session is one Drop in: a setup run and the checklist that follows.
+type Session struct {
+	window   *Window
+	scenario project.Scenario
+	row      []runs.Pair // the outline row's values, or nil
+	examples string      // the row's Examples block's slug, or ""
+
+	process  *setup.Process
+	block    *blockRun // a markdown card's run block running now, or nil
+	scripts  []string  // scripts still to run after the current one: teardown, then setup
+	teardown bool      // the script running now is the teardown
+
+	skipTeardown bool   // "Run setup anyway" leaves a failing teardown out
+	argumentsDir string // where GIVENS_ARG_<n> files are, or ""
+	untrusted    bool   // the developer chose "Don't trust", so scripts are off
+
+	// Cards: by_hand and ask cards the script printed, then the markdown setup's steps.
+	cards          []SetupCard
+	snippets       []string // each card's text to copy
+	parsed         int      // the current script's output lines read so far
+	reading        int      // text lines still to read for the last card
+	display        []string // the current script's output, card lines taken out
+	intro          string   // the markdown setup's text above its first step
+	markdownFrom   int      // the index of the first markdown card, or -1
+	cardInput      string   // what's typed into a waiting ask card
+	cardFailed     bool     // a by_hand card was marked failed
+	markdownFailed bool     // a markdown card was marked failed
+	waitingSince   time.Time
+	waited         time.Duration // time spent waiting at cards, which isn't slow
+	env            []string
+	earlier        []string // output of scripts that already finished
+	started        time.Time
+
+	status      string
+	message     string   // across the top: "Setup failed (exit 3)", "This scenario needs bb"
+	hints       []string // install hints, each with a copy button
+	keepWaiting bool
+	checklist   []CheckItem
+	note        string
+	attachments []string // paths of files "Record run" copies into the run's folder
+	recorded    bool     // "Record run" saved this checklist, so leaving loses nothing
+}
+
+// Session is the Drop in on show, or nil.
+func (w *Window) Session() *Session {
+	assert.That(w != nil, "session runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	return w.session
+}
+
+// Scenario: Drop in
+// Scenario: The setup script fails
+
+// DropIn drops in to a scenario: it runs the setup and opens the Drop in page. Before anything
+// runs it checks the commands the setup needs and the setups it builds on.
+func (w *Window) DropIn(scenario string) (*Session, error) {
+	return w.dropIn(scenario, false)
+}
+
+// dropIn drops in, leaving the teardown out when skipTeardown is set: "Run setup anyway".
+func (w *Window) dropIn(scenario string, skipTeardown bool) (*Session, error) {
+	assert.That(w != nil, "drop in runs on a window")
+	assert.That(len(scenario) <= NameLengthMax, "the name fits NameLengthMax")
+	found, ok := w.findScenario(scenario)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", scenario, ErrNotFound)
+	}
+	return w.startSession(found, outlineRow{}, skipTeardown)
+}
+
+// startSession opens the Drop in page for a scenario, or one row of an outline, and runs its
+// setup once the project is trusted. A setup with no script needs no trust: nothing runs.
+func (w *Window) startSession(found project.Scenario, row outlineRow, skipTeardown bool) (
+	*Session, error) {
+	assert.That(w != nil, "start session runs on a window")
+	assert.That(found.Capability != "", "the scenario belongs to a capability")
+	if w.branch != "" {
+		return nil, fmt.Errorf("%s isn't checked out, so its setup scripts don't run", w.branch)
+	}
+	trusted, refused, err := w.trustOf()
+	if err != nil {
+		return nil, err
+	}
+	session := &Session{
+		window: w, scenario: found, status: SessionRunning, skipTeardown: skipTeardown,
+		started: w.app.config.Clock.Now(), env: setupEnv(found, row.values),
+		markdownFrom: -1, row: row.values, examples: row.examples,
+	}
+	if w.session != nil {
+		w.session.removeArguments()
+	}
+	w.session = session
+	// A markdown setup's run blocks are code too, so they're asked about as a script is.
+	runsScripts := found.Setup != "" || found.Teardown != "" ||
+		len(runBlocksIn(found.SetupCards)) > 0
+	return session, w.runTrusted(session, runsScripts, trusted, refused)
+}
+
+// begin checks what setup needs, then starts its scripts: teardown first, then setup.
+func (s *Session) begin() error {
+	assert.That(s.status == SessionRunning, "a session begins running")
+	assert.That(s.process == nil, "a session begins once")
+	s.started = s.window.app.config.Clock.Now()
+	if problem, hints, err := s.window.precheck(s.scenario); err != nil || problem != "" {
+		s.hints = hints
+		if err == nil {
+			s.fail(problem)
+		}
+		return err
+	}
+	arguments, err := s.writeArguments()
+	if err != nil {
+		return err
+	}
+	bin, err := s.givensBin()
+	if err != nil {
+		return err
+	}
+	s.env = append(append(s.env, arguments...), bin)
+	for _, script := range []string{s.scenario.Teardown, s.scenario.Setup} {
+		if script != "" && !(s.skipTeardown && script == s.scenario.Teardown) {
+			s.scripts = append(s.scripts, script)
+		}
+	}
+	if len(s.scripts) == 0 {
+		s.finishScripts()
+		return nil
+	}
+	s.start()
+	return nil
+}
+
+// setupEnv is the variables a Drop in runs setup with. GIVENS_QUIET hides the "your turn"
+// lines, which the checklist shows instead; GIVENS_UI makes by_hand and ask cards. begin adds
+// GIVENS_BIN and the arguments' files.
+// See capabilities/the-kit/about.md.
+func setupEnv(scenario project.Scenario, row []runs.Pair) []string {
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	assert.That(len(row) <= helpers.HelpersMax, "a row stays bounded")
+	env := []string{"GIVENS_QUIET=1", "GIVENS_UI=1", "GIVENS_SCENARIO=" + scenario.Key()}
+	for _, value := range row {
+		env = append(env, "GIVENS_EX_"+value.Name+"="+value.Value)
+	}
+	return env
+}
+
+// start runs the next script in the queue, or finishes when there's none.
+func (s *Session) start() {
+	assert.That(s.status == SessionRunning, "only a running session starts a script")
+	assert.That(len(s.scripts) > 0, "there's a script to start")
+	s.earlier, s.display, s.parsed = append(s.earlier, s.display...), nil, 0
+	script := s.scripts[0]
+	s.scripts = s.scripts[1:]
+	s.teardown = script == s.scenario.Teardown
+	if s.teardown {
+		s.earlier = append(s.earlier, "→ teardown")
+	}
+	process, err := setup.Start(setup.Request{
+		Script: script, Dir: filepath.Dir(s.window.path), Env: s.env,
+	})
+	if err != nil {
+		s.process = nil
+		s.fail("Setup couldn't start: " + err.Error())
+		return
+	}
+	s.process = process
+}
+
+// poll moves a running session on when its script has ended.
+func (s *Session) poll() {
+	assert.That(s != nil, "poll runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	if s.block != nil {
+		s.pollBlock()
+		return
+	}
+	if (s.status != SessionRunning && s.status != SessionWaiting) || s.process == nil {
+		return
+	}
+	s.readOutput()
+	if s.reading == 0 {
+		s.finishCardText()
+	}
+	result, ended := s.process.Wait(time.Millisecond)
+	if !ended || s.markdownFrom >= 0 {
+		return
+	}
+	s.readOutput()
+	s.resume()
+	switch {
+	case result.Err == setup.ErrStopped:
+		s.status = SessionStopped
+	case result.Err != nil:
+		s.fail("Setup failed: " + result.Err.Error())
+	case result.ExitCode != 0 && s.cardFailed:
+		s.fail(MessageStoppedAtByHand)
+	case result.ExitCode != 0 && s.teardown:
+		s.fail("Teardown failed (exit " + strconv.Itoa(result.ExitCode) + ")")
+	case result.ExitCode != 0:
+		s.fail("Setup failed (exit " + strconv.Itoa(result.ExitCode) + ")")
+	case len(s.scripts) > 0:
+		s.start()
+	default:
+		s.finishScripts()
+	}
+}
+
+// finishScripts moves on once every script ran: to the markdown setup's cards, or to the
+// checklist.
+func (s *Session) finishScripts() {
+	assert.That(s.status == SessionRunning, "the scripts ran to their end")
+	assert.That(len(s.scripts) == 0, "no script is left to run")
+	if s.scenario.SetupCards != "" && s.markdownFrom < 0 {
+		if err := s.addMarkdownCards(); err != nil {
+			s.fail("The markdown setup couldn't be read: " + err.Error())
+		}
+		return
+	}
+	s.status, s.checklist = SessionReady, checklistOf(s.scenario, s.row)
+}
+
+// Status is one of the Session* states.
+func (s *Session) Status() string {
+	assert.That(s != nil, "status runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	s.poll()
+	return s.status
+}
+
+// Output is the setup's output so far, one line per entry.
+func (s *Session) Output() []string {
+	assert.That(s != nil, "output runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	s.poll()
+	return append(append(make([]string, 0, len(s.earlier)+16), s.earlier...), s.display...)
+}
+
+// Wait waits up to limit for setup to finish or pause, then returns Status.
+func (s *Session) Wait(limit time.Duration) string {
+	assert.That(s != nil, "wait runs on a session")
+	assert.That(limit > 0, "a wait has a limit")
+	deadline := time.Now().Add(limit)
+	for polls := int64(0); polls <= int64(limit/pollInterval); polls++ {
+		// A session with no script running is waiting on a question, like the trust prompt.
+		idle := s.process == nil && s.block == nil
+		if s.Status() != SessionRunning || idle || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(pollInterval)
+	}
+	return s.Status()
+}
+
+// Checklist is the manual Givens, then the When and Then steps in the order they're written.
+// It's empty until setup finishes.
+func (s *Session) Checklist() []CheckItem {
+	assert.That(s != nil, "checklist runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	s.poll()
+	return append(make([]CheckItem, 0, len(s.checklist)), s.checklist...)
+}
+
+// ScenarioKey is the Drop in's scenario as a run key, like checkout/card-declined, by which
+// the window finds it again.
+func (s *Session) ScenarioKey() string {
+	assert.That(s != nil, "scenario key runs on a session")
+	assert.That(s.scenario.Capability != "", "the scenario belongs to a capability")
+	return s.scenario.Key()
+}
+
+// Givens are the scenario's Given steps, Background first, placeholders filled in. Setup
+// does them, so they aren't on the checklist; the givens command's TUI shows them above it,
+// so the whole scenario reads on the Drop in page.
+func (s *Session) Givens() []string {
+	assert.That(s != nil, "givens runs on a session")
+	assert.That(s.scenario.Name != "", "the session has a scenario")
+	return givensOf(s.scenario, s.row)
+}
+
+// givensOf are a scenario's Given steps, Background first, each And and But after a Given
+// with them, placeholders filled in: what setup sets up, which the checklist leaves out.
+func givensOf(scenario project.Scenario, row []runs.Pair) []string {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(scenario.Steps) <= helpers.HelpersMax, "steps stay bounded")
+	givens := make([]string, 0, len(scenario.Background)+len(scenario.Steps))
+	for _, steps := range [][]project.Step{scenario.Background, scenario.Steps} {
+		kind := "given"
+		for _, step := range steps {
+			switch step.Keyword {
+			case "Given", "When", "Then":
+				kind = strings.ToLower(step.Keyword)
+			}
+			if kind == "given" {
+				givens = append(givens, step.Keyword+" "+fillPlaceholders(step.Text, row))
+			}
+		}
+	}
+	return givens
+}
+
+// FileOf is the file an "Edit script", "Edit setup" or "Edit teardown" offer opens, as an
+// absolute path, or "" for any other offer. The givens command's TUI opens it in the
+// developer's editor, where the app opens its own.
+func (s *Session) FileOf(offer string) string {
+	assert.That(s != nil, "file of runs on a session")
+	assert.That(offer != "", "an offer has a label")
+	file := scenarioFileOf(offer)
+	if file == nil {
+		return ""
+	}
+	return file(s.scenario)
+}
+
+// Note is the run's note as written so far, which "Record run" keeps with the run.
+func (s *Session) Note() string {
+	assert.That(s != nil, "note runs on a session")
+	assert.That(s.window != nil, "a session belongs to a window")
+	return s.note
+}
+
+// Scenario: A command the setup needs isn't installed
+
+// precheck finds what would stop setup before it runs: a from line naming no scenario, or a
+// command the setup or its helpers need that isn't installed. It returns the message to show,
+// and any install hints.
+func (w *Window) precheck(scenario project.Scenario) (string, []string, error) {
+	assert.That(w.project != nil, "a Drop in runs in a loaded project")
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	if scenario.Setup == "" && len(runBlocksIn(scenario.SetupCards)) == 0 {
+		return "", nil, nil
+	}
+	if scenario.Setup != "" {
+		if problem, err := w.fromProblem(scenario); err != nil || problem != "" {
+			return problem, nil, err
+		}
+	}
+	required, err := w.RequiredCommands(scenario.Capability + "/" + scenario.Name)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, command := range required {
+		if !command.Installed {
+			return "This scenario needs " + command.Command, []string{command.Hint}, nil
+		}
+	}
+	return "", nil, nil
+}
+
+// Scenario: Setup is still running after two minutes
+// Scenario: A longer timeout
+// Scenario: A timeout Givens can't read
+
+// stillRunning is the "Still running after …" message once setup has run past its limit on
+// the app's clock, or "" before then, after "Keep waiting", or once setup has ended.
+func (s *Session) stillRunning() string {
+	assert.That(s != nil, "still running runs on a session")
+	assert.That(!s.started.IsZero(), "a session records when it started")
+	limit := s.scenario.StillRunning
+	if limit <= 0 {
+		limit = project.StillRunningDefault
+	}
+	if s.status != SessionRunning || s.keepWaiting ||
+		s.window.app.config.Clock.Now().Sub(s.started)-s.waited < limit {
+		return ""
+	}
+	return "Still running after " + spokenDuration(limit)
+}
+
+// spokenDuration says a limit as a person would: "2 minutes", "90 seconds".
+func spokenDuration(limit time.Duration) string {
+	assert.That(limit > 0, "a limit is positive")
+	assert.That(limit%time.Second == 0, "limits are whole seconds")
+	count, unit := int64(limit/time.Second), "second"
+	if limit%time.Minute == 0 {
+		count, unit = int64(limit/time.Minute), "minute"
+	}
+	if count != 1 {
+		unit += "s"
+	}
+	return fmt.Sprintf("%d %s", count, unit)
+}
+
+// Scenario: Steps done by hand come first
+
+// firstYouLine matches a `first_you '…'` line in a setup script: a Given done by hand, which
+// the checklist shows first. Quiet mode hides the kit's own "First, …" line.
+const firstYouPattern = `(?m)^\s*first_you\s+(.+?)\s*$`
+
+var firstYouLine = regexp.MustCompile(firstYouPattern) //tiger:allow-global compiled once
+
+// unquote takes the quotes off one bash word, as the kit would see it: 'x' or "x".
+func unquote(word string) string {
+	assert.That(!strings.Contains(word, "\n"), "a word is on one line")
+	if len(word) >= 2 && word[0] == '\'' && word[len(word)-1] == '\'' {
+		return word[1 : len(word)-1]
+	}
+	if len(word) >= 2 && word[0] == '"' && word[len(word)-1] == '"' {
+		return strings.ReplaceAll(word[1:len(word)-1], `\"`, `"`)
+	}
+	return word
 }
 
 // Feature: Gherkin files
@@ -629,19 +1081,20 @@ func (w *Window) SetRunLimits(limits runs.Limits) error {
 // browser lines is GIVENS_BIN; the terminal scenarios ("Browser lines in a terminal", "Run
 // cards in a terminal", "The givens command isn't installed") are the kit and
 // cmd/givens/run.go (runBlocks). Code elsewhere: Drop in calls into this section from its own
-// functions. startSession (dropin_run.go) asks for trust when runBlocksIn finds a run block,
-// which is "Cards that run code ask for trust"; precheck checks a setup with run blocks only;
-// begin adds givensBin. addMarkdownCards (cards.go) marks run blocks with runLanguage and
-// clears a card's offers when it runs; it and markMarkdownCard move on with runNextCard, and
-// ChooseOnCard's "Open" calls openLink. cardLines (dropin_page.go) shows runState; poll and
-// Wait (session.go) poll a running block; "Stop" (choose, dropin_page.go) and leaveSession
-// (selection.go) call stopBlock. In big_helpers.go: runBlocksIn, since Share setup's setupTexts
+// functions. startSession asks for trust when runBlocksIn finds a run block, which is "Cards
+// that run code ask for trust"; precheck checks a setup with run blocks only; begin adds
+// givensBin. addMarkdownCards (cards.go) marks run blocks with runLanguage and clears a card's
+// offers when it runs; it and markMarkdownCard move on with runNextCard, and ChooseOnCard's
+// "Open" calls openLink. cardLines (dropin_page.go) shows runState; poll and Wait poll a
+// running block; "Stop" (choose, dropin_page.go) and leaveSession (selection.go) call
+// stopBlock. In big_helpers.go: runBlocksIn, since Share setup's setupTexts
 // reads run blocks as script lines too; scratchDir, which Drop in's argument files share; and
 // RequiredCommands, which adds Chrome through chromeRequired. runNextCard and openLink came in
 // with this story and hold Drop in's part too: a card that waits, the checklist once every card
 // is marked, and the default browser when the Givens browser isn't open. givensCommand's other
 // caller is the dead InstallCommand (windows.go). Session's block and markdownFailed fields are
-// in session.go's type, and SetupCard's Output and runBlocks and CodeBlock's Run in dropin.go's.
+// in its type, in Drop in's section, and SetupCard's Output and runBlocks and CodeBlock's Run in
+// dropin.go's.
 
 // cardOutputLinesMax bounds what one card keeps of its blocks' output.
 const cardOutputLinesMax = 1000
@@ -1892,7 +2345,7 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // the kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
 // internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
 // Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view
-// read it too; so is RequiredCommands, which Drop in's precheck (dropin_run.go) also calls,
+// read it too; so is RequiredCommands, which Drop in's precheck also calls,
 // and so are the bash -n limits and bashError, which Write stories' shellProblems
 // shares. The four "Changing …" scenarios and "Updating the kit keeps
 // scenarios verified" are internal/fingerprint, which statusFor (big_helpers.go) and Drop in's
