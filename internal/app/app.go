@@ -35,7 +35,6 @@ const (
 
 // Window kinds.
 const (
-	WindowWelcome = "welcome"
 	WindowProject = "project"
 )
 
@@ -78,7 +77,6 @@ type App struct {
 	config  Config
 	windows []*Window    // front first
 	opener  URLOpener    // opens links; nil until UseURLOpener
-	picker  FolderPicker // shows the folder picker; nil until UseFolderPicker
 	kits    []KitRelease // the kit releases Givens ships, oldest first; see ShipKits
 	// pendingTrash holds paths sent to the Trash that are still on disk; see trash.
 	pendingTrash map[string]bool
@@ -111,20 +109,10 @@ func (a *App) Front() *Window {
 	return a.windows[0]
 }
 
-// Quit closes every window, remembering which projects were open.
+// Quit closes every window.
 func (a *App) Quit() error {
 	assert.That(a != nil, "quit runs on an app")
-	assert.That(a.config.AppDataDir != "", "the app knows where to remember windows")
-	open := make([]string, 0, len(a.windows))
-	// A branch's window isn't reopened: its folder is a throwaway copy.
-	for _, window := range a.windows {
-		if window.kind == WindowProject && window.branch == "" {
-			open = append(open, window.path)
-		}
-	}
-	if err := a.writeFolders(openWindowsFileName, open); err != nil {
-		return err
-	}
+	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
 	for _, window := range a.windows {
 		if window.session != nil {
 			window.session.removeArguments()
@@ -133,6 +121,3 @@ func (a *App) Quit() error {
 	a.windows = a.windows[:0]
 	return nil
 }
-
-// openWindowsFileName remembers which projects were open at the last quit, front first.
-const openWindowsFileName = "open-windows.txt"

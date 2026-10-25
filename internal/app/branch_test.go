@@ -90,18 +90,4 @@ func TestBranchCopiesCleanedUp(t *testing.T) {
 	if _, err := os.Stat(filepath.Dir(copied)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("closing the branch's window left %s: %v", filepath.Dir(copied), err)
 	}
-	stale := filepath.Join(core.config.AppDataDir, branchesDirName, "0123456789ab", "old-x")
-	if err := os.MkdirAll(stale, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := core.Launch(); err != nil {
-		t.Fatal(err)
-	}
-	branches := filepath.Join(core.config.AppDataDir, branchesDirName)
-	if _, err := os.Stat(branches); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("launching left %s: %v", branches, err)
-	}
-	if _, err := os.Stat(window.Path()); err != nil {
-		t.Errorf("launching touched the working tree: %v", err)
-	}
 }

@@ -15,32 +15,30 @@ import (
 // so lists are never nil here.
 // Ref: https://pkg.go.dev/encoding/json#Marshal
 
-// AppSnapshot is every window, front first, and the welcome window's recent list.
+// AppSnapshot is every window, front first.
 type AppSnapshot struct {
 	Windows []WindowSnapshot `json:"windows"`
-	Recents []string         `json:"recents"`
 }
 
 // WindowSnapshot is one window as serve describes it. Records.swift's WindowSnapshot.
 type WindowSnapshot struct {
-	ID                string           `json:"id"`
-	Kind              string           `json:"kind"`
-	Title             string           `json:"title"`
-	Path              string           `json:"path"`
-	Messages          []string         `json:"messages"`
-	Sidebar           []SidebarItem    `json:"sidebar"`
-	Selected          string           `json:"selected"`
-	Capability        *Capability      `json:"capability"`
-	Scenario          *Scenario        `json:"scenario"`
-	Search            *SearchSnapshot  `json:"search"`
-	Editor            *EditorSnapshot  `json:"editor"`
-	Session           *SessionSnapshot `json:"session"`
-	Listed            []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
-	Rows              []DropInRow      `json:"rows"`   // the selected outline's Examples rows
-	Runs              []RunLine        `json:"runs"`   // the shown scenario's runs, newest first
-	Offers            []string         `json:"offers"`
-	Labels            []string         `json:"labels"`
-	FolderPickerShown bool             `json:"folderPickerShown"`
+	ID         string           `json:"id"`
+	Kind       string           `json:"kind"`
+	Title      string           `json:"title"`
+	Path       string           `json:"path"`
+	Messages   []string         `json:"messages"`
+	Sidebar    []SidebarItem    `json:"sidebar"`
+	Selected   string           `json:"selected"`
+	Capability *Capability      `json:"capability"`
+	Scenario   *Scenario        `json:"scenario"`
+	Search     *SearchSnapshot  `json:"search"`
+	Editor     *EditorSnapshot  `json:"editor"`
+	Session    *SessionSnapshot `json:"session"`
+	Listed     []Scenario       `json:"listed"` // a view's, tag's or step's scenarios
+	Rows       []DropInRow      `json:"rows"`   // the selected outline's Examples rows
+	Runs       []RunLine        `json:"runs"`   // the shown scenario's runs, newest first
+	Offers     []string         `json:"offers"`
+	Labels     []string         `json:"labels"`
 	// Branch is the branch a read-only window shows, or "" for the checked-out folder.
 	Branch string `json:"branch"`
 }
@@ -83,7 +81,6 @@ func (a *App) Snapshot() AppSnapshot {
 	assert.That(len(a.windows) <= WindowsMax, "windows stay bounded")
 	snapshot := AppSnapshot{
 		Windows: make([]WindowSnapshot, 0, len(a.windows)),
-		Recents: append(make([]string, 0, RecentsMax), a.Recents()...),
 	}
 	for _, window := range a.windows {
 		snapshot.Windows = append(snapshot.Windows, window.Snapshot())
@@ -126,11 +123,7 @@ func (w *Window) Snapshot() WindowSnapshot {
 	} else if w.selectedHelper != "" {
 		labels = append(labels, w.helperLabels()...)
 	}
-	if w.kind == WindowWelcome {
-		if recents := w.app.Recents(); len(recents) > 0 {
-			labels = append(append(labels, LabelRecent), recents...)
-		}
-	} else if w.project == nil {
+	if w.project == nil {
 		messages = append(messages, MessageNoCapabilities)
 	} else {
 		messages = append(messages, w.kitMessages()...)

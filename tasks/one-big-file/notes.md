@@ -576,3 +576,17 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
   - Parallel slices: fine when the stories and their files are apart; clashes came from the
     import blocks, the end of big_helpers.go, and notes.md. The rest went one at a time.
   - A moved doc comment with a wrapped line starting "// Scenario:" read as a heading.
+
+## Dead code deleted (2026-10-25)
+- Gone: install.go and windows.go (InstallFolders, InstallCommand), and from Open a project's
+  section Launch, the welcome window, OpenRecent, the folder picker (UseFolderPicker,
+  openFolder, FolderPickerShown) and OpenDropped. Only `_archive/internal/serve` called them.
+- What fell away with them: Recents and recents.txt (written on every Open, read only by the
+  welcome window), Quit's open-windows.txt (read only by Launch), the WindowWelcome kind and its
+  branches in window.go, snapshot.go and offers.go, "Open folder…", and the snapshot's Recents
+  and FolderPickerShown fields. Tests: TestWritableFolders, and TestBranchCopiesCleanedUp's
+  Launch half.
+- Launch also cleared stale branch copies; the TUI never called it, so that wasn't happening.
+  A todo.txt line covers it.
+- `deadcode` (golang.org/x/tools) didn't find these: reflection (JSON snapshots, chromedp)
+  keeps every exported method alive to it. Grepping callers outside `_archive/` did.

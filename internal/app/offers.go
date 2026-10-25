@@ -26,9 +26,6 @@ func (w *Window) allOffers() []string {
 	if w.prompt != nil {
 		return []string{w.prompt.confirm, w.prompt.cancel}
 	}
-	if w.kind == WindowWelcome {
-		return []string{OfferOpenFolder}
-	}
 	if w.project == nil {
 		return []string{OfferCreateFolder}
 	}
@@ -83,8 +80,6 @@ func (w *Window) Choose(action string) error {
 	switch action {
 	case OfferUpdateKit:
 		return w.updateKit()
-	case OfferOpenFolder:
-		return w.openFolder()
 	case OfferCreateFolder:
 		return w.createCapabilities()
 	}

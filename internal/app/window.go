@@ -9,7 +9,7 @@ import (
 	"givens/internal/watch"
 )
 
-// Window is one Givens window: the welcome window, or one project.
+// Window is one Givens window, showing one project.
 type Window struct {
 	// statuses are scenario statuses kept until files change or the day turns; see statusOf.
 	statuses  map[string]string
@@ -43,7 +43,6 @@ type Window struct {
 	holdRefresh        bool     // a snapshot is being built, and has already looked
 	search             *search  // the ⌘K panel while it's open, or nil
 	selectedStep       string   // the step result on show, as its text, or ""
-	folderPicker       bool     // "Open folder…" showed the folder picker
 
 	// A branch's window shows a read-only copy of another branch's capabilities; see Open a
 	// project in big.go.
@@ -91,7 +90,7 @@ type Scenario struct {
 	Warning    string   `json:"warning"`
 }
 
-// Kind is WindowWelcome or WindowProject.
+// Kind is WindowProject, the one kind of window.
 func (w *Window) Kind() string {
 	assert.That(w != nil, "kind runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
@@ -102,16 +101,13 @@ func (w *Window) Kind() string {
 func (w *Window) Title() string {
 	assert.That(w != nil, "title runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
-	if w.kind == WindowWelcome {
-		return "Welcome to Givens"
-	}
 	if w.branch != "" {
 		return w.branchOrigin + " @ " + w.branch
 	}
 	return w.path
 }
 
-// Path is the capabilities folder a project window shows, or "" for the welcome window.
+// Path is the capabilities folder a project window shows.
 func (w *Window) Path() string {
 	assert.That(w != nil, "path runs on a window")
 	assert.That(len(w.path) <= PathLengthMax, "the path fits PathLengthMax")
