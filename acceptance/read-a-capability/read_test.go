@@ -36,15 +36,15 @@ func steps(w *world.World) []world.Step {
 	s := &state{World: w}
 	return append(s.historySteps(),
 		world.Def(`^they see "([^"]*)", "([^"]*)" and "([^"]*)"$`, s.seeStory),
-		world.Def(`^below the scenarios, about\.md is shown with the checkout flow diagram$`,
-			s.aboutBelowStory),
-		world.Def(`^its (\d+) scenarios are listed, with happy paths and error states marked `+
-			`differently$`, s.scenariosListed),
+		world.Def(`^after the scenarios, about\.md is shown with the checkout flow diagram$`,
+			s.aboutAfterScenarios),
+		world.Def(`^its (\d+) scenarios are listed, each marked as a happy path or an error `+
+			`state$`, s.scenariosListed),
 		world.Def(`^they select the "([^"]*)" scenario$`, s.selectScenario),
 		world.Def(`^its steps are shown (?:with their keywords lined up|as normal)$`,
 			s.stepsLinedUp),
 		world.Def(`^its tags, (\S+) and (\S+), are shown above its steps$`, s.tagsAboveSteps),
-		world.Def(`^its setup script is shown next to the steps$`, s.setupShown),
+		world.Def(`^its setup script is shown with its steps$`, s.setupShown),
 		world.Def(`^the "([^"]*)" scenario has no setup yet$`, s.noSetup),
 		world.Def(`^in place of a setup they see "([^"]*)"$`, s.noSetupShown),
 		world.Def(`^Checkout's about\.md shows an image that isn't on disk$`, s.aboutImageMissing),
@@ -99,8 +99,8 @@ func (s *state) checkoutScenario(name string) (diskScenario, error) {
 	return diskScenario{}, fmt.Errorf("checkout.feature has no scenario %q", name)
 }
 
-// linedUp is how a scenario's steps read in the library: keywords right-aligned to the widest
-// one, so every step's text starts in the same column.
+// linedUp is how a scenario's steps read when it's selected: keywords right-aligned to the
+// widest one, so every step's text starts in the same column.
 func linedUp(steps []string) []string {
 	width := 0
 	for _, step := range steps {
@@ -166,7 +166,7 @@ func (s *state) seeStory(asA string, iWant string, soThat string) error {
 }
 
 // selectScenario selects a scenario, giving it a setup script first when the sample shop has
-// none, so there's a setup to show next to its steps.
+// none, so there's a setup to show with its steps.
 func (s *state) selectScenario(name string) error {
 	s.scenario = name
 	if err := s.CopySampleShop(); err != nil {

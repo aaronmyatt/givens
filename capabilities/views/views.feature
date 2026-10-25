@@ -1,11 +1,13 @@
 Feature: Views
   As a developer looking across a whole project
-  I want sidebar views that collect scenarios and helpers from every capability
+  I want views that collect scenarios and helpers from every capability
   So that I can find every error state, or everything that needs checking again, without opening each capability
 
-  Views sit under the capabilities in the sidebar: Error states, Unverified and Shared, plus one
-  view per tag under Tags. They're worked out from the same files as everything else, so there's
-  nothing extra to keep up to date.
+  The views are Error states, Unverified and Shared, plus one view per tag. In the TUI, the
+  Views tab lists the first three and the Tags tab the tags, each with how many it holds;
+  Enter on Error states, Unverified or a tag lists its scenarios. The Helpers tab lists
+  Shared's helpers, and `givens helpers` prints them. Views are worked out from the same files
+  as everything else, so there's nothing extra to keep up to date.
 
   Scenario: See every error state
     Given a developer has the sample shop project open in Givens
@@ -26,7 +28,7 @@ Feature: Views
   # since. "Changing a helper unverifies the scenarios that call it" covers the second half.
   Scenario: Browse helpers
     Given a developer has the sample shop project open in Givens
-    When they select "Shared" in the sidebar
+    When they select the "Shared" view
     Then every documented helper is listed with its signature and description
     And each one shows the file it's defined in and how many scripts call it
 

@@ -19,7 +19,7 @@ func sequenceSteps(s *state) []world.Step {
 	return []world.Step{
 		world.Def(`^"([^"]*)" goes When, Then, When, Then$`, s.goesBackAndForth),
 		world.Def(`^the checklist is in the order the steps are written$`, s.checklistInOrder),
-		world.Def(`^the Drop in page shows a When part, a Then part, a When part and a Then `+
+		world.Def(`^the checklist falls into a When part, a Then part, a When part and a Then `+
 			`part$`, s.partsInOrder),
 	}
 }
@@ -90,7 +90,7 @@ func (s *state) partsInOrder() error {
 		kinds = append(kinds, part.Kind)
 	}
 	if want := []string{"when", "then", "when", "then"}; !slices.Equal(kinds, want) {
-		return fmt.Errorf("the Drop in page's parts are %q, not %q", kinds, want)
+		return fmt.Errorf("the checklist's parts are %q, not %q", kinds, want)
 	}
 	return nil
 }

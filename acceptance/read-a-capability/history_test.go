@@ -7,10 +7,10 @@ import (
 	"givens/acceptance/world"
 )
 
-// historySteps cover what a scenario's page lists of its runs, and "Copy steps".
+// historySteps cover the runs listed for a scenario, and "Copy steps".
 func (s *state) historySteps() []world.Step {
 	return []world.Step{
-		world.Def(`^its page lists one run, "([^"]*)"$`, s.listsOneRun),
+		world.Def(`^one run is listed for it, "([^"]*)"$`, s.listsOneRun),
 		world.Def(`^the clipboard holds "([^"]*)" as Gherkin, its Scenario: line then its `+
 			`steps$`, s.clipboardHoldsGherkin),
 	}
@@ -26,7 +26,7 @@ func (s *state) listsOneRun(text string) error {
 			continue
 		}
 		if len(shown.Runs) != 1 || !strings.HasPrefix(shown.Runs[0].Text, text) {
-			return fmt.Errorf("the scenario's page lists %+v", shown.Runs)
+			return fmt.Errorf("the scenario's runs listed are %+v", shown.Runs)
 		}
 		return nil
 	}

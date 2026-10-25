@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"givens/acceptance/world"
+	"givens/internal/app"
 )
 
 const capability = "copy-a-setup-script"
@@ -30,7 +31,8 @@ func steps(w *world.World) []world.Step {
 	return []world.Step{
 		world.Def(`^running it from the (?:project's|repo's) root folder sets up the scenario$`,
 			s.runClipboardFromRoot),
-		world.Def(`^they press ⌘K, type "([^"]*)" and press ⇧⌘C$`, s.copyFromSearch),
+		world.Def(`^they search for "([^"]*)" and copy the first scenario found$`,
+			s.copyFromSearch),
 		world.Def(`^"([^"]*)" is still selected$`, s.stillSelected),
 		world.Def(`^the sample shop's capabilities folder is at docs/capabilities in its git repo$`,
 			s.capabilitiesInDocs),
@@ -62,6 +64,8 @@ func (s *state) runClipboardFromRoot() error {
 	return nil
 }
 
+// copyFromSearch searches, then copies the setup of the first scenario among the results with
+// the window's copy-setup key, which search answers to while it's open.
 func (s *state) copyFromSearch(query string) error {
 	if err := s.Search(query); err != nil {
 		return err
@@ -70,7 +74,7 @@ func (s *state) copyFromSearch(query string) error {
 	if err != nil {
 		return err
 	}
-	return window.Press("⇧⌘C")
+	return window.Press(app.KeyCopySetup)
 }
 
 func (s *state) stillSelected(name string) error {

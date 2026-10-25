@@ -10,13 +10,18 @@ Feature: Drop into a scenario
   Before running anything, Givens reads the `need` lines in the script and the helpers it calls,
   so a missing command is caught before any state changes.
 
+  A Drop in starts from the TUI (Enter on a scenario) or from `givens drop-in <key>`, and shows
+  on the TUI's Drop in page. What Givens offers there, like "Done", "Keep waiting" or "Record
+  run", each has a key, listed at the foot of the page; about.md has the table. e edits the
+  scenario and s its setup, in the developer's own editor.
+
   Scenario: Drop in
     Given a developer has the sample shop project open in Givens
     And the "Card declined" setup prints a line, then waits before printing the next
     And "Card declined" is selected
     When they choose "Drop in"
     Then the setup script's output appears line by line as it runs
-    And when it finishes, any manual Givens, then the When steps, are shown as a checklist
+    And when it finishes, any steps done by hand, then the When and Then steps, are shown as a checklist
     And each Then step can be marked "Pass" or "Fail"
 
   @error
@@ -36,7 +41,7 @@ Feature: Drop into a scenario
     When they drop in to "Card declined"
     Then nothing in the script runs
     And they see "This scenario needs shopctl"
-    And the install hint "brew install shop/tap/shopctl" is shown with a copy button
+    And the install hint "brew install shop/tap/shopctl" is shown, and "Copy" copies it
 
   @error
   Scenario: Setup is still running after two minutes
@@ -63,13 +68,13 @@ Feature: Drop into a scenario
     Then setup runs with the usual 2-minute timeout
     And "Card declined" is marked "@timeout must look like @timeout:90s or @timeout:5m"
 
-  # A scenario can go back and forth, like When, Then, When, Then. The Drop in page keeps its
+  # A scenario can go back and forth, like When, Then, When, Then. The checklist keeps its
   # steps in the order they're written, so each Then comes right after the When it checks.
   Scenario: Steps stay in the order they're written
     Given "Card declined" goes When, Then, When, Then
     When a developer drops in to "Card declined"
     Then the checklist is in the order the steps are written
-    And the Drop in page shows a When part, a Then part, a When part and a Then part
+    And the checklist falls into a When part, a Then part, a When part and a Then part
 
   Scenario: Record a run
     Given a developer has dropped in to "Card declined" and marked every Then step "Pass"
@@ -122,7 +127,7 @@ Feature: Drop into a scenario
     And both run lines are kept
 
   Scenario: Reset state part way through
-    Given a developer has dropped in to "Card declined" and ticked "they place the order"
+    Given a developer has dropped in to "Card declined" and marked "they place the order" done
     When they choose "Reset state"
     Then the setup script runs again from the start
     And the checklist is cleared
@@ -224,12 +229,12 @@ Feature: Drop into a scenario
     And the When steps come after it
     And the Then steps are still the only ones marked "Pass" or "Fail"
 
-  # Some setup steps can't run on this Mac, like a locked-down server console, a browser page or
-  # a phone. `by_hand` stops setup at that step and shows it as a card: where to do it, the
-  # snippet or a link, and "Done" or "Failed". `ask` stops setup until the user types a value
-  # back. Both show even with `GIVENS_QUIET=1`, since they're part of setup, not the scenario's
-  # steps. The 2-minute timer pauses while a card waits. Automate a step when you can, with
-  # `ssh` or a browser driver checked by `need`, and use these only when you can't.
+  # Some setup steps can't run from the developer's machine, like a locked-down server console,
+  # a browser page or a phone. `by_hand` stops setup at that step and shows it as a card: where
+  # to do it, the snippet or a link, and "Done" or "Failed". `ask` stops setup until the user
+  # types a value back. Both show even with `GIVENS_QUIET=1`, since they're part of setup, not
+  # the scenario's steps. The 2-minute timer pauses while a card waits. Automate a step when you
+  # can, with `ssh` or a browser driver checked by `need`, and use these only when you can't.
   Scenario: A step done by hand
     Given the "Card declined" setup has a by_hand step for "DigitalOcean console" with the snippet "shopctl flags set new_checkout on"
     When a developer drops in to "Card declined"
@@ -259,7 +264,7 @@ Feature: Drop into a scenario
   @error
   Scenario: Continue with nothing typed
     Given setup is paused at an ask card
-    When a developer chooses "Continue" with the field empty
+    When a developer chooses "Continue" with nothing typed
     Then they see "Enter a value first"
     And setup stays paused
 
@@ -276,24 +281,24 @@ Feature: Drop into a scenario
     Then no "Still running" message is shown
 
   # An outline's Drop in page lists every Examples row one after another, so rows can be
-  # compared. Only one row is live at a time, since the app can only be in one row's state. The
-  # row's values fill the `<placeholders>` in the steps, and reach the setup script as
-  # `GIVENS_EX_<column>`. Doc strings and data tables reach it as files, through
-  # `GIVENS_ARG_<n>`.
+  # compared; the TUI lists them to pick one before setup runs. Only one row is live at a time,
+  # since the app being tested can only be in one row's state. The row's values fill the
+  # `<placeholders>` in the steps, and reach the setup script as `GIVENS_EX_<column>`. Doc
+  # strings and data tables reach it as files, through `GIVENS_ARG_<n>`.
   Scenario: See every row on one page
     Given checkout.feature has the outline "Card rejected by the bank"
     And a developer has the sample shop project open in Givens
     When they select "Card rejected by the bank"
     Then its Drop in page lists the "expired" and "stolen" rows one after another
     And each row shows its steps with the placeholders filled in, like "Then they see "Your card has expired""
-    And each row shows its status and its own "Drop in" button
+    And each row shows its status and offers its own "Drop in"
 
   Scenario: Drop in to one row
     Given a developer has "Card rejected by the bank" open
     When they choose "Drop in" on the "expired" row
     Then the setup script runs with GIVENS_EX_card set to "expired"
-    And that row's checklist opens beneath it
-    And the "stolen" row stays readable but greyed out, with its "Drop in" disabled
+    And that row is live, with its checklist
+    And the "stolen" row is still listed with its steps, but set aside, and can't be dropped in to
 
   Scenario: Switch to another row
     Given a developer has dropped in to the "expired" row and marked one Then step
@@ -334,7 +339,7 @@ Feature: Drop into a scenario
     Given "Card rejected by the bank" has two Examples blocks with no names
     When a developer opens the sample shop in Givens
     Then the scenario is listed with the warning "Name each Examples block so runs can tell them apart"
-    And "Record run" is disabled on it until they're named
+    And "Record run" isn't offered on it until they're named
 
   # When a scenario's setup is all done by hand, in a browser, an app or a locked-down console,
   # it lives in `scripts/<slug>.md`, not a bash file. Each top-level numbered item becomes one
@@ -381,9 +386,10 @@ Feature: Drop into a scenario
     And choosing "Edit setup" leaves the Drop in and opens pay-in-app.md in the editor
 
   # A card often holds something to paste elsewhere: a command for a terminal, or a snippet for
-  # a browser console. Each fenced code block gets its own Copy button, and copies exactly its
-  # code: no fences, no list numbers, no indent from the list it sits in. The same goes for code
-  # blocks in `by_hand` text.
+  # a browser console. Each fenced code block, and each inline code span, can be copied on its
+  # own, and copies exactly its code: no fences, no list numbers, no indent from the list it sits
+  # in. The same goes for code blocks in `by_hand` text. The TUI's c copies a card's first block,
+  # or else its first inline code.
   #
   #   2. Turn on the new checkout in the server console:
   #
@@ -405,12 +411,12 @@ Feature: Drop into a scenario
   Scenario: Several code blocks
     Given step 2 holds a bash code block and step 3 holds a js code block
     When a developer looks at those cards in Drop in
-    Then each code block has its own Copy button, labelled "bash" and "js"
+    Then each code block can be copied on its own, labelled "bash" and "js"
     And copying one never includes the other
 
   Scenario: Copy inline code
     Given a card says "Sign in as sam@example.com"
-    When a developer clicks sam@example.com
+    When a developer copies the inline code sam@example.com
     Then the clipboard holds "sam@example.com"
 
   @error
@@ -418,4 +424,4 @@ Feature: Drop into a scenario
     Given step 2 of pay-in-app.md opens a code fence that never closes
     When a developer drops in to "Pay in app"
     Then step 2's card shows "The code block starting on line 4 never closes"
-    And it has no Copy button until the fence is closed
+    And it can't be copied until the fence is closed

@@ -56,6 +56,10 @@ func (s *state) titleIsPath() error {
 		return fmt.Errorf("the window's title is %q; it doesn't show %q",
 			window.Title(), s.Capabilities())
 	}
+	top, _, _ := strings.Cut(screenOf(window), "\n")
+	if !containsPath(top, s.Capabilities()) {
+		return fmt.Errorf("the TUI's top line is %q; it doesn't show %q", top, s.Capabilities())
+	}
 	return nil
 }
 

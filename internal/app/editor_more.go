@@ -1,12 +1,16 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"givens/internal/assert"
 	"givens/internal/spec"
@@ -326,4 +330,73 @@ func (e *Editor) chooseInEditor(action string) error {
 		return e.window.deleteFile()
 	}
 	return ErrNotImplemented
+}
+
+// Problems are what the parser can't read in the editor's text as it is now, unsaved: the
+// marks a save would leave. Only a .feature file has them. The givens command checks them
+// before it saves an edit made in $EDITOR. See capabilities/work-in-the-terminal.
+func (e *Editor) Problems() []EditorMark {
+	assert.That(e != nil, "problems runs on an editor")
+	assert.That(filepath.IsAbs(e.path), "the editor's path is absolute")
+	if strings.HasSuffix(e.path, ".sh") {
+		return shellProblems(e.text)
+	}
+	if !strings.HasSuffix(e.path, ".feature") {
+		return []EditorMark{}
+	}
+	if _, err := spec.ParseFeatureText(e.text); err != nil {
+		line, message := spec.Explain(err)
+		return []EditorMark{{Line: int(line), Message: capitalized(message)}}
+	}
+	return []EditorMark{}
+}
+
+// Line is the line the editor opened at, counting from 1, or 0 for the top of the file.
+func (e *Editor) Line() int {
+	assert.That(e != nil, "line runs on an editor")
+	assert.That(e.line >= 0, "a line isn't negative")
+	return e.line
+}
+
+// ChangedOnDisk is true while another tool has saved the file since the editor opened it, so
+// Save would write nothing.
+func (e *Editor) ChangedOnDisk() bool {
+	assert.That(e != nil, "changed on disk runs on an editor")
+	assert.That(e.window != nil, "an editor belongs to a window")
+	return e.conflict()
+}
+
+// CloseEditor closes the editor without asking, whatever it holds unsaved: the givens
+// command's own editing ends in the developer's editor, which saved or kept the text.
+func (w *Window) CloseEditor() {
+	assert.That(w != nil, "close editor runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	w.editor = nil
+}
+
+// shellProblems are the lines `bash -n` reports in a setup script or helper file's text, so a
+// script that doesn't parse isn't saved from the developer's editor, as a .feature file that
+// doesn't parse isn't. A check that can't run reports nothing: the file is saved as typed.
+// Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html (-n)
+func shellProblems(text string) []EditorMark {
+	assert.That(utf8.ValidString(text), "a script is text")
+	assert.That(syntaxCheckTimeout > 0, "the check has a limit")
+	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "bash", "-n")
+	command.Stdin = strings.NewReader(text)
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	if err != nil && !errors.As(err, &exit) {
+		return []EditorMark{}
+	}
+	marks := make([]EditorMark, 0, 2)
+	for _, match := range bashError.FindAllStringSubmatch(string(output), helperProblemsMax) {
+		// bash quotes the line it stopped on after its message, as a line of its own.
+		line, convertErr := strconv.Atoi(match[1])
+		if convertErr == nil && !strings.HasPrefix(match[2], "`") {
+			marks = append(marks, EditorMark{Line: line, Message: capitalized(match[2])})
+		}
+	}
+	return marks
 }

@@ -80,11 +80,11 @@ func (s *state) startsWithoutAsking() error {
 	return s.startedRunning()
 }
 
-// dropInWithoutRunning expects the Drop in screen to show Card declined's steps and its setup
+// dropInWithoutRunning expects the Drop in page to show Card declined's steps and its setup
 // script's text, while the script stays unrun.
 func (s *state) dropInWithoutRunning() error {
 	if s.Session == nil {
-		return errors.New("dropping in opened no Drop in screen")
+		return errors.New("dropping in opened no Drop in page")
 	}
 	window, err := s.Front()
 	if err != nil {
@@ -100,12 +100,12 @@ func (s *state) dropInWithoutRunning() error {
 			continue
 		}
 		for _, step := range scenario.Steps {
-			if err := world.Expect(window.Visible(), step.Text, "the Drop in screen"); err != nil {
+			if err := world.Expect(window.Visible(), step.Text, "the Drop in page"); err != nil {
 				return err
 			}
 		}
 	}
-	if err := world.Expect(window.Visible(), s.script, "the Drop in screen"); err != nil {
+	if err := world.Expect(window.Visible(), s.script, "the Drop in page"); err != nil {
 		return err
 	}
 	return s.stayedQuiet()

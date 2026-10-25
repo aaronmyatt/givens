@@ -28,16 +28,17 @@ type state struct {
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
 	return []world.Step{
+		world.Def(`^they search for "([^"]*)"$`, s.Search),
 		world.Def(`^the results are grouped under (.+) and ([A-Z][a-z]+)$`, s.groupedUnder),
 		world.Def(`^"([^"]*)" and "([^"]*)" are listed under ([A-Z][a-z]+)$`, s.bothListedUnder),
-		world.Def(`^every match is highlighted$`, s.everyMatchHighlighted),
+		world.Def(`^every match is marked in its result$`, s.everyMatchMarked),
 		world.Def(`^"([^"]*)" is listed under ([A-Z][a-z]+), matching "([^"]*)"$`,
 			s.listedMatching),
 		world.Def(`^"([^"]*)" is listed under ([A-Z][a-z]+)$`, s.listedUnder),
 		world.Def(`^the step "(.+)" is listed with "(\d+) uses?"$`, s.stepWithUses),
 		world.Def(`^selecting it lists "([^"]*)" and "([^"]*)"$`, s.selectingItLists),
 		world.Def(`^a developer has searched for "([^"]*)"$`, s.hasSearched),
-		world.Def(`^they choose the "([^"]*)" filter$`, s.chooseFilter),
+		world.Def(`^they narrow the results to "([^"]*)"$`, s.narrowTo),
 		world.Def(`^only (stories|scenarios|steps|scripts|helpers) are listed$`, s.onlyKind),
 		world.Def(`^scripts with "([^"]*)" in their name come before scripts that only mention it$`,
 			s.namedScriptsFirst),
@@ -74,9 +75,9 @@ func (s *state) bothListedUnder(first string, second string, kind string) error 
 	return s.listedUnder(second, kind)
 }
 
-// everyMatchHighlighted expects each result to highlight every place the query appears in its
-// title and second line, and nothing else.
-func (s *state) everyMatchHighlighted() error {
+// everyMatchMarked expects each result to mark every place the query appears in its title and
+// second line, and nothing else: its Matches, which `givens search --json` prints.
+func (s *state) everyMatchMarked() error {
 	window, err := s.Front()
 	if err != nil {
 		return err
@@ -91,12 +92,12 @@ func (s *state) everyMatchHighlighted() error {
 			shown := strings.ToLower(result.Name + "\n" + result.Detail)
 			want := strings.Count(shown, query)
 			if want == 0 || len(result.Matches) != want {
-				return fmt.Errorf("%s %q shows %q %d times and highlights %q",
+				return fmt.Errorf("%s %q shows %q %d times and marks %q",
 					group.Kind, result.Name, results.Query, want, result.Matches)
 			}
 			for _, match := range result.Matches {
 				if !strings.EqualFold(match, results.Query) {
-					return fmt.Errorf("%q highlights %q, not %q", result.Name, match, query)
+					return fmt.Errorf("%q marks %q, not %q", result.Name, match, query)
 				}
 			}
 		}
@@ -184,7 +185,8 @@ func (s *state) hasSearched(query string) error {
 	return s.Search(query)
 }
 
-func (s *state) chooseFilter(kind string) error {
+// narrowTo keeps one kind of result, as `givens search --kind` does.
+func (s *state) narrowTo(kind string) error {
 	window, err := s.Front()
 	if err != nil {
 		return err

@@ -1,5 +1,5 @@
 // Package sharesetupbetweenscenarios runs capabilities/share-setup-between-scenarios: helpers
-// in _shared folders, the sidebar's Shared list, and setup fingerprints. Steps shared with other
+// in _shared folders, the Helpers list, and setup fingerprints. Steps shared with other
 // capabilities are in acceptance/world.
 package sharesetupbetweenscenarios
 
@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"givens/acceptance/world"
+	"givens/internal/kit"
 )
 
 const capability = "share-setup-between-scenarios"
@@ -54,9 +55,13 @@ func whenSteps(s *state) []world.Step {
 		world.Def(`^([a-z_]+) changes on disk$`, s.helperChanges),
 		world.Def(`^"([^"]*)" is changed to "([^"]*)"$`, s.stepChanges),
 		world.Def(`^the "([^"]*)" setup script changes$`, s.setupChanges),
-		world.Def(`^the sample shop's kit is updated from version 1 to 2$`, s.kitUpdated),
-		world.Def(`^they select ([a-z_]+) under Shared and choose "([^"]*)"$`, s.chooseOnHelper),
-		world.Def(`^they choose "New helper" in (\S+) and name it "([a-z_]+)"$`, s.newHelper),
+		world.Def(`^the sample shop's kit is updated to the next version$`, s.kitUpdated),
+		world.Def(`^they choose "([^"]*)" on ([a-z_]+) in the Helpers list$`,
+			func(action string, helper string) error { return s.chooseOnHelper(helper, action) }),
+		world.Def(`^they add a helper named "([a-z_]+)" to (\S+)$`,
+			func(helper string, capabilityName string) error {
+				return s.newHelper(capabilityName, helper)
+			}),
 		world.Def(`^they save it with its closing brace missing$`, s.saveWithoutBrace),
 	}
 }
@@ -67,20 +72,18 @@ func thenSteps(s *state) []world.Step {
 		world.Def(`^Givens points out that ([a-z_]+) is defined in (\S+)$`, s.pointsOut),
 		world.Def(`^Checkout's seed_shopper runs in place of the shared one$`, s.overrideRan),
 		world.Def(`^no warning is shown$`, s.noWarning),
-		world.Def(`^the Shared list marks it "([^"]*)"$`, s.marksOverride),
+		world.Def(`^the Helpers list marks it "([^"]*)"$`, s.marksOverride),
 		world.Def(`^the output warns "([^"]*)"$`, s.outputWarns),
-		world.Def(`^both definitions are flagged in the Shared list$`, s.bothFlagged),
+		world.Def(`^both definitions are flagged in the Helpers list$`, s.bothFlagged),
 		world.Def(`^"([^"]*)" still shows as verified$`, s.stillVerified),
 		world.Def(`^both show "([^"]*)"$`, s.bothShow),
 		world.Def(`^if ([a-z]+) isn't installed, it's marked "([^"]*)" with its install hint$`,
 			s.markedIfMissing),
 		world.Def(`^(\S+) opens in the editor at ([a-z_]+)$`, s.opensAt),
-		world.Def(`^the (\d+) scripts that call it are listed beside the editor$`,
-			s.callersListed),
+		world.Def(`^the (\d+) scripts that call it are listed with it$`, s.callersListed),
 		world.Def(`^(\S+) is created with a # @helper comment and an empty ([a-z_]+) function$`,
 			s.helperCreated),
-		world.Def(`^([a-z_]+) is listed under Shared as one of (\S+)'s helpers$`,
-			s.listedUnder),
+		world.Def(`^([a-z_]+) is in the Helpers list as one of (\S+)'s helpers$`, s.listedUnder),
 		world.Def(`^the line bash reports is marked with its syntax error$`, s.syntaxMarked),
 	}
 }
@@ -266,13 +269,15 @@ func (s *state) kitUpdated() error {
 	if err != nil {
 		return err
 	}
-	version := regexp.MustCompile(`(?m)^# givens kit 1$`)
-	if !version.MatchString(text) {
-		return fmt.Errorf("expected the kit to start at version 1 (`# givens kit 1`), got:\n%s",
+	// The update rewrites the version line and adds a function, as a real one would.
+	version, ok := kit.Version(text)
+	if !ok {
+		return fmt.Errorf("expected the kit to start with its version line, got:\n%s",
 			firstLine(text))
 	}
-	updated := version.ReplaceAllString(text, "# givens kit 2") +
-		"\n_givens_version_2() { :; }\n"
+	_, rest, _ := strings.Cut(text, "\n")
+	updated := fmt.Sprintf("# givens kit %d\n%s\n_givens_next_version() { :; }\n",
+		version+1, rest)
 	return s.WriteFile(path, updated)
 }
 

@@ -135,7 +135,7 @@ func (s *state) nothingInRuns() error {
 	return nil
 }
 
-// git runs git in the sample shop, away from this Mac's own git settings.
+// git runs git in the sample shop, away from this machine's own git settings.
 // Ref: https://git-scm.com/docs/git#Documentation/git.txt-codeGITCONFIGGLOBALcode
 func (s *state) git(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)

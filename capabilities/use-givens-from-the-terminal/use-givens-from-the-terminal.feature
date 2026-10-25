@@ -1,10 +1,11 @@
 Feature: Use Givens from the terminal
   As a developer in a terminal, or an agent working for one
-  I want to list, run and check scenarios without opening the app
+  I want to list, run and check scenarios with plain commands
   So that agents and CI (automated checks on each push) can use the same files
 
-  `list` and `run` stay plain bash, like the rest of the `givens` command. `check` needs the
-  app's parser, so it runs the app headless, with no window.
+  `list`, `run` and `check` print plain text, for agents and CI, and never open the TUI (a
+  text UI: full screen, driven by the keyboard). A person at a terminal has the TUI and their
+  own editor too; see work-in-the-terminal.
 
   Scenario: List scenarios
     Given a developer's terminal is in the sample shop's folder

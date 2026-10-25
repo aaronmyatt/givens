@@ -1,10 +1,10 @@
 Feature: Update the kit
   As a developer on a project started with an older Givens
-  I want to update the kit from inside Givens
+  I want Givens to update the kit for me
   So that I get fixes without copying files by hand
 
   givens.sh starts with a version line, for example `# givens kit 2`. Updating the kit doesn't
-  unverify any scenario.
+  unverify any scenario. What Givens says about the kit shows under the TUI's list.
 
   Scenario: An update is available
     Given the sample shop's givens.sh is version 1

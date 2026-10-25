@@ -31,7 +31,8 @@ func (s *state) renameSteps() []world.Step {
 			s.fromLineUpdated),
 		world.Def(`^it shows "([^"]*)", since its runs were recorded under the old name$`,
 			s.renamedShows),
-		world.Def(`^the sidebar lists "([^"]*)" in place of "([^"]*)"$`, s.sidebarInPlaceOf),
+		world.Def(`^"([^"]*)" is listed among the capabilities in place of "([^"]*)"$`,
+			s.listedInPlaceOf),
 		world.Def(`^its folder and \.feature file are renamed to ([a-z0-9-]+) and `+
 			`([a-z0-9-]+\.feature), with its scripts and helpers inside$`, s.folderRenamed),
 		world.Def(`^its scenarios show "([^"]*)"$`, s.scenariosShow),
@@ -291,17 +292,17 @@ func (s *state) statusOf(name string, want string) error {
 
 func (s *state) renamedShows(status string) error { return s.statusOf(s.renamedTo, status) }
 
-func (s *state) sidebarInPlaceOf(newName string, oldName string) error {
+func (s *state) listedInPlaceOf(newName string, oldName string) error {
 	window, err := s.window()
 	if err != nil {
 		return err
 	}
 	items := window.Sidebar()
-	if err := sidebarHas(items, newName); err != nil {
+	if err := capabilityListed(items, newName); err != nil {
 		return err
 	}
-	if sidebarHas(items, oldName) == nil {
-		return fmt.Errorf("the sidebar still lists %q", oldName)
+	if capabilityListed(items, oldName) == nil {
+		return fmt.Errorf("the capability %q is still listed", oldName)
 	}
 	return nil
 }

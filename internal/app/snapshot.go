@@ -73,6 +73,8 @@ type SessionSnapshot struct {
 	Parts []ChecklistPart `json:"parts"`
 	// Attachments are the paths of files "Record run" will keep with the run.
 	Attachments []string `json:"attachments"`
+	// Recorded is true once "Record run" has saved the checklist as it's marked now.
+	Recorded bool `json:"recorded"`
 }
 
 // Snapshot is the whole app, front window first.

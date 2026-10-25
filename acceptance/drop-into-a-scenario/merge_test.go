@@ -31,7 +31,7 @@ func (s *state) runsOnTwoBranches(name string) error {
 	if _, err := s.git("checkout", "--quiet", "main"); err != nil {
 		return err
 	}
-	// A later run on the same day, from a fresh Givens, as on Ali's Mac.
+	// A later run on the same day, from a fresh Givens, as on Ali's machine.
 	s.Clock.Advance(time.Hour)
 	s.App, s.Window, s.Session = nil, nil, nil
 	return s.recordOnBranch(name, "ali", "Ali")

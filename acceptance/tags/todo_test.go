@@ -17,17 +17,19 @@ import (
 // scenario to do" and "Remove a to do flag".
 func (s *state) todoSteps() []world.Step {
 	return []world.Step{
-		world.Def(`^"([^"]*)" is listed under Tags in the sidebar$`, s.underTags),
+		world.Def(`^"([^"]*)" is listed on the Tags tab$`, s.underTags),
+		world.Def(`^"([^"]*)" is shown flagged to do$`, s.flagged),
 		world.Def(`^"([^"]*)" is tagged (@\S+) in checkout\.feature, and nothing else changes$`,
 			func(name string, tag string) error { return s.onlyFlagChanged(name, tag, true) }),
 		world.Def(`^"([^"]*)" isn't tagged (@\S+) in checkout\.feature, and nothing else `+
 			`changes$`,
 			func(name string, tag string) error { return s.onlyFlagChanged(name, tag, false) }),
-		world.Def(`^it's listed when they select "([^"]*)" under Tags$`, s.listedUnderTag),
-		world.Def(`^it isn't shown with a red flag$`, s.notFlagged),
+		world.Def(`^it's listed when they select "([^"]*)" on the Tags tab$`, s.listedUnderTag),
+		world.Def(`^it isn't shown flagged to do$`, s.notFlagged),
 	}
 }
 
+// underTags expects name among the window's tag views: what the TUI's Tags tab lists.
 func (s *state) underTags(name string) error {
 	window, err := s.Front()
 	if err != nil {
@@ -40,7 +42,7 @@ func (s *state) underTags(name string) error {
 		}
 	}
 	if !slices.Contains(tags, name) {
-		return fmt.Errorf("Tags in the sidebar lists %q, not %q", tags, name)
+		return fmt.Errorf("the Tags tab lists %q, not %q", tags, name)
 	}
 	return nil
 }
@@ -98,13 +100,27 @@ func (s *state) listedUnderTag(tag string) error {
 	return nil
 }
 
+// flagged expects the scenario flagged to do where the window shows it, as the TUI's list
+// flags it ⚑.
+func (s *state) flagged(name string) error {
+	s.subject = name
+	flagged, err := s.ShownFlagged(name)
+	if err != nil {
+		return err
+	}
+	if !flagged {
+		return fmt.Errorf("%q is shown without its to do flag", name)
+	}
+	return nil
+}
+
 func (s *state) notFlagged() error {
 	flagged, err := s.ShownFlagged(s.subject)
 	if err != nil {
 		return err
 	}
 	if flagged {
-		return fmt.Errorf("%q is still shown with a red flag", s.subject)
+		return fmt.Errorf("%q is still shown flagged to do", s.subject)
 	}
 	return nil
 }

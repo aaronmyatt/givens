@@ -42,7 +42,6 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^"([^"]*)" isn't listed$`, s.notListed),
 		world.Def(`^"([^"]*)" is listed with "([^"]*)"$`, s.listedWith),
 		world.Def(`^the other (\d+) scenarios are listed with "([^"]*)"$`, s.othersListedWith),
-		world.Def(`^they select "Shared" in the sidebar$`, s.selectShared),
 		world.Def(`^every documented helper is listed with its signature and description$`,
 			s.helpersWithSignatures),
 		world.Def(`^each one shows the file it's defined in and how many scripts call it$`,
@@ -291,12 +290,4 @@ func contains(names []string, name string) bool {
 		}
 	}
 	return false
-}
-
-func (s *state) selectShared() error {
-	window, err := s.Front()
-	if err != nil {
-		return err
-	}
-	return window.Select("Shared")
 }

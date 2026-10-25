@@ -65,8 +65,8 @@ func (s *state) outputStreams() error {
 	return world.Expect(output, secondLine, "the setup's output")
 }
 
-// checklistShown expects the checklist to be any manual Givens, then the scenario's When
-// steps, then its Then steps.
+// checklistShown expects the checklist to be any Given steps done by hand, then the
+// scenario's When steps, then its Then steps.
 func (s *state) checklistShown() error {
 	session, err := s.settleTo(app.SessionReady)
 	if err != nil {
@@ -82,7 +82,8 @@ func (s *state) checklistShown() error {
 	for _, item := range items {
 		rank, known := order[item.Kind]
 		if !known || rank < last {
-			return fmt.Errorf("the checklist isn't Givens, then Whens, then Thens: %+v", items)
+			return fmt.Errorf("the checklist isn't steps by hand, then Whens, then Thens: %+v",
+				items)
 		}
 		last = rank
 	}

@@ -89,10 +89,11 @@ func (w *Window) EditingHelper() HelperEdit {
 
 // NewHelper creates <capability>/_shared/<name>.sh holding a `# @helper` comment and an empty
 // function called name, and opens it in the editor. capability is a capability's name, such as
-// "Checkout". Needed by "Add a helper".
+// "Checkout", or "" for the capabilities folder's own _shared, which every capability's
+// scripts can call. Needed by "Add a helper".
 func (w *Window) NewHelper(capability string, name string) error {
 	assert.That(w != nil, "new helper runs on a window")
-	assert.That(capability != "", "a helper belongs to a capability")
+	assert.That(len(capability) <= NameLengthMax, "the capability's name fits NameLengthMax")
 	assert.That(!strings.ContainsAny(name, "/ \n"), "a helper's name is a shell function name")
 	if err := w.writable(); err != nil {
 		return err
@@ -100,11 +101,15 @@ func (w *Window) NewHelper(capability string, name string) error {
 	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(name) {
 		return fmt.Errorf("%q isn't a shell function name", name)
 	}
-	owner, ok := w.findCapability(capability)
-	if !ok {
-		return fmt.Errorf("%s: %w", capability, ErrNotFound)
+	dir := w.path
+	if capability != "" {
+		owner, ok := w.findCapability(capability)
+		if !ok {
+			return fmt.Errorf("%s: %w", capability, ErrNotFound)
+		}
+		dir = owner.Dir
 	}
-	path := filepath.Join(owner.Dir, sharedFolder, name+".sh")
+	path := filepath.Join(dir, sharedFolder, name+".sh")
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", filepath.Base(path))
 	}

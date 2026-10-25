@@ -155,7 +155,7 @@ func changedLines(diff string) []string {
 	return changed
 }
 
-// capabilityNames lists the sidebar's capabilities by name.
+// capabilityNames lists the capabilities listed, by name.
 func capabilityNames(items []app.SidebarItem) []string {
 	names := make([]string, 0, len(items))
 	for _, item := range items {
@@ -166,13 +166,13 @@ func capabilityNames(items []app.SidebarItem) []string {
 	return names
 }
 
-// sidebarCapability finds a capability's line in the sidebar.
-func sidebarCapability(items []app.SidebarItem, name string) (app.SidebarItem, error) {
+// listedCapability finds a capability's line in the list.
+func listedCapability(items []app.SidebarItem, name string) (app.SidebarItem, error) {
 	for _, item := range items {
 		if item.Kind == "capability" && item.Name == name {
 			return item, nil
 		}
 	}
-	return app.SidebarItem{}, fmt.Errorf("the sidebar has no capability %q; it lists %q",
+	return app.SidebarItem{}, fmt.Errorf("no capability %q is listed; the list holds %q",
 		name, capabilityNames(items))
 }

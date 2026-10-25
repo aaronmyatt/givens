@@ -55,7 +55,7 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^a developer chose "([^"]*)" for the sample shop before$`, s.choseBefore),
 		world.Def(`^setup starts without asking$`, s.startsWithoutAsking),
 		world.Def(`^a developer chose "([^"]*)" for the sample shop$`, s.choseNow),
-		world.Def(`^the Drop in screen opens with the scenario's steps and setup script, `+
+		world.Def(`^the Drop in page opens with the scenario's steps and setup script, `+
 			`but nothing in the script runs$`, s.dropInWithoutRunning),
 		world.Def(`^they see "([^"]*)", and "Copy" still works$`, s.seeAndCopyWorks),
 		world.Def(`^a developer trusted the sample shop at ~/code/shop$`, s.trustedAtShop),

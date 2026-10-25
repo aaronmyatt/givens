@@ -6,11 +6,13 @@
 package spec
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	gherkin "github.com/cucumber/gherkin/go/v42"
 	messages "github.com/cucumber/messages/go/v34"
@@ -150,13 +152,31 @@ func ParseFeature(path string) (*messages.Feature, error) {
 	if len(source) > FeatureFileSizeBytesMax {
 		return nil, fmt.Errorf("%s is larger than 4 MiB", path)
 	}
+	feature, err := ParseFeatureText(string(source))
+	if errors.Is(err, ErrNoFeature) {
+		return nil, fmt.Errorf("%s has no Feature", path)
+	}
+	return feature, err
+}
+
+// ErrNoFeature is a .feature file's text with no Feature: line.
+var ErrNoFeature = errors.New("has no Feature")
+
+// ParseFeatureText parses a .feature file's text, as ParseFeature does a file: an editor's
+// text, before it's saved.
+func ParseFeatureText(source string) (*messages.Feature, error) {
+	assert.That(utf8.ValidString(source), "a feature is text")
+	assert.That(len(source) <= FeatureFileSizeBytesMax*2, "the text stays bounded")
+	if len(source) > FeatureFileSizeBytesMax {
+		return nil, errors.New("is larger than 4 MiB")
+	}
 	ids := &messages.Incrementing{}
-	document, err := gherkin.ParseGherkinDocument(strings.NewReader(string(source)), ids.NewId)
+	document, err := gherkin.ParseGherkinDocument(strings.NewReader(source), ids.NewId)
 	if err != nil {
 		return nil, err
 	}
 	if document.Feature == nil {
-		return nil, fmt.Errorf("%s has no Feature", path)
+		return nil, ErrNoFeature
 	}
 	assert.That(document.Feature.Location != nil, "a parsed Feature has a location")
 	return document.Feature, nil

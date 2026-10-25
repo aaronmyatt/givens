@@ -1,7 +1,7 @@
 # Givens
 
-A macOS app and CLI that reads a project's `capabilities/` folder of Gherkin scenarios, sets up
-each scenario's starting state, and walks a developer through it.
+A terminal app (a TUI) and CLI that reads a project's `capabilities/` folder of Gherkin
+scenarios, sets up each scenario's starting state, and walks a developer through it.
 
 ## Where things are
 
@@ -10,8 +10,9 @@ each scenario's starting state, and walks a developer through it.
 - `acceptance/<capability>/`: one godog suite per capability, with its step definitions.
   Shared steps, fixtures and fakes are in `acceptance/world/`. `@wip` scenarios are skipped;
   `GIVENS_TAGS=@wip go test ./acceptance/...` runs them, and they fail until built.
-- `internal/app/`: the core the Swift UI, the CLI and the steps all drive; mostly stubs that
-  return `ErrNotImplemented` until built. `cmd/givens/`: the CLI. `tools/tigerlint/`: the linter.
+- `internal/app/`: the core the TUI, the CLI and the steps all drive; mostly stubs that
+  return `ErrNotImplemented` until built. `internal/tui/`: the TUI. `cmd/givens/`: the CLI.
+  `tools/tigerlint/`: the linter.
 - `testdata/sample-shop/`: the pretend project most scenarios start from.
 - `todo.txt` and `tasks/<slug>/`: the backlog, worked with the `txtodo-backlog` skill.
 

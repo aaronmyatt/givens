@@ -52,7 +52,6 @@ func Common(w *World) []Step {
 		Def(`^it prints "([^"]*)"$`, w.prints),
 		Def(`^"([^"]*)" shows "([^"]*)"$`, w.shows),
 		Def(`^"([^"]*)" has a passing run recorded$`, w.RecordPassingRun),
-		Def(`^they press ⌘K and type "([^"]*)"$`, w.Search),
 		Def(`^the clipboard holds "([^"]*)"$`, w.clipboardHolds),
 		Def(`^the file is saved anyway$`, w.savedAnyway),
 		Def(`^it opens in the editor$`, w.opensInEditor),
@@ -60,7 +59,6 @@ func Common(w *World) []Step {
 		Def(`^checkout\.feature has the line "([^"]*)" among the steps of "([^"]*)"$`,
 			w.lineAmongSteps),
 		Def(`^"([^"]*)" has only scripts/([a-z0-9-]+)\.md$`, w.onlyMarkdownSetup),
-		Def(`^"([^"]*)" is shown with a red flag$`, w.shownWithFlag),
 	}
 	assert.That(len(steps) > 0, "there are common steps")
 	return steps

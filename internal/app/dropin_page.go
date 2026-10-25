@@ -17,7 +17,7 @@ func (s *Session) snapshot() *SessionSnapshot {
 	return &SessionSnapshot{
 		Scenario: s.scenario.Name, Status: s.Status(), Output: s.Output(),
 		Cards: s.cardLines(), Checklist: s.Checklist(), Parts: s.Parts(),
-		Attachments: s.Attachments(),
+		Attachments: s.Attachments(), Recorded: s.recorded,
 	}
 }
 
@@ -105,10 +105,13 @@ func (s *Session) choose(action string) error {
 	}
 	switch action {
 	case OfferStop:
+		s.scripts = nil
+		if s.block != nil {
+			return s.stopBlock()
+		}
 		if s.process == nil {
 			return nil
 		}
-		s.scripts = nil
 		return s.process.Stop()
 	case OfferKeepWaiting:
 		s.keepWaiting = true
@@ -190,12 +193,31 @@ func (s *Session) cardLines() []string {
 		case CardByHand:
 			lines = append(lines, "By hand, in "+card.Where)
 		case CardMarkdown:
-			lines = append(lines, fmt.Sprintf("Step %d", index-s.markdownFrom+1))
+			lines = append(lines, fmt.Sprintf("Step %d", index-s.markdownFrom+1)+
+				s.runState(index))
 		}
-		lines = append(append(lines, card.Text), card.Images...)
+		lines = append(append(append(lines, card.Text), card.Images...), card.Output...)
 		if card.Warning != "" {
 			lines = append(lines, card.Warning)
 		}
 	}
 	return lines
+}
+
+// runState follows a card's heading when it runs by itself: " · runs by itself" until it
+// runs, then " · running", " · ran" or " · failed".
+func (s *Session) runState(card int) string {
+	assert.That(card >= 0 && card < len(s.cards), "the card exists")
+	assert.That(s.markdownFrom >= 0, "a markdown card is asked about")
+	switch {
+	case len(s.cards[card].runBlocks) == 0:
+		return ""
+	case s.block != nil && s.block.card == card:
+		return " · running"
+	case s.cards[card].Mark == MarkDone:
+		return " · ran"
+	case s.cards[card].Mark != "":
+		return " · failed"
+	}
+	return " · runs by itself"
 }

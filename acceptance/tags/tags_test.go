@@ -43,10 +43,10 @@ func steps(w *world.World) []world.Step {
 	defined := []world.Step{
 		world.Def(`^"([^"]*)" is tagged (@\S+) in checkout\.feature$`, s.taggedInCheckout),
 		world.Def(`^a developer selects the "([^"]*)" view$`, s.selectView),
-		world.Def(`^a developer presses ⌘K and types "([^"]*)"$`, s.Search),
+		world.Def(`^(?:they search|a developer searches) for "([^"]*)"$`, s.Search),
 		world.Def(`^"([^"]*)" is listed, marked as an error state$`, s.listedAsError),
 		world.Def(`^"([^"]*)" and "([^"]*)" are both tagged (@\S+)$`, s.bothTagged),
-		world.Def(`^a developer selects "([^"]*)" under Tags(?: in the sidebar)?$`, s.selectTag),
+		world.Def(`^a developer selects "([^"]*)" on the Tags tab$`, s.selectTag),
 		world.Def(`^only those two scenarios are listed$`, s.onlyThoseListed),
 		world.Def(`^the Feature: (.+) line is tagged (@\S+)$`, s.featureTagged),
 		world.Def(`^every (.+) scenario is listed$`, s.everyScenarioListed),
@@ -59,7 +59,8 @@ func steps(w *world.World) []world.Step {
 			s.taggedThree),
 		world.Def(`^"([^"]*)" is listed$`, s.found),
 		world.Def(`^"([^"]*)" isn't$`, s.notFound),
-		world.Def(`^only "([^"]*)" is listed, with "([^"]*)" highlighted$`, s.onlyFoundHighlighted),
+		world.Def(`^only "([^"]*)" is listed, with "([^"]*)" marked as the match$`,
+			s.onlyFoundMarked),
 		world.Def(`^no results are listed until the expression is complete$`,
 			s.noResultsUntilComplete),
 	}
@@ -122,7 +123,7 @@ func (s *state) bothTagged(first string, second string, tag string) error {
 	return nil
 }
 
-// selectTag expects the tag under Tags in the sidebar, then selects it.
+// selectTag expects the tag among the views the Tags tab lists, then selects it.
 func (s *state) selectTag(tag string) error {
 	if err := s.underTags(tag); err != nil {
 		return err
@@ -260,8 +261,8 @@ func (s *state) notFound(name string) error {
 	return nil
 }
 
-// onlyFoundHighlighted expects one scenario under Scenarios, with the word highlighted.
-func (s *state) onlyFoundHighlighted(name string, word string) error {
+// onlyFoundMarked expects one scenario under Scenarios, with the word among its matches.
+func (s *state) onlyFoundMarked(name string, word string) error {
 	window, err := s.Front()
 	if err != nil {
 		return err
@@ -271,7 +272,7 @@ func (s *state) onlyFoundHighlighted(name string, word string) error {
 		return fmt.Errorf("the search's Scenarios are %+v, not just %q", results, name)
 	}
 	if !slices.Contains(results[0].Matches, word) {
-		return fmt.Errorf("%q highlights %q, not %q", name, results[0].Matches, word)
+		return fmt.Errorf("%q marks %q, not %q", name, results[0].Matches, word)
 	}
 	return nil
 }

@@ -1,45 +1,28 @@
 #!/usr/bin/env bash
-# Installs Givens for everyone on this Mac to use: builds build/Givens.app, puts it in
-# /Applications (or ~/Applications when /Applications can't be written), links the givens
-# command into a folder on PATH, and registers the app so `open -a Givens`, Spotlight and
-# `givens <folder>` find it.
+# Installs the givens command for everyone on this Mac to use: builds it into a folder of its
+# own and links it into a folder on PATH, so `givens .` opens the TUI on any project.
 #
 #   scripts/install.sh                                # command in ~/.local/bin
 #   GIVENS_BIN_DIR=/opt/homebrew/bin scripts/install.sh
-#   scripts/install.sh --uninstall                    # removes both again
+#   scripts/install.sh --uninstall                    # removes it again
 #
-# The app is ad-hoc signed by build-app.sh; it isn't quarantined, since it was built here.
-# Signing and notarizing for other Macs is scripts/sign-app.sh's.
+# --uninstall also removes a Givens.app an earlier install put in Applications: the Mac app is
+# archived in _archive/macos.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-apps=/Applications
-if [ ! -w "$apps" ]; then
-  apps="$HOME/Applications"
-fi
 bin="${GIVENS_BIN_DIR:-$HOME/.local/bin}"
-app="$apps/Givens.app"
+home="${GIVENS_HOME:-$HOME/.local/share/givens}"
 command="$bin/givens"
 
-# Launch Services' register tool; -f registers an app bundle even where it was registered.
-# Ref: https://developer.apple.com/documentation/coreservices/launch_services
-lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-
-# Quits a running Givens, so its files can be replaced. Ref: man osascript
-quit_givens() {
-  osascript -e 'if application "Givens" is running then tell application "Givens" to quit' \
-    >/dev/null 2>&1 || true
-}
-
 if [ "${1:-}" = "--uninstall" ]; then
-  quit_givens
   # Only the link Givens made is removed, never another givens on PATH.
   if [ -L "$command" ]; then rm "$command"; fi
-  if [ -d "$app" ]; then
-    "$lsregister" -u "$app" >/dev/null 2>&1 || true
-    rm -rf "$app"
-  fi
-  echo "Removed $app and $command. Your projects and capabilities folders are untouched."
+  rm -f "$home/givens"
+  for app in /Applications/Givens.app "$HOME/Applications/Givens.app"; do
+    if [ -d "$app" ]; then rm -rf "$app"; fi
+  done
+  echo "Removed $command. Your projects and capabilities folders are untouched."
   exit 0
 fi
 
@@ -48,17 +31,12 @@ if [ -e "$command" ] && [ ! -L "$command" ]; then
   exit 1
 fi
 
-scripts/build-app.sh
-quit_givens
-mkdir -p "$apps" "$bin"
-# ditto copies the bundle with its signature and extended attributes intact.
-# Ref: man ditto
-rm -rf "$app"
-ditto build/Givens.app "$app"
-ln -sf "$app/Contents/Helpers/givens" "$command"
-"$lsregister" -f "$app"
+mkdir -p "$home" "$bin"
+# Ref: https://pkg.go.dev/cmd/go#hdr-Compile_packages_and_dependencies
+go build -o "$home/givens" ./cmd/givens
+ln -sf "$home/givens" "$command"
 
-echo "Installed $app"
+echo "Installed $home/givens"
 echo "Linked $command"
 case ":$PATH:" in
   *":$bin:"*) echo "Open a new terminal window, then try: givens ." ;;

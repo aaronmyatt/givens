@@ -73,7 +73,7 @@ func (s *state) canChooseThree(first string, second string, third string) error 
 	offers := window.Offers()
 	for _, action := range []string{first, second, third} {
 		if !slices.Contains(offers, action) {
-			return fmt.Errorf("the window doesn't offer %q; it offers %q", action, offers)
+			return fmt.Errorf("Givens doesn't offer %q; it offers %q", action, offers)
 		}
 	}
 	onDisk, err := s.ReadFile(featurePath("checkout"))
@@ -89,7 +89,7 @@ func (s *state) canChooseThree(first string, second string, third string) error 
 // addLine adds line after the subject scenario's last step in the editor, unsaved.
 func (s *state) addLine(line string) error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	lines := strings.Split(s.editor.Text(), "\n")
 	last := lastStepIndex(lines, s.subject)
@@ -105,7 +105,7 @@ func (s *state) addNonStep() error { return s.addLine("Check the order is pendin
 
 func (s *state) lineMarked(message string) error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	marks := s.editor.Marks()
 	want := app.EditorMark{Line: s.addedLineNumber, Message: message}
@@ -137,7 +137,7 @@ func (s *state) previewSteps() ([]string, error) {
 // previewLinedUp expects the scenario's name, then its steps lined up and unmarked, in order.
 func (s *state) previewLinedUp() error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	preview := s.editor.Preview()
 	if !slices.ContainsFunc(preview, func(line app.PreviewLine) bool {
@@ -163,7 +163,7 @@ func (s *state) previewLinedUp() error {
 
 func (s *state) previewHasChanges() error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	shown := make([]string, 0, 16)
 	for _, line := range s.editor.Preview() {
@@ -180,7 +180,7 @@ func (s *state) previewHasChanges() error {
 
 func (s *state) previewMarked() error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	preview := s.editor.Preview()
 	for _, line := range preview {
@@ -236,11 +236,11 @@ func (s *state) aboutImages() ([]string, error) {
 	return images, nil
 }
 
-// previewAsLibrary expects the preview to be exactly what the library shows as Checkout's
-// about.md, with its images.
-func (s *state) previewAsLibrary() error {
+// previewAsStory expects the preview to be exactly the about.md Checkout's story shows, which
+// the TUI's story page draws, with its images.
+func (s *state) previewAsStory() error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	images, err := s.aboutImages()
 	if err != nil {
@@ -250,7 +250,7 @@ func (s *state) previewAsLibrary() error {
 	if err != nil {
 		return err
 	}
-	library, err := window.Capability("Checkout")
+	story, err := window.Capability("Checkout")
 	if err != nil {
 		return err
 	}
@@ -259,9 +259,9 @@ func (s *state) previewAsLibrary() error {
 		shown = append(shown, line.Text)
 	}
 	preview := strings.Join(shown, "\n")
-	if library.About == "" || preview != library.About {
-		return fmt.Errorf("the preview is %q, not the library's about.md: %q", preview,
-			library.About)
+	if story.About == "" || preview != story.About {
+		return fmt.Errorf("the preview is %q, not the story's about.md: %q", preview,
+			story.About)
 	}
 	for _, image := range images {
 		if !strings.Contains(preview, image) {

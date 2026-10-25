@@ -21,10 +21,11 @@ func (s *state) deleteSteps() []world.Step {
 		world.Def(`^Checkout shows (\d+) scenarios$`, s.checkoutShows),
 		world.Def(`^nothing is deleted unless they choose "([^"]*)"$`, s.deletedOnlyWhen),
 		world.Def(`^the invites folder is moved to the Trash$`, s.invitesTrashed),
-		world.Def(`^the sidebar lists "([^"]*)" and "([^"]*)"$`, s.sidebarLists),
+		world.Def(`^only "([^"]*)" and "([^"]*)" are listed among the capabilities$`,
+			s.onlyListed),
 		world.Def(`^a developer has chosen "([^"]*)" on "([^"]*)"$`, s.editFromPage),
 		world.Def(`^([a-z0-9-]+\.(?:md|sh)) is moved to the Trash$`, s.setupFileTrashed),
-		world.Def(`^the editor closes$`, s.editorClosed),
+		world.Def(`^nothing is left open to edit$`, s.editorClosed),
 	}
 }
 
@@ -153,8 +154,7 @@ func (s *state) checkoutShows(count string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("the sidebar doesn't show Checkout with %d scenarios: %v", want,
-		window.Sidebar())
+	return fmt.Errorf("Checkout isn't listed with %d scenarios: %v", want, window.Sidebar())
 }
 
 // deletedOnlyWhen expects nothing deleted yet, then chooses action and expects the delete.
@@ -174,7 +174,7 @@ func (s *state) deletedOnlyWhen(action string) error {
 		return err
 	}
 	if offers := window.Offers(); !slices.Contains(offers, action) {
-		return fmt.Errorf("the window doesn't offer %q; it offers %q", action, offers)
+		return fmt.Errorf("Givens doesn't offer %q; it offers %q", action, offers)
 	}
 	if err := window.Choose(action); err != nil {
 		return err
@@ -192,7 +192,7 @@ func (s *state) invitesTrashed() error {
 	return s.trashed(filepath.Join(s.Capabilities(), "invites"))
 }
 
-func (s *state) sidebarLists(first string, second string) error {
+func (s *state) onlyListed(first string, second string) error {
 	window, err := s.window()
 	if err != nil {
 		return err
@@ -207,13 +207,14 @@ func (s *state) sidebarLists(first string, second string) error {
 	want := []string{first, second}
 	slices.Sort(want)
 	if !slices.Equal(capabilities, want) {
-		return fmt.Errorf("the sidebar lists the capabilities %q, not %q", capabilities, want)
+		return fmt.Errorf("the capabilities listed are %q, not %q", capabilities, want)
 	}
 	return nil
 }
 
-// editFromPage selects a scenario and chooses an edit offer on its page, like "Edit setup",
-// remembering every file before, and the one opened, for "Delete file".
+// editFromPage selects a scenario and chooses an edit offer, like "Edit setup", as s on a
+// scenario in the TUI does, remembering every file before, and the one opened, for
+// "Delete file".
 func (s *state) editFromPage(action string, name string) error {
 	window, err := s.window()
 	if err != nil {
@@ -226,7 +227,7 @@ func (s *state) editFromPage(action string, name string) error {
 		return err
 	}
 	if window.Editing() == "" {
-		return fmt.Errorf("%q opened nothing in the editor", action)
+		return fmt.Errorf("%q opened nothing to edit", action)
 	}
 	s.deletingFile = window.Editing()
 	s.before, err = snapshot(s.Capabilities(), everyFile)
@@ -243,7 +244,7 @@ func (s *state) editorClosed() error {
 		return err
 	}
 	if window.Editor() != nil {
-		return fmt.Errorf("the editor still holds %s", window.Editing())
+		return fmt.Errorf("%s is still open to edit", window.Editing())
 	}
 	return nil
 }

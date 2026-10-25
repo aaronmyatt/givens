@@ -61,20 +61,21 @@ func steps(w *world.World) []world.Step {
 
 func (s *state) storySteps() []world.Step {
 	return []world.Step{
-		world.Def(`^they choose "New story" and fill in "([^"]*)", "([^"]*)", "([^"]*)" and `+
+		world.Def(`^they start a new story and fill in "([^"]*)", "([^"]*)", "([^"]*)" and `+
 			`"([^"]*)"$`, s.newStory),
 		world.Def(`^([a-z0-9-]+)/([a-z0-9-]+\.feature) is created, with "([^"]*)" and those `+
 			`lines as its description$`, s.storyCreated),
-		world.Def(`^"([^"]*)" appears in the sidebar$`, s.inSidebar),
-		world.Def(`^they choose "New scenario" in ([A-Za-z ]+), name it "([^"]*)" and mark it `+
-			`as an error state$`, s.newErrorScenario),
-		world.Def(`^they choose "New scenario" in ([A-Za-z ]+) and name it "([^"]*)"$`,
-			s.newHappyScenario),
+		world.Def(`^"([^"]*)" is listed among the capabilities$`, s.listedAsCapability),
+		world.Def(`^they add a scenario to ([A-Za-z ]+) named "([^"]*)", marked as an error `+
+			`state$`, s.newErrorScenario),
+		world.Def(`^they add a scenario to ([A-Za-z ]+) named "([^"]*)"$`, s.newHappyScenario),
 		world.Def(`^a "Scenario: ([^"]*)" block tagged (@\S+) is added to checkout\.feature$`,
 			s.blockAdded),
 		world.Def(`^checkout/scripts/([a-z0-9-]+\.sh) is created, starting with the line that `+
 			`sources givens\.sh$`, s.scriptCreated),
-		world.Def(`^the new scenario opens in the editor$`, s.newScenarioInEditor),
+		world.Def(`^checkout\.feature is left open to edit at the new scenario$`,
+			s.newScenarioInEditor),
+		world.Def(`^"([^"]*)" is shown flagged to do$`, s.shownFlaggedToDo),
 		world.Def(`^"([^"]*)" has no setup yet$`, s.noSetupYet),
 		world.Def(`^scripts/([a-z0-9-]+\.md) is created with an empty numbered list$`,
 			s.markdownSetupCreated),
@@ -174,10 +175,8 @@ func (s *state) newStory(name string, asA string, iWant string, soThat string) e
 	if err != nil {
 		return err
 	}
+	// givens new story fills in a StoryDraft from its template and calls NewStory, as here.
 	s.story = app.StoryDraft{Name: name, AsA: asA, IWant: iWant, SoThat: soThat}
-	if err := window.Choose("New story"); err != nil {
-		return err
-	}
 	return window.NewStory(s.story)
 }
 
@@ -213,21 +212,35 @@ func (s *state) storyCreated(folder string, file string, featureLine string) err
 	return nil
 }
 
-func (s *state) inSidebar(name string) error {
+// listedAsCapability checks the capabilities the window lists, which the TUI's Capabilities
+// tab draws.
+func (s *state) listedAsCapability(name string) error {
 	window, err := s.window()
 	if err != nil {
 		return err
 	}
-	return sidebarHas(window.Sidebar(), name)
+	return capabilityListed(window.Sidebar(), name)
 }
 
-func sidebarHas(items []app.SidebarItem, name string) error {
+func capabilityListed(items []app.SidebarItem, name string) error {
 	for _, item := range items {
 		if item.Name == name && item.Kind == "capability" {
 			return nil
 		}
 	}
-	return fmt.Errorf("the sidebar has no capability %q: %v", name, items)
+	return fmt.Errorf("no capability %q is listed: %v", name, items)
+}
+
+// shownFlaggedToDo expects the scenario shown with its to do flag, wherever it's listed.
+func (s *state) shownFlaggedToDo(name string) error {
+	flagged, err := s.ShownFlagged(name)
+	if err != nil {
+		return err
+	}
+	if !flagged {
+		return fmt.Errorf("%q isn't shown flagged to do", name)
+	}
+	return nil
 }
 
 func (s *state) newErrorScenario(capabilityName string, name string) error {
@@ -238,8 +251,8 @@ func (s *state) newHappyScenario(capabilityName string, name string) error {
 	return s.newScenario(capabilityName, app.ScenarioDraft{Name: name})
 }
 
-// newScenario fills in the New scenario dialog in a capability, keeping its .feature file's
-// text from before.
+// newScenario adds a scenario to a capability, as givens new scenario does once its template
+// is filled in, keeping the .feature file's text from before.
 func (s *state) newScenario(capabilityName string, draft app.ScenarioDraft) error {
 	window, err := s.window()
 	if err != nil {
@@ -251,9 +264,6 @@ func (s *state) newScenario(capabilityName string, draft app.ScenarioDraft) erro
 		return err
 	}
 	if err := window.Select(capabilityName); err != nil {
-		return err
-	}
-	if err := window.Choose("New scenario"); err != nil {
 		return err
 	}
 	return window.NewScenario(draft)
@@ -308,7 +318,7 @@ func (s *state) scriptCreated(file string) error {
 	return nil
 }
 
-// newScenarioInEditor checks that checkout.feature is open at the new scenario.
+// newScenarioInEditor checks that checkout.feature is left open to edit at the new scenario.
 func (s *state) newScenarioInEditor() error {
 	window, err := s.window()
 	if err != nil {
@@ -316,7 +326,7 @@ func (s *state) newScenarioInEditor() error {
 	}
 	editor := window.Editor()
 	if editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	feature := filepath.Join(s.Project, featurePath("checkout"))
 	if err := samePath(window.Editing(), feature); err != nil {

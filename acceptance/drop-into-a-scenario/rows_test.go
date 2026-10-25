@@ -144,16 +144,18 @@ func (s *state) rowChecklistOpen() error {
 	return s.rowChecklistLive("expired")
 }
 
-func (s *state) rowGreyedOut(card string) error {
+// rowSetAside expects the row set aside (Greyed) while another is live: its steps still
+// shown, and "Drop in" shown but turned off.
+func (s *state) rowSetAside(card string) error {
 	row, err := s.row(card)
 	if err != nil {
 		return err
 	}
 	if !row.Greyed || len(row.Steps) == 0 {
-		return fmt.Errorf("the %s row isn't greyed out with its steps shown: %+v", card, row)
+		return fmt.Errorf("the %s row isn't set aside with its steps shown: %+v", card, row)
 	}
 	if !slices.Contains(row.Disabled, "Drop in") || slices.Contains(row.Offers, "Drop in") {
-		return fmt.Errorf("the %s row's \"Drop in\" isn't disabled: %+v", card, row)
+		return fmt.Errorf("the %s row can still be dropped in to: %+v", card, row)
 	}
 	return nil
 }
@@ -380,9 +382,9 @@ func (s *state) listedWithWarning(text string) error {
 	return world.Expect([]string{scenario.Warning}, text, outlineName+"'s warning")
 }
 
-// recordDisabledUntilNamed drops in to a row and marks every check, expecting no "Record run";
+// recordOffUntilNamed drops in to a row and marks every check, expecting no "Record run";
 // then names the Examples blocks and expects the warning to clear and "Record run" to return.
-func (s *state) recordDisabledUntilNamed() error {
+func (s *state) recordOffUntilNamed() error {
 	window, err := s.window()
 	if err != nil {
 		return err

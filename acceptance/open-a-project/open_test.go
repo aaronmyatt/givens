@@ -1,8 +1,10 @@
 // Package openaproject runs capabilities/open-a-project. Steps shared with other
 // capabilities are in acceptance/world.
 //
-// Windows, the Dock, recents and the welcome window are state in internal/app, so these steps
-// drive that core and never a real GUI. The terminal scenarios run the built givens command.
+// Opening a project is internal/app's App.Open, which the givens command calls, so these steps
+// drive that core; what a person sees is read from internal/tui's model drawn over the window.
+// The terminal scenarios run the built givens command, with its test seam standing in for a
+// terminal (see testScreenEnv in cmd/givens).
 package openaproject
 
 import (
@@ -18,6 +20,7 @@ import (
 	"givens/acceptance/world"
 	"givens/internal/app"
 	"givens/internal/spec"
+	"givens/internal/tui"
 )
 
 const capability = "open-a-project"
@@ -31,46 +34,41 @@ type state struct {
 	*world.World
 	bare     string      // a project folder with no capabilities folder
 	before   []string    // the bare project's files before the step under test
-	other    string      // a second project's capabilities folder
 	opened   *app.Window // the window the last Open returned
-	recent   string      // the sample shop's entry in Recents
-	message  string      // what Givens said after installing the command
-	install  string      // the folder the givens command was installed into
-	openLog  string      // where the stand-in for `open` records its arguments
 	gotFront *app.Window // the front window before the step under test
 }
 
 func steps(w *world.World) []world.Step {
 	s := &state{World: w}
-	all := append(projectSteps(s), welcomeSteps(s)...)
-	all = append(all, terminalSteps(s)...)
-	all = append(all, branchSteps(s)...)
-	return append(all, windowSteps(s)...)
+	all := append(projectSteps(s), terminalSteps(s)...)
+	return append(all, branchSteps(s)...)
 }
 
 // projectSteps open one project and read what its window shows.
 func projectSteps(s *state) []world.Step {
 	return []world.Step{
 		world.Def(`^a developer has the sample shop project, with (.+)$`, s.shopWithFeatures),
-		world.Def(`^they open its capabilities folder in Givens$`, s.openCapabilities),
-		world.Def(`^the sidebar lists "([^"]*)", "([^"]*)" and "([^"]*)", from each Feature: line$`,
+		world.Def(`^a developer has the sample shop project open$`, s.OpenSampleShop),
+		world.Def(`^they open its capabilities folder$`, s.openCapabilities),
+		world.Def(`^Givens lists "([^"]*)", "([^"]*)" and "([^"]*)", from each Feature: line$`,
 			s.sidebarListsThree),
 		world.Def(`^each capability shows how many scenarios it has$`, s.countsShown),
-		world.Def(`^the ([A-Z][a-z]+) story is shown$`, s.storyShown),
-		world.Def(`^they open the project's root folder in Givens$`, s.openRoot),
+		world.Def(`^the ([A-Z][a-z]+) story is shown beside the list$`, s.storyShown),
+		world.Def(`^they open the project's root folder$`, s.openRoot),
 		world.Def(`^Givens finds the capabilities folder inside it$`, s.foundCapabilities),
-		world.Def(`^the window title shows the path to that capabilities folder$`, s.titleIsPath),
+		world.Def(`^the top line of the TUI shows the path to that capabilities folder$`,
+			s.titleIsPath),
 		world.Def(`^a developer has a project with no capabilities folder$`, s.bareProject),
-		world.Def(`^they open it in Givens$`, s.openBare),
+		world.Def(`^Givens opens it$`, s.openBare),
 		world.Def(`^nothing is written to the project$`, s.nothingWritten),
-		world.Def(`^a developer has a project with no capabilities folder open in Givens$`,
+		world.Def(`^a developer has opened a project with no capabilities folder$`,
 			s.bareProjectOpen),
 		world.Def(`^the project gets a capabilities folder containing GIVENS\.md and `+
 			`_shared/givens\.sh$`, s.gotCapabilitiesFolder),
 		world.Def(`^it contains the starter capability "([^"]*)", with add-a-story\.feature, `+
 			`its about\.md and setup scripts$`, s.gotStarter),
 		world.Def(`^it contains \.gitattributes marking runs/ as merge=union$`, s.gotAttributes),
-		world.Def(`^the sidebar lists "([^"]*)"$`, s.sidebarListsOne),
+		world.Def(`^Givens lists "([^"]*)"$`, s.sidebarListsOne),
 		world.Def(`^another tool adds a scenario to checkout\.feature$`, s.otherToolAdds),
 		world.Def(`^"([^"]*)" appears in the ([A-Za-z ]+) scenarios within two seconds$`,
 			s.appearsWithin),
@@ -116,7 +114,8 @@ func (s *state) openCapabilities() error {
 	return s.open(s.Capabilities())
 }
 
-// capabilityNames lists the capability items in the front window's sidebar, in order.
+// capabilityNames lists the capabilities the front window lists, in order: the TUI's
+// Capabilities tab, and what givens list groups by.
 func (s *state) capabilityNames() ([]string, error) {
 	window, err := s.Front()
 	if err != nil {
@@ -137,7 +136,7 @@ func (s *state) sidebarLists(want []string) error {
 		return err
 	}
 	if !slices.Equal(got, want) {
-		return fmt.Errorf("the sidebar lists capabilities %q, not %q", got, want)
+		return fmt.Errorf("Givens lists capabilities %q, not %q", got, want)
 	}
 	return nil
 }
@@ -150,12 +149,14 @@ func (s *state) sidebarListsOne(name string) error {
 	return s.sidebarLists([]string{name})
 }
 
-// countsShown compares each capability's count in the sidebar with its .feature file.
+// countsShown compares each capability's count with its .feature file, and expects the TUI's
+// list to show it as "Checkout (5)".
 func (s *state) countsShown() error {
 	window, err := s.Front()
 	if err != nil {
 		return err
 	}
+	screen := screenOf(window)
 	shown := 0
 	for _, item := range window.Sidebar() {
 		if item.Kind != "capability" {
@@ -173,15 +174,20 @@ func (s *state) countsShown() error {
 			return fmt.Errorf("%q shows %d scenarios; its .feature file has %d",
 				item.Name, item.Count, len(scenarios))
 		}
+		heading := fmt.Sprintf("%s (%d)", item.Name, item.Count)
+		if !strings.Contains(screen, heading) {
+			return fmt.Errorf("the TUI doesn't show %q; it shows:\n%s", heading, screen)
+		}
 		shown++
 	}
 	if shown == 0 {
-		return errors.New("the sidebar lists no capabilities")
+		return errors.New("Givens lists no capabilities")
 	}
 	return nil
 }
 
-// storyShown expects the As a, I want and So that lines of the named capability on screen.
+// storyShown expects the As a, I want and So that lines of the named capability in the
+// window, and in the TUI beside the list, where they show while the cursor is on it.
 func (s *state) storyShown(name string) error {
 	path, err := featureNamed(s.Capabilities(), name)
 	if err != nil {
@@ -195,12 +201,21 @@ func (s *state) storyShown(name string) error {
 	if err != nil {
 		return err
 	}
+	screen := screenOf(window)
 	for _, line := range story {
 		if err := world.Expect(window.Visible(), line, "the window"); err != nil {
 			return err
 		}
+		if !strings.Contains(screen, line) {
+			return fmt.Errorf("the TUI doesn't show %q; it shows:\n%s", line, screen)
+		}
 	}
 	return nil
+}
+
+// screenOf is what the TUI draws first over window, as plain text: what bare givens shows.
+func screenOf(window *app.Window) string {
+	return tui.New(window, nil).Text()
 }
 
 // featureNamed finds the .feature file under capabilities whose Feature: line is name.

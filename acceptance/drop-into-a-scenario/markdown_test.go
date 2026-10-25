@@ -257,7 +257,7 @@ func (s *state) lookAtCards() error {
 	return err
 }
 
-func (s *state) labelledCopyButtons(first string, second string) error {
+func (s *state) labelledCopyableBlocks(first string, second string) error {
 	_, cards, err := s.markdownCards()
 	if err != nil {
 		return err
@@ -314,7 +314,9 @@ func (s *state) cardSays(text string) error {
 	return fmt.Errorf("no card says %q: %+v", text, cards)
 }
 
-func (s *state) clickInlineCode(code string) error {
+// copyInlineCode copies one inline code span of the card cardSays found, as the TUI's c does
+// for a card's first span.
+func (s *state) copyInlineCode(code string) error {
 	session, err := s.session()
 	if err != nil {
 		return err
@@ -385,8 +387,8 @@ func (s *state) markdownHolding(name string, scriptSlug string, content string) 
 	return s.markdownSetup(name, content+"\n")
 }
 
-// editorAfterDropIn chooses action on the Drop in, then expects the Drop in gone, since the
-// Mac page draws a Drop in over the editor, and file open in the editor.
+// editorAfterDropIn chooses action on the Drop in, then expects the Drop in gone, since its
+// setup is about to change under it, and file open in the editor.
 func (s *state) editorAfterDropIn(action string, file string) error {
 	window, err := s.window()
 	if err != nil {

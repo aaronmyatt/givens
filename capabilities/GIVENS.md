@@ -16,7 +16,7 @@ capabilities/
     about.md                   # optional: diagrams, images, context
     scripts/<slug>.sh          # setup that runs commands
     scripts/<slug>.teardown.sh # optional: runs before each setup
-    scripts/<slug>.md          # setup done only by hand, shown as cards
+    scripts/<slug>.md          # setup done by hand, shown as cards; "bash run" blocks run
     _shared/*.sh               # helpers only this capability's scripts can call
   runs/YYYY-MM-DD.log          # one line per recorded Drop in
   runs/files/<run key>/<time>/ # files kept with a run, like a screenshot
@@ -30,8 +30,8 @@ capabilities/
 - The Feature's description holds the story: an `As a`, an `I want` and a `So that` line.
   Descriptions are plain text; a line starting with `#` is a Gherkin comment.
 - Tags: `@error` marks an error state (untagged is a happy path). `@timeout:5m` sets when to
-  show "Still running" (default 2 minutes). `@todo` flags a scenario that needs work, drawn
-  with a red flag; a new scenario starts with it. Any other tag, `@todo` included, is a view.
+  show "Still running" (default 2 minutes). `@todo` flags a scenario that needs work, marked
+  ⚑ in the list; a new scenario starts with it. Any other tag, `@todo` included, is a view.
   A tag on `Feature:` applies to every scenario in the file.
 - A slug is a name in lower case; letters and digits in any language are kept; every run of
   other characters becomes one hyphen; hyphens are trimmed from the ends.
@@ -39,6 +39,14 @@ capabilities/
 - Scenario names must make different slugs within a file, `Rule:` blocks included.
 - A scenario's setup is `scripts/<slug>.sh`, `scripts/<slug>.md`, or both (script first).
   Setup should be idempotent: running it twice leaves the same state as once.
+- In `scripts/<slug>.md`, a code block whose info string is `bash run` runs by itself, with
+  the kit loaded, and one that is `js run` runs in the Givens browser; the card is done when
+  it exits with 0. Any other card waits for the developer. A run block is code, so it's
+  asked about as a script is.
+- The Givens browser is Chrome with a profile of Givens's own for the project. The kit's
+  `browser_open`, `in_browser` and `app_action` drive it, and it stays open after setup, so
+  the When steps are done in it. `app_action <name>` calls `window.app.<name>`, which the app
+  sets in its dev builds.
 - A run is recorded against `<capability>/<scenario slug>`, plus `/<examples slug>` for a named
   Examples block. Renaming a scenario starts its runs over.
 - In a git repository with an `origin` remote, runs are kept off main: Givens keeps the run log

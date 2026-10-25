@@ -13,8 +13,9 @@ import (
 
 const teardownLine = "✓ cleared orders"
 
-// droppedInTicked drops in to a setup that counts its runs, and ticks the step containing text.
-func (s *state) droppedInTicked(name string, text string) error {
+// droppedInMarkedDone drops in to a setup that counts its runs, and marks the step containing
+// text done.
+func (s *state) droppedInMarkedDone(name string, text string) error {
 	err := s.writeSetup(name, script(
 		`echo run >> `+shopData+`/setup-runs"`, `ok "seeded shopper"`))
 	if err != nil {

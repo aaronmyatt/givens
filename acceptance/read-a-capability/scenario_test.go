@@ -145,9 +145,9 @@ func (s *state) storyOnDisk() ([]string, error) {
 	return story, nil
 }
 
-// aboutBelowStory checks that about.md's text and images follow the story, and that each
-// image it shows is on disk, so the diagram is shown rather than a placeholder.
-func (s *state) aboutBelowStory() error {
+// aboutAfterScenarios checks that about.md's text and images follow the scenarios, and that
+// each image it shows is on disk, so the diagram is shown rather than a placeholder.
+func (s *state) aboutAfterScenarios() error {
 	about, err := s.ReadFile(filepath.Join("capabilities", "checkout", "about.md"))
 	if err != nil {
 		return fmt.Errorf("the sample shop needs checkout/about.md with its flow diagram: %w", err)

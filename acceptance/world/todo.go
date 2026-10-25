@@ -7,7 +7,7 @@ import (
 	"givens/internal/assert"
 )
 
-// ShownFlagged says whether the scenario called name is drawn with a red flag where the front
+// ShownFlagged says whether the scenario called name is flagged @todo where the front
 // window shows it: in the capability's list, on its own page, or in a view's list. It fails
 // when the window doesn't show it at all. See "A scenario flagged to do" in capabilities/tags.
 func (w *World) ShownFlagged(name string) (bool, error) {
@@ -31,18 +31,4 @@ func (w *World) ShownFlagged(name string) (bool, error) {
 		}
 	}
 	return false, fmt.Errorf("the window doesn't show %q; it shows %q", name, snapshot.Selected)
-}
-
-// shownWithFlag expects the scenario drawn with a red flag.
-func (w *World) shownWithFlag(name string) error {
-	assert.That(w != nil, "shown with flag runs on a world")
-	assert.That(name != "", "a scenario has a name")
-	flagged, err := w.ShownFlagged(name)
-	if err != nil {
-		return err
-	}
-	if !flagged {
-		return fmt.Errorf("%q is shown without a red flag", name)
-	}
-	return nil
 }

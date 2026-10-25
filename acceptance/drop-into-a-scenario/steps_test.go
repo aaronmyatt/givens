@@ -61,8 +61,8 @@ func runSteps(s *state) []world.Step {
 		world.Def(`^the "Card declined" setup prints a line, then waits before printing the next$`,
 			s.printsThenWaits),
 		world.Def(`^the setup script's output appears line by line as it runs$`, s.outputStreams),
-		world.Def(`^when it finishes, any manual Givens, then the When steps, are shown as a `+
-			`checklist$`, s.checklistShown),
+		world.Def(`^when it finishes, any steps done by hand, then the When and Then steps, are `+
+			`shown as a checklist$`, s.checklistShown),
 		world.Def(`^each Then step can be marked "Pass" or "Fail"$`, s.thenStepsMarkable),
 		world.Def(`^the "Card declined" setup script stops with an error part way through$`,
 			s.setupStopsPartWay),
@@ -71,7 +71,7 @@ func runSteps(s *state) []world.Step {
 		world.Def(`^the "Card declined" setup script needs a command called shopctl, which `+
 			`isn't installed$`, s.needsShopctl),
 		world.Def(`^nothing in the script runs$`, s.nothingRuns),
-		world.Def(`^the install hint "([^"]*)" is shown with a copy button$`, s.installHint),
+		world.Def(`^the install hint "([^"]*)" is shown, and "Copy" copies it$`, s.installHint),
 		world.Def(`^the "Card declined" setup script takes more than two minutes$`,
 			s.setupTakesTooLong),
 		world.Def(`^"([^"]*)" isn't tagged @timeout$`, s.untagTimeout),
@@ -116,8 +116,8 @@ func recordSteps(s *state) []world.Step {
 // teardownSteps cover Reset state, idempotent setup and teardown scripts.
 func teardownSteps(s *state) []world.Step {
 	return []world.Step{
-		world.Def(`^a developer has dropped in to "([^"]*)" and ticked "([^"]*)"$`,
-			s.droppedInTicked),
+		world.Def(`^a developer has dropped in to "([^"]*)" and marked "([^"]*)" done$`,
+			s.droppedInMarkedDone),
 		world.Def(`^the setup script runs again from the start$`, s.setupRanAgain),
 		world.Def(`^the checklist is cleared$`, s.checklistCleared),
 		world.Def(`^"([^"]*)" has no teardown script$`, s.noTeardown),

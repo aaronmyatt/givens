@@ -29,7 +29,7 @@ func byHandSteps(s *state) []world.Step {
 			s.typeAndChoose),
 		world.Def(`^the rest of setup runs with ([A-Z_]+) set to "([^"]*)"$`, s.restRunsWith),
 		world.Def(`^setup is paused at an ask card$`, s.pausedAtAsk),
-		world.Def(`^a developer chooses "Continue" with the field empty$`, s.continueEmpty),
+		world.Def(`^a developer chooses "Continue" with nothing typed$`, s.continueEmpty),
 		world.Def(`^setup stays paused$`, s.staysPaused),
 		world.Def(`^the "Pay with saved card" setup has a by_hand step$`, s.fromScenarioByHand),
 		world.Def(`^the card for Pay with saved card's step is shown$`, s.fromCardShown),
@@ -47,14 +47,14 @@ func rowSteps(s *state) []world.Step {
 			s.rowsListed),
 		world.Def(`^each row shows its steps with the placeholders filled in, like "(.*)"$`,
 			s.rowsFilledIn),
-		world.Def(`^each row shows its status and its own "Drop in" button$`, s.rowsHaveStatus),
+		world.Def(`^each row shows its status and offers its own "Drop in"$`, s.rowsHaveStatus),
 		world.Def(`^a developer has "([^"]*)" open$`, s.outlineOpen),
 		world.Def(`^they choose "([^"]*)" on the "([^"]*)" row$`, s.chooseOnRow),
 		world.Def(`^(?:the setup script runs|that setup runs) with GIVENS_EX_card set to `+
 			`"([^"]*)"$`, s.exampleCardIs),
-		world.Def(`^that row's checklist opens beneath it$`, s.rowChecklistOpen),
-		world.Def(`^the "([^"]*)" row stays readable but greyed out, with its "Drop in" `+
-			`disabled$`, s.rowGreyedOut),
+		world.Def(`^that row is live, with its checklist$`, s.rowChecklistOpen),
+		world.Def(`^the "([^"]*)" row is still listed with its steps, but set aside, and can't be `+
+			`dropped in to$`, s.rowSetAside),
 		world.Def(`^a developer has dropped in to the "([^"]*)" row and marked one Then step$`,
 			s.rowMarkedOne),
 		world.Def(`^they're asked "([^"]*)"$`, s.asked),
@@ -74,8 +74,8 @@ func rowSteps(s *state) []world.Step {
 		world.Def(`^the setup script can seed the cart from it$`, s.cartSeeded),
 		world.Def(`^"([^"]*)" has two Examples blocks with no names$`, s.unnamedExamples),
 		world.Def(`^the scenario is listed with the warning "([^"]*)"$`, s.listedWithWarning),
-		world.Def(`^"Record run" is disabled on it until they're named$`,
-			s.recordDisabledUntilNamed),
+		world.Def(`^"Record run" isn't offered on it until they're named$`,
+			s.recordOffUntilNamed),
 	}
 }
 
@@ -104,15 +104,15 @@ func markdownSteps(s *state) []world.Step {
 		world.Def(`^step 2 holds a bash code block and step 3 holds a js code block$`,
 			s.codeBlocksSetup),
 		world.Def(`^a developer looks at those cards in Drop in$`, s.lookAtCards),
-		world.Def(`^each code block has its own Copy button, labelled "([^"]*)" and "([^"]*)"$`,
-			s.labelledCopyButtons),
+		world.Def(`^each code block can be copied on its own, labelled "([^"]*)" and "([^"]*)"$`,
+			s.labelledCopyableBlocks),
 		world.Def(`^copying one never includes the other$`, s.copiesApart),
 		world.Def(`^a card says "([^"]*)"$`, s.cardSays),
-		world.Def(`^a developer clicks (\S+)$`, s.clickInlineCode),
+		world.Def(`^a developer copies the inline code (\S+)$`, s.copyInlineCode),
 		world.Def(`^step 2 of pay-in-app\.md opens a code fence that never closes$`,
 			s.unclosedFence),
 		world.Def(`^step (\d+)'s card shows "([^"]*)"$`, s.stepCardShows),
-		world.Def(`^it has no Copy button until the fence is closed$`, s.noCopyUntilClosed),
+		world.Def(`^it can't be copied until the fence is closed$`, s.noCopyUntilClosed),
 		world.Def(`^"([^"]*)" has scripts/([a-z0-9-]+)\.md holding only "([^"]*)"$`,
 			s.markdownHolding),
 		world.Def(`^choosing "([^"]*)" leaves the Drop in and opens ([a-z0-9-]+\.md) in the `+

@@ -8,6 +8,9 @@ Feature: Copy a setup script
   command works from any folder inside it. The script runs as written, kit and helpers included,
   so the copy never drifts from the files.
 
+  Copy is one of Givens's offers on the selected scenario. From a search, it copies the first
+  scenario found, and leaves what's selected alone.
+
   Scenario: Copy
     Given a developer has the sample shop project open in Givens
     And "Card declined" is selected
@@ -18,7 +21,7 @@ Feature: Copy a setup script
   Scenario: Copy from search
     Given a developer has the sample shop project open in Givens
     And "Sign in" is selected
-    When they press ⌘K, type "card declined" and press ⇧⌘C
+    When they search for "card declined" and copy the first scenario found
     Then the clipboard holds "bash capabilities/checkout/scripts/card-declined.sh"
     And "Sign in" is still selected
 

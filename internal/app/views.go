@@ -65,18 +65,34 @@ func isViewTag(tag string) bool {
 func (w *Window) ListedScenarios() []Scenario {
 	assert.That(w != nil, "listed scenarios run on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
+	return w.scenariosIn(w.selectedView, w.selectedStep)
+}
+
+// ScenariosIn lists a view's scenarios ("Error states", "Unverified") or a tag's
+// ("payments"), as ListedScenarios does once it's selected, but leaves the selection alone:
+// the TUI lists a view under its heading while the cursor moves on to its scenarios, which
+// selects each one. "Shared" lists helpers, not scenarios, so it has none.
+func (w *Window) ScenariosIn(view string) []Scenario {
+	assert.That(w != nil, "scenarios in runs on a window")
+	assert.That(view != "", "a view or tag is named")
+	return w.scenariosIn(view, "")
+}
+
+// scenariosIn lists the scenarios in a view or tag, or that use a step.
+func (w *Window) scenariosIn(view string, step string) []Scenario {
+	assert.That(w.app != nil, "a window belongs to an app")
+	assert.That(view == "" || step == "", "a view or a step, not both")
 	w.refresh()
 	listed := make([]Scenario, 0, 16)
-	if w.project == nil || (w.selectedView == "" && w.selectedStep == "") ||
-		w.selectedView == ViewShared {
+	if w.project == nil || (view == "" && step == "") || view == ViewShared {
 		return listed
 	}
 	for _, capability := range w.project.Capabilities {
 		for _, loaded := range capability.Scenarios {
 			shown := w.scenarioOf(capability, loaded)
-			if w.selectedView == ViewUnverified && loaded.Outline {
+			if view == ViewUnverified && loaded.Outline {
 				listed = append(listed, w.unverifiedRows(shown, loaded)...)
-			} else if w.inView(shown) {
+			} else if inView(shown, view, step) {
 				listed = append(listed, shown)
 			}
 		}
@@ -84,25 +100,25 @@ func (w *Window) ListedScenarios() []Scenario {
 	return listed
 }
 
-// inView is true when a scenario belongs in the selected view.
-func (w *Window) inView(scenario Scenario) bool {
-	assert.That(w.selectedView != "" || w.selectedStep != "", "a view or step is selected")
+// inView is true when a scenario belongs in a view or tag, or uses a step.
+func inView(scenario Scenario, view string, step string) bool {
+	assert.That(view != "" || step != "", "a view or step is named")
 	assert.That(scenario.Name != "", "the scenario has a name")
-	if w.selectedStep != "" {
-		for _, step := range scenario.Steps {
-			if _, text, _ := strings.Cut(step, " "); text == w.selectedStep {
+	if step != "" {
+		for _, used := range scenario.Steps {
+			if _, text, _ := strings.Cut(used, " "); text == step {
 				return true
 			}
 		}
 		return false
 	}
-	switch w.selectedView {
+	switch view {
 	case ViewErrorStates:
 		return scenario.Error
 	case ViewUnverified:
 		return !strings.HasPrefix(scenario.Status, statusVerified)
 	}
-	return slices.Contains(scenario.Tags, "@"+w.selectedView)
+	return slices.Contains(scenario.Tags, "@"+view)
 }
 
 // ViewHelper is one helper listed in the sidebar's "Shared" view.

@@ -232,8 +232,8 @@ func (s *state) noKit() error {
 	return os.Remove(filepath.Join(s.Project, filepath.FromSlash(kitPath)))
 }
 
-// deletedKitComesBack deletes the kit from the open project, then reads the window, as any
-// screen does, and checks the kit is back.
+// deletedKitComesBack deletes the kit from the open project, then reads the window, as the
+// TUI does each time it draws, and checks the kit is back.
 func (s *state) deletedKitComesBack(version int) error {
 	if err := os.Remove(filepath.Join(s.Project, filepath.FromSlash(kitPath))); err != nil {
 		return err

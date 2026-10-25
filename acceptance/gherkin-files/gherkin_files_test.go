@@ -35,7 +35,7 @@ func TestStepsDefined(t *testing.T) { world.CheckStepsDefined(t, capability, ste
 type state struct {
 	*world.World
 	names    []string // the scenarios a Given step arranged, in the order it named them
-	listed   string   // the sidebar item a Then step last found, for "selecting it"
+	listed   string   // the capability a Then step last found listed, for "selecting it"
 	comment  string   // the comment line a Given step added
 	editFrom string   // the step line an edit replaced
 	editTo   string   // what the edit replaced it with
@@ -53,7 +53,8 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^their run keys stay ([a-z0-9/-]+) and ([a-z0-9/-]+)$`, s.runKeysStay),
 		world.Def(`^checkout\.feature has the comment "([^"]*)" above "([^"]*)"$`,
 			s.commentAbove),
-		world.Def(`^a developer edits a step of "([^"]*)" in Givens and saves$`, s.editStep),
+		world.Def(`^a developer edits a step of "([^"]*)" with givens edit and saves$`,
+			s.editStep),
 		world.Def(`^the comment is still there$`, s.commentStillThere),
 		world.Def(`^git diff shows only the step that changed$`, s.diffShowsOnlyStep),
 		world.Def(`^the sample shop has ([a-z0-9/._-]+\.ts)$`, s.stepsFile),
@@ -67,8 +68,8 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^checkout\.feature has scenarios named "([^"]*)" and "([^"]*)"$`,
 			s.scenariosNamed),
 		world.Def(`^both are listed with the warning "([^"]*)"$`, s.bothWarned),
-		world.Def(`^"([^"]*)" is disabled on both until one is renamed$`,
-			s.disabledUntilRenamed),
+		world.Def(`^"([^"]*)" isn't offered on either until one is renamed$`,
+			s.notOfferedUntilRenamed),
 		world.Def(`^the checkout folder holds checkout\.feature and ([a-z-]+\.feature)$`,
 			s.secondFeature),
 		world.Def(`^Checkout loads from checkout\.feature$`, s.loadsFromCheckoutFeature),
@@ -267,7 +268,7 @@ func (s *state) stepsFolder() error {
 }
 
 // checkoutLoadsWithoutWarning expects every scenario in checkout.feature, and no warning on
-// the capability, its sidebar line or anywhere in the window that names the steps file.
+// the capability, its line in the list or anywhere in the window that names the steps file.
 func (s *state) checkoutLoadsWithoutWarning() error {
 	if err := s.loadsNormally("Checkout"); err != nil {
 		return err
@@ -286,10 +287,10 @@ func (s *state) notACapability(name string) error {
 	}
 	names := capabilityNames(window.Sidebar())
 	if len(names) == 0 {
-		return fmt.Errorf("the sidebar lists no capabilities")
+		return fmt.Errorf("no capabilities are listed")
 	}
 	if slices.ContainsFunc(names, func(got string) bool { return strings.EqualFold(got, name) }) {
-		return fmt.Errorf("the sidebar lists %q as a capability: %q", name, names)
+		return fmt.Errorf("%q is listed as a capability: %q", name, names)
 	}
 	return nil
 }
@@ -306,7 +307,7 @@ func (s *state) listedWithWarning(name string) error {
 	if err != nil {
 		return err
 	}
-	item, err := sidebarCapability(window.Sidebar(), name)
+	item, err := listedCapability(window.Sidebar(), name)
 	if err != nil {
 		return err
 	}
@@ -361,14 +362,14 @@ func (s *state) bothWarned(warning string) error {
 	return nil
 }
 
-// loadsNormally expects a capability on the sidebar with no warning, showing exactly the
+// loadsNormally expects a capability listed with no warning, showing exactly the
 // scenarios its .feature file holds.
 func (s *state) loadsNormally(name string) error {
 	window, err := s.Front()
 	if err != nil {
 		return err
 	}
-	item, err := sidebarCapability(window.Sidebar(), name)
+	item, err := listedCapability(window.Sidebar(), name)
 	if err != nil {
 		return err
 	}
@@ -434,7 +435,8 @@ func scenarioNames(shown app.Capability) []string {
 	return names
 }
 
-// editStep opens the scenario in Givens's editor, adds words to its last step, and saves.
+// editStep opens the scenario to edit, adds words to its last step, and saves, as givens edit
+// does with what the developer's editor gives back.
 func (s *state) editStep(name string) error {
 	window, err := s.Front()
 	if err != nil {
@@ -458,9 +460,9 @@ func (s *state) editStep(name string) error {
 	return editor.Save()
 }
 
-// disabledUntilRenamed expects neither action offered on either scenario, renames the second
+// notOfferedUntilRenamed expects neither action offered on either scenario, renames the second
 // in Givens, and then expects both actions offered on both.
-func (s *state) disabledUntilRenamed(action string) error {
+func (s *state) notOfferedUntilRenamed(action string) error {
 	window, err := s.Front()
 	if err != nil {
 		return err

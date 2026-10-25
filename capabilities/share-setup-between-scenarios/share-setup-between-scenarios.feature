@@ -7,10 +7,12 @@ Feature: Share setup between scenarios
   `<capability>/_shared/*.sh`. A capability's helpers are only visible to that capability's
   scripts, and override a shared helper with the same name.
 
-  The "Shared" section of the sidebar lists every helper documented with a `# @helper` comment,
-  where it's defined and which scripts call it. A run's setup fingerprint covers the helpers a
-  script calls, so changing a helper marks the scenarios that use it as unverified, and only
-  those.
+  Givens lists every helper documented with a `# @helper` comment, where it's defined and which
+  scripts call it: the Helpers list, which the TUI shows on its Helpers tab and `givens helpers`
+  prints. A helper is edited, or a new one written, in the developer's own editor: Enter or n on
+  the Helpers tab, or `givens helper edit` and `givens helper new`. A run's setup fingerprint
+  covers the helpers a script calls, so changing a helper marks the scenarios that use it as
+  unverified, and only those.
 
   @error
   Scenario: Calling another capability's helper
@@ -26,7 +28,7 @@ Feature: Share setup between scenarios
     When they drop in to "Card declined"
     Then Checkout's seed_shopper runs in place of the shared one
     And no warning is shown
-    And the Shared list marks it "Overrides _shared/users.sh"
+    And the Helpers list marks it "Overrides _shared/users.sh"
 
   @error
   Scenario: Two shared files define the same helper
@@ -34,7 +36,7 @@ Feature: Share setup between scenarios
     And two files in _shared define seed_shopper
     When they drop in to "Card declined"
     Then the output warns "seed_shopper is defined in both _shared/users.sh and _shared/people.sh"
-    And both definitions are flagged in the Shared list
+    And both definitions are flagged in the Helpers list
 
   Scenario: Changing a helper unverifies the scenarios that call it
     Given "Card declined" and "Accept invite" both have a passing run recorded
@@ -67,7 +69,7 @@ Feature: Share setup between scenarios
 
   Scenario: Updating the kit keeps scenarios verified
     Given "Card declined" has a passing run recorded
-    When the sample shop's kit is updated from version 1 to 2
+    When the sample shop's kit is updated to the next version
     Then "Card declined" still shows as verified
 
   Scenario: See what a scenario needs installed
@@ -79,15 +81,15 @@ Feature: Share setup between scenarios
 
   Scenario: Edit a helper
     Given a developer has the sample shop project open in Givens
-    When they select seed_shopper under Shared and choose "Edit"
+    When they choose "Edit" on seed_shopper in the Helpers list
     Then _shared/users.sh opens in the editor at seed_shopper
-    And the 5 scripts that call it are listed beside the editor
+    And the 5 scripts that call it are listed with it
 
   Scenario: Add a helper
     Given a developer has the sample shop project open in Givens
-    When they choose "New helper" in Checkout and name it "add_coupon"
+    When they add a helper named "add_coupon" to Checkout
     Then checkout/_shared/add_coupon.sh is created with a # @helper comment and an empty add_coupon function
-    And add_coupon is listed under Shared as one of Checkout's helpers
+    And add_coupon is in the Helpers list as one of Checkout's helpers
 
   @error
   Scenario: Save a helper with a syntax error

@@ -110,7 +110,7 @@ func (s *state) bothFlagged() error {
 	slices.Sort(flagged)
 	want := []string{"_shared/people.sh", "_shared/users.sh"}
 	if !slices.Equal(flagged, want) {
-		return fmt.Errorf("expected %q flagged in the Shared list, got %q", want, flagged)
+		return fmt.Errorf("expected %q flagged in the Helpers list, got %q", want, flagged)
 	}
 	return nil
 }
@@ -198,8 +198,8 @@ func (s *state) opensAt(file string, helper string) error {
 	return nil
 }
 
-// callersListed compares the scripts beside the editor with the sample shop's scripts that
-// call the helper.
+// callersListed compares the callers Givens lists with the helper being edited with the
+// sample shop's scripts that call it.
 func (s *state) callersListed(count string) error {
 	want, err := s.callersOf(s.helper)
 	if err != nil {
@@ -216,7 +216,7 @@ func (s *state) callersListed(count string) error {
 	got := slices.Clone(window.EditingHelper().Callers)
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
-		return fmt.Errorf("expected %q beside the editor, got %q", want, got)
+		return fmt.Errorf("expected %q listed with the helper, got %q", want, got)
 	}
 	return nil
 }

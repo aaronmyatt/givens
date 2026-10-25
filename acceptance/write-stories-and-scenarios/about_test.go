@@ -11,21 +11,22 @@ import (
 	"givens/internal/app"
 )
 
-// aboutSteps cover editing a capability's about.md from its story, or starting one.
+// aboutSteps cover opening what's on show to edit, and a capability's about.md, or starting
+// one.
 func (s *state) aboutSteps() []world.Step {
 	return []world.Step{
-		world.Def(`^([a-z0-9-]+/[a-z0-9-]+\.(?:md|feature)) opens in the editor$`,
-			s.aboutInEditor),
-		world.Def(`^they press e$`, s.pressE),
-		world.Def(`^([a-z0-9-]+/[a-z0-9-]+\.feature) opens in the editor at the "([^"]*)" `+
-			`block$`, s.inEditorAtBlock),
+		world.Def(`^([a-z0-9-]+/[a-z0-9-]+\.(?:md|feature)) opens to edit$`, s.aboutInEditor),
+		world.Def(`^(?:they press e|they edit what's on show)$`, s.pressE),
+		world.Def(`^([a-z0-9-]+/[a-z0-9-]+\.feature) opens to edit at the "([^"]*)" block$`,
+			s.inEditorAtBlock),
+		world.Def(`^it opens to edit$`, s.opensToEdit),
 		world.Def(`^Invites has no about\.md$`, s.invitesHasNoAbout),
 		world.Def(`^([a-z0-9-]+/about\.md) is created, starting with the line "([^"]*)"$`,
 			s.aboutCreated),
 	}
 }
 
-// aboutInEditor checks the editor holds path, a file in the capabilities folder.
+// aboutInEditor checks path, a file in the capabilities folder, is open to edit.
 func (s *state) aboutInEditor(path string) error {
 	window, err := s.Front()
 	if err != nil {
@@ -61,6 +62,21 @@ func (s *state) aboutCreated(path string, line string) error {
 	return nil
 }
 
+// opensToEdit checks something is open to edit: what the TUI and givens edit hand to the
+// developer's editor.
+func (s *state) opensToEdit() error {
+	window, err := s.Front()
+	if err != nil {
+		return err
+	}
+	if window.Editing() == "" {
+		return errors.New("nothing is open to edit")
+	}
+	return nil
+}
+
+// pressE opens what's on show to edit: the selected scenario at its block, or the story's
+// .feature file.
 func (s *state) pressE() error {
 	window, err := s.Front()
 	if err != nil {
@@ -69,7 +85,7 @@ func (s *state) pressE() error {
 	return window.Press(app.KeyEdit)
 }
 
-// inEditorAtBlock checks the editor holds path, opened at the named scenario's block.
+// inEditorAtBlock checks path is open to edit at the named scenario's block.
 func (s *state) inEditorAtBlock(path string, name string) error {
 	if err := s.aboutInEditor(path); err != nil {
 		return err

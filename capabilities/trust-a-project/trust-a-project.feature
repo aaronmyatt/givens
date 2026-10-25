@@ -3,10 +3,11 @@ Feature: Trust a project
   I want Givens to ask before it runs any of the project's scripts
   So that opening a cloned repo can't run code I haven't looked at
 
-  Trust is tied to the project's folder path and stored in Givens's own app data on that Mac,
-  next to the recent projects list. It's never saved in the project, so a cloned repo can't mark
-  itself as trusted, and a re-clone or moved folder asks again. Reading, searching and copying
-  work without trust. Only running scripts needs it.
+  Trust is tied to the project's folder path and stored in Givens's own data folder on that
+  machine. It's never saved in the project, so a cloned repo can't mark itself as trusted, and a
+  re-clone or moved folder asks again. Reading, searching and copying work without trust. Only
+  running scripts needs it. In the TUI, t trusts and d doesn't; `givens trust` trusts the
+  project the terminal is in. See work-in-the-terminal.
 
   Scenario: Asked before the first run
     Given a developer has never run anything from the sample shop
@@ -24,7 +25,7 @@ Feature: Trust a project
   Scenario: Choose not to trust
     Given a developer chose "Don't trust" for the sample shop
     When they drop in to "Card declined"
-    Then the Drop in screen opens with the scenario's steps and setup script, but nothing in the script runs
+    Then the Drop in page opens with the scenario's steps and setup script, but nothing in the script runs
     And they see "Scripts are off for this project", and "Copy" still works
     And they're offered "Trust this project"
 

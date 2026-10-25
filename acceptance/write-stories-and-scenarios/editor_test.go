@@ -36,8 +36,8 @@ func (s *state) editorSteps() []world.Step {
 	return []world.Step{
 		world.Def(`^a developer is writing a new scenario in Checkout$`, s.writingNewScenario),
 		world.Def(`^they type "([^"]*)"$`, s.typeText),
-		world.Def(`^(?:they're offered )?"([^"]*)" with "([^"]*)"$`, s.offeredWith),
-		world.Def(`^choosing one inserts it word for word$`, s.choosingInserts),
+		world.Def(`^(?:the steps suggested include )?"([^"]*)" with "([^"]*)"$`, s.offeredWith),
+		world.Def(`^choosing one puts it in word for word$`, s.choosingInserts),
 		world.Def(`^a developer has the sample shop project in git and open in Givens$`,
 			s.openInGit),
 		world.Def(`^they change "([^"]*)" to "([^"]*)" in "([^"]*)"$`, s.changeIn),
@@ -52,18 +52,18 @@ func (s *state) editorSteps() []world.Step {
 		world.Def(`^one line among its steps doesn't start with Given, When, Then, And, But `+
 			`or \*$`, s.addNonStep),
 		world.Def(`^that line is marked "([^"]*)"$`, s.lineMarked),
-		world.Def(`^(?:the scenario is shown as it reads in the library, with its keywords `+
-			`lined up|the steps around it are shown as normal)$`, s.previewLinedUp),
+		world.Def(`^(?:the preview shows the scenario with its keywords lined up|the steps `+
+			`around it are shown as normal)$`, s.previewLinedUp),
 		world.Def(`^their unsaved changes are included$`, s.previewHasChanges),
 		world.Def(`^a developer is editing Checkout's about\.md$`, s.editingAbout),
-		world.Def(`^the checkout flow diagram is shown as it will look in the library$`,
-			s.previewAsLibrary),
+		world.Def(`^the checkout flow diagram is shown as Checkout's story shows it$`,
+			s.previewAsStory),
 		world.Def(`^that line is shown marked with the parser's message$`, s.previewMarked),
 	}
 }
 
 // writingNewScenario makes sure "a signed-in shopper with one item in the cart" is used in
-// 4 scenarios, then starts a new scenario in Checkout, which opens it in the editor.
+// 4 scenarios, then adds a new scenario to Checkout, which leaves it open to edit.
 func (s *state) writingNewScenario() error {
 	if err := s.CopySampleShop(); err != nil {
 		return err
@@ -76,9 +76,6 @@ func (s *state) writingNewScenario() error {
 		return err
 	}
 	if err := window.Select("Checkout"); err != nil {
-		return err
-	}
-	if err := window.Choose("New scenario"); err != nil {
 		return err
 	}
 	return window.NewScenario(app.ScenarioDraft{Name: "Pay with store credit"})
@@ -140,7 +137,7 @@ func (s *state) currentEditor() (*app.Editor, error) {
 	if editor := window.Editor(); editor != nil {
 		return editor, nil
 	}
-	return nil, errors.New("nothing is open in the editor")
+	return nil, errors.New("nothing is open to edit")
 }
 
 func (s *state) offeredWith(text string, label string) error {
@@ -151,7 +148,7 @@ func (s *state) offeredWith(text string, label string) error {
 	suggestions := editor.Suggestions()
 	want := app.StepSuggestion{Text: text, Label: label}
 	if !slices.Contains(suggestions, want) {
-		return fmt.Errorf("the editor doesn't offer %q with %q; it offers %v", text, label,
+		return fmt.Errorf("Givens doesn't suggest %q with %q; it suggests %v", text, label,
 			suggestions)
 	}
 	if s.offered == "" {
@@ -262,7 +259,7 @@ func (s *state) setText(text string) error {
 
 func (s *state) save() error {
 	if s.editor == nil {
-		return errors.New("nothing is open in the editor")
+		return errors.New("nothing is open to edit")
 	}
 	return s.editor.Save()
 }

@@ -1,23 +1,27 @@
-// Command givens lists, runs and checks a project's scenarios from a terminal, and serves the
-// macOS app. See capabilities/use-givens-from-the-terminal.
+// Command givens browses, drops in to, edits, lists, runs and checks a project's scenarios
+// from a terminal. See capabilities/work-in-the-terminal and use-givens-from-the-terminal.
 //
-//	givens <folder>
+//	givens [folder]                 (in a terminal: the TUI)
+//	givens drop-in <capability>/<scenario>
 //	givens list [--json] [--tags <expression>]
 //	givens run <capability>/<scenario>
 //	givens check [folder]
-//	givens serve --app-data <folder>
+//	givens browser open|eval|action|close …
+//	givens edit <capability>/<scenario> | <file>
+//	givens new story <name> | givens new scenario <capability>
+//	givens rename <key> <new name> [--yes], givens delete <key> [--yes]
+//	givens todo <key>, givens done <key>
+//	givens helpers | helper new|edit … | history <key> | search <words> | trust | sync
 package main
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"givens/internal/assert"
-	"givens/internal/serve"
 )
 
 // Exit codes. Ref: https://pkg.go.dev/os#Exit
@@ -30,11 +34,17 @@ const (
 // folderDepthMax bounds the walk up from the working folder to the capabilities folder.
 const folderDepthMax = 64
 
-const usage = `usage: givens <folder>
+const usage = `usage: givens [folder]         (in a terminal, the TUI)
+       givens drop-in <capability>/<scenario>
        givens list [--json] [--tags <expression>]
        givens run <capability>/<scenario>
        givens check [folder]
-       givens serve --app-data <folder>`
+       givens browser open|eval|action|close …
+       givens edit <capability>/<scenario> | <file>
+       givens new story <name> | givens new scenario <capability>
+       givens rename <key> <new name> [--yes] | givens delete <key> [--yes]
+       givens todo <key> | givens done <key>
+       givens helpers | helper new|edit … | history <key> | search <words> | trust | sync`
 
 func main() {
 	assert.That(len(os.Args) >= 1, "the OS passes the program name")
@@ -48,18 +58,32 @@ func run(args []string) int {
 	assert.That(args != nil, "args is a list")
 	assert.That(usage != "", "there's usage to print")
 	if len(args) == 0 {
-		fmt.Println(usage)
-		return exitUsage
+		return runTUI("", ".")
 	}
 	switch args[0] {
-	case "serve":
-		return runServe(args[1:])
 	case "check":
 		return runCheck(args[1:])
 	case "list":
 		return runList(args[1:])
 	case "run":
 		return runSetup(args[1:])
+	case "browser":
+		return runBrowser(args[1:])
+	case "edit":
+		return runEdit(args[1:])
+	case "drop-in":
+		return runDropIn(args[1:])
+	case "new":
+		return runNew(args[1:])
+	case "rename":
+		return runRename(args[1:])
+	case "delete":
+		return runDelete(args[1:])
+	case "todo", "done":
+		return runFlag(args[1:], args[0] == "todo")
+	}
+	if code, ok := runPanel(args); ok {
+		return code
 	}
 	if len(args) == 1 && !strings.HasPrefix(args[0], "-") {
 		return openFolder(args[0])
@@ -101,39 +125,10 @@ func findCapabilities(start string) (string, error) {
 	return "", errors.New("no capabilities folder here or in any folder above")
 }
 
-// runServe answers the macOS app on stdin and stdout until stdin closes. GIVENS_TEST_SEAMS=1
-// lets the acceptance suites call the "test." methods.
-func runServe(args []string) int {
-	assert.That(args != nil, "args is a list")
-	if len(args) != 2 || args[0] != "--app-data" || args[1] == "" {
-		_, _ = fmt.Fprintln(os.Stderr, "usage: givens serve --app-data <folder>")
-		return exitUsage
-	}
-	if err := os.MkdirAll(args[1], 0o755); err != nil {
-		complain(err)
-		return exitProblems
-	}
-	server, err := serve.New(args[1], os.Getenv("GIVENS_TEST_SEAMS") == "1")
-	if err != nil {
-		complain(err)
-		return exitProblems
-	}
-	if err := server.Serve(os.Stdin, os.Stdout); err != nil {
-		complain(err)
-		return exitProblems
-	}
-	assert.That(server != nil, "serve ran on a server")
-	return exitOK
-}
-
-// openCommandEnv names a stand-in for `open`, so the acceptance suite can see what would open.
-const openCommandEnv = "GIVENS_OPEN_COMMAND"
-
-// openFolder opens a project in the Givens app, like `code .`: `open -a Givens <folder>`.
-// Ref: https://ss64.com/mac/open.html
+// openFolder opens the project in folder in the TUI, like `code .`: givens <folder>.
 func openFolder(folder string) int {
 	assert.That(folder != "", "a folder is named")
-	assert.That(openCommandEnv != "", "the stand-in has a name")
+	assert.That(exitProblems != exitOK, "a problem exits apart")
 	absolute, err := filepath.Abs(folder)
 	if err != nil {
 		complain(err)
@@ -143,17 +138,7 @@ func openFolder(folder string) int {
 		fmt.Println("There's no folder at " + homeShort(absolute))
 		return exitProblems
 	}
-	opener := os.Getenv(openCommandEnv)
-	if opener == "" {
-		opener = "open"
-	}
-	command := exec.Command(opener, "-a", "Givens", absolute)
-	command.Stdout, command.Stderr = os.Stdout, os.Stderr
-	if err := command.Run(); err != nil {
-		complain(err)
-		return exitProblems
-	}
-	return exitOK
+	return runTUI("", absolute)
 }
 
 // homeShort writes a path under the home folder with ~, as a person would type it.
@@ -168,4 +153,19 @@ func homeShort(path string) string {
 	}
 	assert.That(!strings.HasPrefix(path, home+"/"), "a path under home was shortened")
 	return path
+}
+
+// runPanel runs one of the commands for the app's other panels, saying whether args named one.
+func runPanel(args []string) (int, bool) {
+	assert.That(len(args) > 0, "a command is named")
+	assert.That(args[0] != "", "a command has a name")
+	commands := map[string]func([]string) int{
+		"helpers": runHelpers, "helper": runHelper, "history": runHistory,
+		"search": runSearch, "trust": runTrust, "sync": runSync,
+	}
+	command, ok := commands[args[0]]
+	if !ok {
+		return 0, false
+	}
+	return command(args[1:]), true
 }

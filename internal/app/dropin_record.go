@@ -33,15 +33,16 @@ func (s *Session) Mark(item string, mark string) error {
 		if s.checklist[index].Text != item {
 			continue
 		}
+		// A changed mark is a checklist that "Record run" hasn't saved yet.
 		if mark == MarkClear {
-			s.checklist[index].Mark = ""
+			s.checklist[index].Mark, s.recorded = "", false
 			return nil
 		}
 		then := s.checklist[index].Kind == "then"
 		if then == (mark == MarkDone) {
 			return fmt.Errorf("%q can't be marked %q", item, mark)
 		}
-		s.checklist[index].Mark = mark
+		s.checklist[index].Mark, s.recorded = mark, false
 		return nil
 	}
 	return fmt.Errorf("the checklist has no %q: %w", item, ErrNotFound)

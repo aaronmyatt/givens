@@ -55,3 +55,14 @@ func (w *Window) answer(action string) (bool, error) {
 	}
 	return true, asked.run()
 }
+
+// Question is the question up in the window, and the choice that answers it yes, like
+// "Delete anyway"; "" when none is up. The givens command prints it, and --yes chooses it.
+func (w *Window) Question() (string, string) {
+	assert.That(w != nil, "question runs on a window")
+	assert.That(w.app != nil, "a window belongs to an app")
+	if w.prompt == nil {
+		return "", ""
+	}
+	return w.prompt.message, w.prompt.confirm
+}
