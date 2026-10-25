@@ -30,7 +30,6 @@ import (
 	"givens/internal/app/model"
 	"givens/internal/assert"
 	"givens/internal/project"
-	"givens/internal/runs"
 	"givens/internal/slug"
 	"givens/internal/spec"
 )
@@ -652,6 +651,409 @@ func FromLines(text string) []FromLine {
 	return froms
 }
 
+// From internal/runs, which keeps the run log: one line per recorded Drop in, in
+// <capabilities>/runs/YYYY-MM-DD.log, and each run's attached files and note. Drop in, Keep runs
+// off main, Read a capability, Share setup and Write stories read it. Writing a run, its files
+// and its note, merging a day's log and trimming the ref are Keep runs off main's, at the end of
+// its section in big.go; RunAuthor and AttachedFiles are Drop in's, ReadRunNote is Read a
+// capability's and LinkRunsRefCopy is Open a project's.
+//
+// Lines are only ever appended, never rewritten, so capabilities/.gitattributes can mark the
+// folder `runs/** merge=union` and git keeps both branches' lines in a merge.
+// Ref: https://git-scm.com/docs/gitattributes#_built_in_merge_drivers
+//
+// A line is tab-separated: time (RFC 3339), run key, result, author, then one field per row
+// value (`card=expired`) and per fingerprint part (`fp:steps=1a2b3c4d`), and the note last.
+
+// Limits. Tiger Style: put a limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	// RunLogFilesMax is about 27 years of daily files.
+	RunLogFilesMax = 10000
+	// RunLineLengthBytesMax bounds one run line, note included.
+	RunLineLengthBytesMax = 64 << 10
+	// RunFieldsMax bounds the row values and fingerprint parts on one line.
+	RunFieldsMax = 256
+)
+
+// Results.
+const (
+	RunResultPass = "pass"
+	RunResultFail = "fail"
+)
+
+// fingerprintPrefix starts a fingerprint part's field, so it can't be read as a row value.
+const fingerprintPrefix = "fp:"
+
+// ErrBadRunLine is returned for a run line that can't be read.
+var ErrBadRunLine = errors.New("not a run line")
+
+// RunPair is a name and a value: a row value (card, expired) or a fingerprint part (steps, 1a2b).
+type RunPair struct {
+	Name  string
+	Value string
+}
+
+// Run is one recorded Drop in.
+type Run struct {
+	Time        time.Time
+	Key         string    // see RunKey
+	Result      string    // RunResultPass or RunResultFail
+	Author      string    // git's user.name, or ""
+	Values      []RunPair // the outline row's values, in column order
+	Fingerprint []RunPair // what the setup was made of when it ran
+	Note        string
+}
+
+// RunKey is the name a run is recorded against: <capability>/<scenario slug>, plus
+// /<examples slug> for a row of a named Examples block. examplesSlug is "" otherwise.
+func RunKey(scenarioKey string, examplesSlug string) string {
+	assert.That(strings.Count(scenarioKey, "/") == 1, "a scenario key is capability/slug")
+	assert.That(!strings.Contains(examplesSlug, "/"), "an examples slug is one slug")
+	if examplesSlug == "" {
+		return scenarioKey
+	}
+	return scenarioKey + "/" + examplesSlug
+}
+
+// RunsDir is the run log's folder inside a capabilities folder.
+func RunsDir(capabilities string) string {
+	assert.That(capabilities != "", "capabilities is a path")
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	return filepath.Join(capabilities, "runs")
+}
+
+// formatRun writes one run as a line. Tabs and line breaks inside fields become spaces.
+func formatRun(run Run) string {
+	assert.That(run.Key != "", "a run has a key")
+	assert.That(len(run.Values)+len(run.Fingerprint) <= RunFieldsMax, "fields stay bounded")
+	fields := make([]string, 0, 5+len(run.Values)+len(run.Fingerprint))
+	fields = append(fields, run.Time.Format(time.RFC3339), run.Key, run.Result, run.Author)
+	for _, value := range run.Values {
+		fields = append(fields, value.Name+"="+value.Value)
+	}
+	for _, part := range run.Fingerprint {
+		fields = append(fields, fingerprintPrefix+part.Name+"="+part.Value)
+	}
+	fields = append(fields, run.Note)
+	for index, field := range fields {
+		fields[index] = strings.NewReplacer("\t", " ", "\r", " ", "\n", " ").Replace(field)
+	}
+	return strings.Join(fields, "\t")
+}
+
+// ParseRun reads one run line.
+func ParseRun(line string) (Run, error) {
+	assert.That(len(line) <= RunLineLengthBytesMax, "a line fits RunLineLengthBytesMax")
+	assert.That(!strings.Contains(line, "\n"), "a line is one line")
+	fields := strings.Split(line, "\t")
+	if len(fields) < 5 || len(fields) > 5+RunFieldsMax {
+		return Run{}, fmt.Errorf("%w: %d fields", ErrBadRunLine, len(fields))
+	}
+	at, err := time.Parse(time.RFC3339, fields[0])
+	if err != nil {
+		return Run{}, fmt.Errorf("%w: %v", ErrBadRunLine, err)
+	}
+	run := Run{
+		Time: at, Key: fields[1], Result: fields[2], Author: fields[3],
+		Note: fields[len(fields)-1],
+	}
+	for _, field := range fields[4 : len(fields)-1] {
+		name, value, ok := strings.Cut(field, "=")
+		if !ok {
+			return Run{}, fmt.Errorf("%w: %q is neither a row value nor a fingerprint part",
+				ErrBadRunLine, field)
+		}
+		if part, isPart := strings.CutPrefix(name, fingerprintPrefix); isPart {
+			run.Fingerprint = append(run.Fingerprint, RunPair{Name: part, Value: value})
+		} else {
+			run.Values = append(run.Values, RunPair{Name: name, Value: value})
+		}
+	}
+	return run, nil
+}
+
+// ReadRuns reads every run in runs/ and, when the project keeps its runs off main, in the copy of
+// refs/givens/runs (see RunsRefCopy). A run in both is read once.
+func ReadRuns(capabilities string) ([]Run, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	all, err := ReadRunsFolder(capabilities)
+	if err != nil {
+		return nil, err
+	}
+	copied := RunsRefCopy(capabilities)
+	if copied == "" {
+		return all, nil
+	}
+	kept, err := ReadRunsFolder(copied)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool, len(all)+len(kept))
+	for _, run := range all {
+		seen[formatRun(run)] = true
+	}
+	for _, run := range kept {
+		if !seen[formatRun(run)] {
+			all = append(all, run)
+		}
+	}
+	assert.That(len(all) <= len(seen)+len(kept), "a run is read at most once more")
+	return all, nil
+}
+
+// ReadRunsFolder reads every run in root/runs/, oldest file first and in file order within a day.
+// No runs/ folder means no runs. A line that can't be read is skipped: one bad merge shouldn't
+// hide every run.
+func ReadRunsFolder(capabilities string) ([]Run, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	// Glob returns names in lexical order, which for YYYY-MM-DD is date order.
+	// Ref: https://pkg.go.dev/path/filepath#Glob
+	paths, err := filepath.Glob(filepath.Join(RunsDir(capabilities), "*.log"))
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) > RunLogFilesMax {
+		return nil, fmt.Errorf("runs/ holds %d files, more than %d", len(paths), RunLogFilesMax)
+	}
+	all := make([]Run, 0, len(paths)*4)
+	for _, path := range paths {
+		found, err := readRunFile(path)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, found...)
+	}
+	assert.That(len(paths) <= RunLogFilesMax, "files read stay bounded")
+	return all, nil
+}
+
+// readRunFile reads one day's runs.
+func readRunFile(path string) ([]Run, error) {
+	assert.That(strings.HasSuffix(path, ".log"), "path is a run file")
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	// Scanner splits on lines; Buffer raises its limit to a whole run line.
+	// Ref: https://pkg.go.dev/bufio#Scanner.Buffer
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 4096), RunLineLengthBytesMax+1)
+	found := make([]Run, 0, 16)
+	// bound: Scan stops at the end of the file, which ReadRuns's callers keep to one day of runs.
+	for scanner.Scan() {
+		if run, err := ParseRun(scanner.Text()); err == nil {
+			found = append(found, run)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	assert.That(scanner.Err() == nil, "the file was read to its end")
+	return found, file.Close()
+}
+
+// LatestRun returns the newest run for key whose row values are values, and false when there's
+// none. Runs are compared by time, so a merged file's order doesn't matter.
+func LatestRun(all []Run, key string, values []RunPair) (Run, bool) {
+	assert.That(key != "", "a key names a scenario")
+	assert.That(len(values) <= RunFieldsMax, "values stay bounded")
+	var latest Run
+	found := false
+	for _, run := range all {
+		if run.Key != key || !samePairs(run.Values, values) {
+			continue
+		}
+		if !found || !run.Time.Before(latest.Time) {
+			latest, found = run, true
+		}
+	}
+	return latest, found
+}
+
+// samePairs is true when a and b hold the same pairs in the same order.
+func samePairs(a []RunPair, b []RunPair) bool {
+	assert.That(len(a) <= RunFieldsMax, "a stays bounded")
+	assert.That(len(b) <= RunFieldsMax, "b stays bounded")
+	if len(a) != len(b) {
+		return false
+	}
+	for index := range a {
+		if a[index] != b[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// Attached files: proof of what a run saw, like a screenshot. Each run keeps its own folder,
+// runs/files/<run key>/<time>/, found from the run line's key and time, so the line format
+// doesn't change. Names under one run's folder can't collide with another branch's, so a merge
+// only ever adds folders.
+
+// Limits on attached files.
+const (
+	// FilesPerRunMax bounds the files one run keeps.
+	FilesPerRunMax = 32
+	// AttachedFileBytesMax bounds one attached file: room for a screen recording, not a disk image.
+	AttachedFileBytesMax = 100 << 20
+)
+
+// filesFolderTimeLayout names a run's folder by its time in UTC, so folders sort by time and
+// the name has no colon, which Finder shows as a slash.
+// Ref: https://pkg.go.dev/time#pkg-constants
+const filesFolderTimeLayout = "2006-01-02T150405Z"
+
+// AttachedFilesDir is the folder holding the files attached to the run recorded against key at at.
+func AttachedFilesDir(capabilities string, key string, at time.Time) string {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	assert.That(key != "", "a run has a key")
+	assert.That(!at.IsZero(), "a run has a time")
+	return filepath.Join(RunsDir(capabilities), "files", filepath.FromSlash(key),
+		at.UTC().Format(filesFolderTimeLayout))
+}
+
+// CheckAttachedFile returns an error unless path is a regular file of at most AttachedFileBytesMax
+// bytes.
+func CheckAttachedFile(path string) error {
+	assert.That(path != "", "a file has a path")
+	assert.That(filepath.IsAbs(path), "an attached file's path is absolute")
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s isn't a file", filepath.Base(path))
+	}
+	if info.Size() > AttachedFileBytesMax {
+		return fmt.Errorf("%s is %d MB, more than %d MB", filepath.Base(path), info.Size()>>20,
+			AttachedFileBytesMax>>20)
+	}
+	return nil
+}
+
+// The run's note, when it runs to more than one line: a run line is one line, so the whole
+// note is kept beside the run's files and the line keeps its first line.
+const (
+	// RunNoteFileName is the note's file in a run's folder; no attached file may take the name.
+	RunNoteFileName = "note.md"
+	// RunNoteBytesMax bounds a note: pages of Markdown, not a book.
+	RunNoteBytesMax = 64 << 10
+)
+
+// A project can keep its runs off main: in the git ref refs/givens/runs, which RunStore (Keep runs
+// off main's section) commits, fetches and pushes. On each device the ref is checked out in <git
+// common dir>/givens/tree, laid out like a capabilities folder's runs/, so the run log and its
+// files are read from there just as from runs/. See capabilities/keep-runs-off-main.
+
+// Where the ref's copy lives inside the git common dir. git ignores folders it doesn't know
+// in there, as git-lfs's .git/lfs shows. Ref: https://git-scm.com/docs/gitrepository-layout
+const (
+	RunsRefDirName  = "givens"
+	runsRefTreeName = "tree"
+	// gitDepthMax bounds the walk up from a capabilities folder to its repository's root.
+	gitDepthMax = 64
+	// gitFileBytesMax bounds a .git file or commondir file: one path.
+	gitFileBytesMax = 4096
+)
+
+// RunsRefCopyLinkName is a file in a branch window's copied runs/ that names the checked-out
+// project's ref copy. The branch's copy isn't in a repository, so RunsRefCopy can't find the ref
+// by walking up from it.
+const RunsRefCopyLinkName = ".givens-ref-copy"
+
+// RunsRefCopy is where this project's refs/givens/runs is checked out:
+// <git common dir>/givens/tree, or "" when capabilities isn't in a git repository. It's found
+// without running git, so reading runs stays a few file reads.
+func RunsRefCopy(capabilities string) string {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	linked := readSmall(filepath.Join(RunsDir(capabilities), RunsRefCopyLinkName))
+	if filepath.IsAbs(linked) && filepath.Base(linked) == runsRefTreeName {
+		return filepath.Clean(linked)
+	}
+	common := GitCommonDir(capabilities)
+	if common == "" {
+		return ""
+	}
+	assert.That(filepath.IsAbs(common), "the git dir is absolute")
+	return filepath.Join(common, RunsRefDirName, runsRefTreeName)
+}
+
+// GitCommonDir is the .git folder of the repository holding start, or "" when there's none.
+// A worktree or submodule has a .git file naming its git dir, whose commondir file names the
+// shared one. Ref: https://git-scm.com/docs/gitrepository-layout#_description
+func GitCommonDir(start string) string {
+	assert.That(filepath.IsAbs(start), "the walk starts at an absolute path")
+	dir := filepath.Clean(start)
+	for range gitDepthMax {
+		dotGit := filepath.Join(dir, ".git")
+		info, err := os.Stat(dotGit)
+		if err == nil && info.IsDir() {
+			return dotGit
+		}
+		if err == nil && info.Mode().IsRegular() {
+			return linkedCommonDir(dotGit)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+	return ""
+}
+
+// linkedCommonDir follows a .git file ("gitdir: <path>") to its git dir, then that dir's
+// commondir file, if it has one, to the shared git dir.
+func linkedCommonDir(dotGit string) string {
+	assert.That(filepath.Base(dotGit) == ".git", "a .git file is read")
+	gitdir, ok := strings.CutPrefix(readSmall(dotGit), "gitdir: ")
+	if !ok || gitdir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(filepath.Dir(dotGit), gitdir)
+	}
+	common := readSmall(filepath.Join(gitdir, "commondir"))
+	if common == "" {
+		return filepath.Clean(gitdir)
+	}
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(gitdir, common)
+	}
+	assert.That(filepath.IsAbs(common), "the common dir is absolute")
+	return filepath.Clean(common)
+}
+
+// readSmall reads a one-line file, trimmed, or "" when it's missing or too big.
+func readSmall(path string) string {
+	assert.That(filepath.IsAbs(path), "the path is absolute")
+	info, err := os.Stat(path)
+	if err != nil || info.Size() > gitFileBytesMax {
+		return ""
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(text))
+}
+
+// AttachedFilesFolder is the folder holding run's files: in the ref's copy when it's there, or else
+// under capabilities/runs/files.
+func AttachedFilesFolder(capabilities string, run Run) string {
+	assert.That(run.Key != "", "a run has a key")
+	assert.That(!run.Time.IsZero(), "a run has a time")
+	if copied := RunsRefCopy(capabilities); copied != "" {
+		folder := AttachedFilesDir(copied, run.Key, run.Time)
+		if _, err := os.Stat(folder); err == nil {
+			return folder
+		}
+	}
+	return AttachedFilesDir(capabilities, run.Key, run.Time)
+}
+
 // Scenario statuses, as the library shows them.
 const (
 	StatusNeverRun      = "Never run"
@@ -697,14 +1099,14 @@ func StatusOf(loaded *project.Project, scenario project.Scenario, now time.Time)
 
 // statusFor says where one run key, with its row's values, stands.
 func statusFor(loaded *project.Project, scenario project.Scenario, key string,
-	values []runs.Pair, now time.Time) string {
+	values []RunPair, now time.Time) string {
 	assert.That(loaded != nil, "status is read in a loaded project")
 	assert.That(key != "", "a run key is given")
-	recorded, err := runs.Read(loaded.Root)
+	recorded, err := ReadRuns(loaded.Root)
 	if err != nil {
 		return StatusNeverRun
 	}
-	latest, ok := runs.Latest(recorded, key, values)
+	latest, ok := LatestRun(recorded, key, values)
 	if !ok {
 		return StatusNeverRun
 	}
@@ -715,15 +1117,15 @@ func statusFor(loaded *project.Project, scenario project.Scenario, key string,
 	if changed := FingerprintChanged(latest.Fingerprint, current); changed != "" {
 		return statusUnverified + changed + " changed since the last run"
 	}
-	if latest.Result != runs.ResultPass {
+	if latest.Result != RunResultPass {
 		return StatusLastRunFailed
 	}
 	return verified(latest, now)
 }
 
 // verified says when, and by whom, a passing run was recorded: "Verified today by Sam".
-func verified(run runs.Run, now time.Time) string {
-	assert.That(run.Result == runs.ResultPass, "only a passing run verifies")
+func verified(run Run, now time.Time) string {
+	assert.That(run.Result == RunResultPass, "only a passing run verifies")
 	assert.That(!now.IsZero(), "now is a time")
 	day := "on " + run.Time.Format(time.DateOnly)
 	switch run.Time.In(now.Location()).Format(time.DateOnly) {
@@ -753,15 +1155,15 @@ const (
 // FingerprintOf works out the fingerprint of scenario, one of loaded's, for the row whose values
 // are row (nil for a scenario with no Examples).
 func FingerprintOf(loaded *project.Project, scenario project.Scenario,
-	row []runs.Pair) ([]runs.Pair, error) {
+	row []RunPair) ([]RunPair, error) {
 	assert.That(loaded != nil, "the project is loaded")
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
-	parts := []runs.Pair{{Name: FingerprintPartSteps, Value: hash(stepsText(scenario, row))}}
+	parts := []RunPair{{Name: FingerprintPartSteps, Value: hash(stepsText(scenario, row))}}
 	own, err := setupText(scenario)
 	if err != nil {
 		return nil, err
 	}
-	parts = append(parts, runs.Pair{Name: FingerprintPartSetup, Value: hash(own)})
+	parts = append(parts, RunPair{Name: FingerprintPartSetup, Value: hash(own)})
 	chain, err := fromChain(loaded, scenario)
 	if err != nil {
 		return nil, err
@@ -771,7 +1173,7 @@ func FingerprintOf(loaded *project.Project, scenario project.Scenario,
 		if err != nil {
 			return nil, err
 		}
-		parts = append(parts, runs.Pair{Name: fromPrefix + built.Key(), Value: hash(text)})
+		parts = append(parts, RunPair{Name: fromPrefix + built.Key(), Value: hash(text)})
 	}
 	called, err := calledHelpers(loaded, append([]project.Scenario{scenario}, chain...))
 	if err != nil {
@@ -1312,7 +1714,7 @@ func (s *Session) scratchDir() (string, error) {
 // checklistOf is what the developer does once setup is done: first_you lines from the setup
 // script, then the When and Then steps in the order they're written. And and But take the
 // kind before them.
-func checklistOf(scenario project.Scenario, row []runs.Pair) []model.CheckItem {
+func checklistOf(scenario project.Scenario, row []RunPair) []model.CheckItem {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	items := make([]model.CheckItem, 0, len(scenario.Steps)+2)
@@ -1390,7 +1792,7 @@ func (w *Window) editFile(path string) error {
 // value is "not an outline row".
 type outlineRow struct {
 	examples string
-	values   []runs.Pair
+	values   []RunPair
 }
 
 // rowsOf lists an outline's rows, block by block, in file order.
@@ -1400,10 +1802,10 @@ func rowsOf(scenario project.Scenario) []outlineRow {
 	rows := make([]outlineRow, 0, 4)
 	for _, block := range scenario.Examples {
 		for _, cells := range block.Rows {
-			values := make([]runs.Pair, 0, len(block.Header))
+			values := make([]RunPair, 0, len(block.Header))
 			for column, name := range block.Header {
 				if column < len(cells) {
-					values = append(values, runs.Pair{Name: name, Value: cells[column]})
+					values = append(values, RunPair{Name: name, Value: cells[column]})
 				}
 			}
 			rows = append(rows, outlineRow{examples: block.Slug, values: values})
@@ -1417,12 +1819,12 @@ func rowStatus(loaded *project.Project, scenario project.Scenario, row outlineRo
 	now time.Time) string {
 	assert.That(loaded != nil, "status is read in a loaded project")
 	assert.That(scenario.Outline, "only an outline has rows")
-	return statusFor(loaded, scenario, runs.Key(scenario.Key(), row.examples), row.values, now)
+	return statusFor(loaded, scenario, RunKey(scenario.Key(), row.examples), row.values, now)
 }
 
 // rowName says a row as a person would: its first value, like "expired".
-func rowName(row []runs.Pair) string {
-	assert.That(len(row) <= runs.FieldsMax, "a row stays bounded")
+func rowName(row []RunPair) string {
+	assert.That(len(row) <= RunFieldsMax, "a row stays bounded")
 	if len(row) == 0 {
 		return ""
 	}

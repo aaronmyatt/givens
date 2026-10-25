@@ -28,7 +28,7 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, slug, kit and starter:
+//   - internal/spec, project, slug, kit and starter:
 //     domain packages, each with one job and its own tests.
 
 package app
@@ -62,7 +62,6 @@ import (
 	"givens/internal/browser"
 	"givens/internal/kit"
 	"givens/internal/project"
-	"givens/internal/runs"
 	"givens/internal/slug"
 	"givens/internal/spec"
 	"givens/internal/starter"
@@ -197,8 +196,8 @@ const pollInterval = 20 * time.Millisecond
 type Session struct {
 	window   *Window
 	scenario project.Scenario
-	row      []runs.Pair // the outline row's values, or nil
-	examples string      // the row's Examples block's slug, or ""
+	row      []RunPair // the outline row's values, or nil
+	examples string    // the row's Examples block's slug, or ""
 
 	process  *SetupProcess
 	block    *blockRun // a markdown card's run block running now, or nil
@@ -331,7 +330,7 @@ func (s *Session) begin() error {
 // lines, which the checklist shows instead; GIVENS_UI makes by_hand and ask cards. begin adds
 // GIVENS_BIN and the arguments' files.
 // See capabilities/the-kit/about.md.
-func setupEnv(scenario project.Scenario, row []runs.Pair) []string {
+func setupEnv(scenario project.Scenario, row []RunPair) []string {
 	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
 	assert.That(len(row) <= HelpersMax, "a row stays bounded")
 	env := []string{"GIVENS_QUIET=1", "GIVENS_UI=1", "GIVENS_SCENARIO=" + scenario.Key()}
@@ -476,7 +475,7 @@ func (s *Session) Givens() []string {
 
 // givensOf are a scenario's Given steps, Background first, each And and But after a Given
 // with them, placeholders filled in: what setup sets up, which the checklist leaves out.
-func givensOf(scenario project.Scenario, row []runs.Pair) []string {
+func givensOf(scenario project.Scenario, row []RunPair) []string {
 	assert.That(scenario.Name != "", "the scenario has a name")
 	assert.That(len(scenario.Steps) <= HelpersMax, "steps stay bounded")
 	givens := make([]string, 0, len(scenario.Background)+len(scenario.Steps))
@@ -643,7 +642,7 @@ func (s *Session) Mark(item string, mark string) error {
 // SetRunNote sets the note that "Record run" saves with the run. Needed by "Record a run".
 func (s *Session) SetRunNote(note string) error {
 	assert.That(s != nil, "set note runs on a session")
-	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
+	assert.That(len(note) <= RunNoteBytesMax, "a note fits NoteBytesMax")
 	s.note = note
 	return nil
 }
@@ -654,21 +653,21 @@ func (s *Session) SetRunNote(note string) error {
 // records nothing and shows MessageMarkEachCheck instead.
 func (s *Session) RecordRun(note string) error {
 	assert.That(s != nil, "record run runs on a session")
-	assert.That(len(note) <= runs.NoteBytesMax, "a note fits NoteBytesMax")
+	assert.That(len(note) <= RunNoteBytesMax, "a note fits NoteBytesMax")
 	if s.Status() != SessionReady {
 		return errors.New("setup hasn't finished, so there's no run to record")
 	}
 	if warning := examplesWarning(s.scenario); warning != "" {
 		return errors.New(warning)
 	}
-	result := runs.ResultPass
+	result := RunResultPass
 	for _, item := range s.checklist {
 		if item.Mark == "" {
 			s.message = MessageMarkEachCheck
 			return nil
 		}
 		if item.Mark == MarkFail {
-			result = runs.ResultFail
+			result = RunResultFail
 		}
 	}
 	if note == "" {
@@ -679,9 +678,9 @@ func (s *Session) RecordRun(note string) error {
 	if err != nil {
 		return err
 	}
-	run := runs.Run{
+	run := Run{
 		Time: window.app.config.Clock.Now(), Key: s.key(), Result: result,
-		Author: runs.Author(filepath.Dir(window.path)), Values: s.row,
+		Author: RunAuthor(filepath.Dir(window.path)), Values: s.row,
 		Fingerprint: parts, Note: note,
 	}
 	// Where the run goes is Keep runs off main's: the ref, or capabilities/runs.
@@ -697,13 +696,13 @@ func (s *Session) RecordRun(note string) error {
 func (s *Session) key() string {
 	assert.That(s.scenario.Slug != "", "the scenario has a slug")
 	assert.That(s.scenario.Capability != "", "the scenario belongs to a capability")
-	return runs.Key(s.scenario.Key(), s.examples)
+	return RunKey(s.scenario.Key(), s.examples)
 }
 
 // Scenario: Attach proof to a run
 
 // Files attached to a Drop in: proof, like a screenshot, that "Record run" copies into the
-// run's own folder in runs/. See internal/runs/files.go for where they go.
+// run's own folder in runs/. AttachedFilesDir (big_helpers.go) says where they go.
 
 // Attach adds the file at path to the files "Record run" keeps with the run. A file with the
 // same name as one already attached takes its place. Needed by "Attach proof to a run".
@@ -713,28 +712,28 @@ func (s *Session) Attach(path string) error {
 	if !filepath.IsAbs(path) {
 		return fmt.Errorf("an attached file needs an absolute path, not %q", path)
 	}
-	if err := runs.CheckFile(path); err != nil {
+	if err := CheckAttachedFile(path); err != nil {
 		return err
 	}
 	name := filepath.Base(path)
-	if name == runs.NoteFileName {
+	if name == RunNoteFileName {
 		return fmt.Errorf("%s is the run note's own name; rename the file to attach it", name)
 	}
 	kept := slices.DeleteFunc(s.attachments, func(attached string) bool {
 		return filepath.Base(attached) == name
 	})
-	if len(kept) >= runs.FilesPerRunMax {
-		return fmt.Errorf("a run keeps at most %d files", runs.FilesPerRunMax)
+	if len(kept) >= FilesPerRunMax {
+		return fmt.Errorf("a run keeps at most %d files", FilesPerRunMax)
 	}
 	s.attachments = append(kept, path)
-	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	assert.That(len(s.attachments) <= FilesPerRunMax, "attachments stay bounded")
 	return nil
 }
 
 // Detach takes the attached file called name off again.
 func (s *Session) Detach(name string) error {
 	assert.That(s != nil, "detach runs on a session")
-	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	assert.That(len(s.attachments) <= FilesPerRunMax, "attachments stay bounded")
 	before := len(s.attachments)
 	s.attachments = slices.DeleteFunc(s.attachments, func(attached string) bool {
 		return filepath.Base(attached) == name
@@ -748,20 +747,20 @@ func (s *Session) Detach(name string) error {
 // Attachments lists the paths of the attached files, in the order they were attached.
 func (s *Session) Attachments() []string {
 	assert.That(s != nil, "attachments runs on a session")
-	assert.That(len(s.attachments) <= runs.FilesPerRunMax, "attachments stay bounded")
+	assert.That(len(s.attachments) <= FilesPerRunMax, "attachments stay bounded")
 	return append(make([]string, 0, len(s.attachments)), s.attachments...)
 }
 
 // runFiles lists the paths of the files kept with run, for its line in the history. A folder
 // that can't be read lists none: the run itself still shows.
-func runFiles(capabilities string, run runs.Run) []string {
+func runFiles(capabilities string, run Run) []string {
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
 	assert.That(run.Key != "", "a run has a key")
-	names, err := runs.Files(capabilities, run)
+	names, err := AttachedFiles(capabilities, run)
 	if err != nil {
 		return []string{}
 	}
-	folder := runs.FolderOf(capabilities, run)
+	folder := AttachedFilesFolder(capabilities, run)
 	paths := make([]string, 0, len(names))
 	for _, name := range names {
 		paths = append(paths, filepath.Join(folder, name))
@@ -1424,8 +1423,8 @@ const (
 )
 
 // fillPlaceholders puts a row's values in place of its <column> placeholders.
-func fillPlaceholders(text string, row []runs.Pair) string {
-	assert.That(len(row) <= runs.FieldsMax, "a row stays bounded")
+func fillPlaceholders(text string, row []RunPair) string {
+	assert.That(len(row) <= RunFieldsMax, "a row stays bounded")
 	assert.That(len(text) <= NameLengthMax*64, "a step stays bounded")
 	for _, value := range row {
 		text = strings.ReplaceAll(text, "<"+value.Name+">", value.Value)
@@ -1652,6 +1651,54 @@ func RenderedMarkdown(text string) string {
 	return strings.TrimSpace(shown)
 }
 
+// From internal/runs: who recorded a run, and the files attached to one. The run log is in
+// big_helpers.go.
+
+// runAuthorTimeout bounds the one git call RunAuthor makes.
+const runAuthorTimeout = 5 * time.Second
+
+// RunAuthor is git's user.name as seen from dir, or "" when git isn't installed, dir isn't in a
+// repository with one, or git takes too long. A run is still recorded without a name.
+// Ref: https://git-scm.com/docs/git-config#Documentation/git-config.txt-username
+func RunAuthor(dir string) string {
+	assert.That(filepath.IsAbs(dir), "dir is absolute")
+	assert.That(runAuthorTimeout > 0, "the git call has a limit")
+	ctx, cancel := context.WithTimeout(context.Background(), runAuthorTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "git", "config", "user.name")
+	command.Dir = dir
+	output, err := command.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// AttachedFiles lists the names of the files attached to run, sorted, its note.md left out. A run
+// with no folder has none.
+func AttachedFiles(capabilities string, run Run) ([]string, error) {
+	assert.That(run.Key != "", "a run has a key")
+	assert.That(!run.Time.IsZero(), "a run has a time")
+	// ReadDir returns entries sorted by name.
+	// Ref: https://pkg.go.dev/os#ReadDir
+	entries, err := os.ReadDir(AttachedFilesFolder(capabilities, run))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, min(len(entries), FilesPerRunMax))
+	for _, entry := range entries {
+		if entry.Type().IsRegular() && entry.Name() != RunNoteFileName &&
+			len(names) < FilesPerRunMax {
+			names = append(names, entry.Name())
+		}
+	}
+	assert.That(sort.StringsAreSorted(names), "names come back sorted")
+	return names, nil
+}
+
 // Feature: Gherkin files
 //
 // capabilities/gherkin-files. Givens reads each capability's one .feature file with the
@@ -1815,16 +1862,16 @@ func (w *Window) moveToOwnCapability() error {
 
 // Feature: Keep runs off main
 //
-// capabilities/keep-runs-off-main. In a git repository with an origin remote, runs go to the
-// git ref refs/givens/runs, which Givens fetches, merges and pushes itself; without one, they go
-// in capabilities/runs. Code elsewhere: Drop in's RecordRun records through
-// keepRun; Open a project's Open calls openRunStore, and its OpenBranch links a branch's copy to
-// the ref (runs.LinkRefCopy), which is "Another branch shows runs kept off main"; refresh
-// (big_helpers.go) calls pollRunsSync. Core glue shows runsMessages (Snapshot, snapshot.go),
-// adds runsOffers and runs "Move runs off main", "Share runs" and "Change run limits"
-// (allOffers and Choose, offers.go), and Select clears runsNote (selection.go). Window's runs
-// fields are in window.go's type; RunStore, at the section's end, does the git work and
-// internal/runs writes, reads and trims runs; `givens sync` is cmd/givens/panels.go.
+// capabilities/keep-runs-off-main. In a git repository with an origin remote, runs go to the git
+// ref refs/givens/runs, which Givens fetches, merges and pushes itself; without one, they go in
+// capabilities/runs. Code elsewhere: Drop in's RecordRun records through keepRun; Open a project's
+// Open calls openRunStore, and its OpenBranch links a branch's copy to the ref (LinkRunsRefCopy),
+// which is "Another branch shows runs kept off main"; refresh (big_helpers.go) calls pollRunsSync.
+// Core glue shows runsMessages (Snapshot, snapshot.go), adds runsOffers and runs "Move runs off
+// main", "Share runs" and "Change run limits" (allOffers and Choose, offers.go), and Select clears
+// runsNote (selection.go). Window's runs fields are in window.go's type; RunStore, at the section's
+// end, does the git work and the run log's code (from internal/runs, here and in big_helpers.go)
+// writes, reads and trims runs; `givens sync` is cmd/givens/panels.go.
 
 // In a git repository with a remote, a project keeps its runs off main by default: in the git
 // ref refs/givens/runs, which Givens fetches and pushes itself; RunStore does the git work.
@@ -1875,7 +1922,7 @@ To look by hand:
 // keepRun writes a recorded run where the project keeps its runs: into the ref's copy and out
 // to the remote when they're kept off main, or else in capabilities/runs. Drop in's RecordRun
 // calls it.
-func (w *Window) keepRun(run runs.Run, attachments []string, note string) error {
+func (w *Window) keepRun(run Run, attachments []string, note string) error {
 	assert.That(w != nil, "keep run runs on a window")
 	assert.That(run.Key != "", "a run has a key")
 	if w.keepsRunsOffMain() {
@@ -1890,24 +1937,24 @@ func (w *Window) keepRun(run runs.Run, attachments []string, note string) error 
 // attached files first, so a line is never there without them, then its note, then its
 // line. A second run of the scenario in the same second moves on a second, so it gets a
 // files folder of its own.
-func writeRun(root string, run runs.Run, attachments []string, note string) error {
+func writeRun(root string, run Run, attachments []string, note string) error {
 	assert.That(filepath.IsAbs(root), "runs are written under an absolute folder")
 	assert.That(run.Key != "", "a run has a key")
-	at, err := runs.FreeTime(root, run.Key, run.Time)
+	at, err := FreeRunTime(root, run.Key, run.Time)
 	if err != nil {
 		return err
 	}
 	run.Time = at
-	if err := runs.CopyFiles(root, run, attachments); err != nil {
+	if err := CopyAttachedFiles(root, run, attachments); err != nil {
 		return err
 	}
 	if strings.Contains(note, "\n") {
-		run.Note = runs.Summary(note)
-		if err := runs.WriteNote(root, run, note); err != nil {
+		run.Note = NoteSummary(note)
+		if err := WriteRunNote(root, run, note); err != nil {
 			return err
 		}
 	}
-	return runs.Append(root, run)
+	return AppendRun(root, run)
 }
 
 // KeepsRunsOffMain is true when the window's runs go to refs/givens/runs. `givens sync`
@@ -2081,7 +2128,7 @@ func (w *Window) syncRuns(timeout time.Duration) error {
 func (w *Window) runsOnMain() []string {
 	assert.That(w != nil, "runs on main runs on a window")
 	assert.That(filepath.IsAbs(w.path) || w.path == "", "a project's path is absolute")
-	logs, err := filepath.Glob(filepath.Join(runs.Dir(w.path), "*.log"))
+	logs, err := filepath.Glob(filepath.Join(RunsDir(w.path), "*.log"))
 	if err != nil {
 		return []string{}
 	}
@@ -2107,15 +2154,15 @@ func (w *Window) moveRunsOffMain() error {
 		return err
 	}
 	moving := w.runsOnMain()
-	if _, err := os.Stat(filepath.Join(runs.Dir(w.path), "files")); err == nil {
-		moving = append(moving, filepath.Join(runs.Dir(w.path), "files"))
+	if _, err := os.Stat(filepath.Join(RunsDir(w.path), "files")); err == nil {
+		moving = append(moving, filepath.Join(RunsDir(w.path), "files"))
 	}
 	for _, path := range moving {
 		if err := w.app.trash(path); err != nil {
 			return err
 		}
 	}
-	marker := filepath.Join(runs.Dir(w.path), runs.OffMainFileName)
+	marker := filepath.Join(RunsDir(w.path), OffMainFileName)
 	if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
 		return err
 	}
@@ -2130,35 +2177,35 @@ func (w *Window) moveRunsOffMain() error {
 
 // RunLimits are how many runs, and MB of them, the ref keeps: its limits file, or the
 // defaults until one is written. Needed by "Change the limits".
-func (w *Window) RunLimits() (runs.Limits, error) {
+func (w *Window) RunLimits() (RunLimits, error) {
 	assert.That(w != nil, "run limits run on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if !w.keepsRunsOffMain() {
-		return runs.Limits{}, ErrRunsOnMain
+		return RunLimits{}, ErrRunsOnMain
 	}
-	return runs.ReadLimits(w.runStore.Tree())
+	return ReadRunLimits(w.runStore.Tree())
 }
 
 // SetRunLimits writes the ref's limits and shares them, so every device trims the same way.
 // Lower limits trim the ref at once. Needed by "Change the limits".
-func (w *Window) SetRunLimits(limits runs.Limits) error {
+func (w *Window) SetRunLimits(limits RunLimits) error {
 	assert.That(w != nil, "set run limits runs on a window")
 	assert.That(w.app != nil, "a window belongs to an app")
 	if !w.keepsRunsOffMain() {
 		return ErrRunsOnMain
 	}
-	if limits.Runs < 1 || limits.Runs > runs.LimitMax || limits.Megabytes < 1 ||
-		limits.Megabytes > runs.LimitMax {
-		return fmt.Errorf("each limit is a whole number from 1 to %d", runs.LimitMax)
+	if limits.Runs < 1 || limits.Runs > RunLimitMax || limits.Megabytes < 1 ||
+		limits.Megabytes > RunLimitMax {
+		return fmt.Errorf("each limit is a whole number from 1 to %d", RunLimitMax)
 	}
-	write := func(tree string) error { return runs.WriteLimits(tree, limits) }
+	write := func(tree string) error { return WriteRunLimits(tree, limits) }
 	return w.afterRunsChange(w.runStore.Change(write, RunsNetworkTimeout))
 }
 
 // From internal/runref: the run store keeps a project's runs off main, in the git ref
 // refs/givens/runs, which it commits, fetches, merges and pushes itself. The ref is checked out
-// in <git common dir>/givens/tree (runs.RefCopy), where internal/runs reads and writes runs as
-// it does in capabilities/runs. The developer's working tree, their index and every branch
+// in <git common dir>/givens/tree (RunsRefCopy), where the run log is read and written as
+// it is in capabilities/runs. The developer's working tree, their index and every branch
 // are left alone.
 //
 // Git's plumbing builds each commit from the copy: `add` into an index of Givens's own, then
@@ -2211,20 +2258,20 @@ type RunStore struct {
 	capabilities string // the project's capabilities folder; git runs from here
 	gitDir       string // the repository's git common dir
 	dir          string // <gitDir>/givens: the copy, its index and the lock
-	tree         string // <dir>/tree, the copy: runs.RefCopy(capabilities)
+	tree         string // <dir>/tree, the copy: RunsRefCopy(capabilities)
 }
 
 // RunStoreOf finds the store of the repository holding capabilities, or false when it isn't in a
 // git repository. Nothing is written until the store is changed.
 func RunStoreOf(capabilities string) (RunStore, bool) {
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
-	gitDir := runs.GitCommonDir(capabilities)
+	gitDir := GitCommonDir(capabilities)
 	if gitDir == "" {
 		return RunStore{}, false
 	}
 	store := RunStore{
 		capabilities: capabilities, gitDir: gitDir,
-		dir: filepath.Join(gitDir, runs.RefDirName), tree: runs.RefCopy(capabilities),
+		dir: filepath.Join(gitDir, RunsRefDirName), tree: RunsRefCopy(capabilities),
 	}
 	assert.That(filepath.Dir(store.tree) == store.dir, "the copy is in the store's folder")
 	return store, true
@@ -2460,18 +2507,18 @@ func (s RunStore) keepHere(cause error) error {
 // trim writes the default limits file if the copy has none, then trims to the limits.
 func (s RunStore) trim() (bool, error) {
 	assert.That(s.tree != "", "the store was opened")
-	if _, err := os.Stat(filepath.Join(s.tree, runs.LimitsFileName)); errors.Is(err,
+	if _, err := os.Stat(filepath.Join(s.tree, RunLimitsFileName)); errors.Is(err,
 		fs.ErrNotExist) {
-		if err := runs.WriteLimits(s.tree, runs.DefaultLimits()); err != nil {
+		if err := WriteRunLimits(s.tree, DefaultRunLimits()); err != nil {
 			return false, err
 		}
 	}
-	limits, err := runs.ReadLimits(s.tree)
+	limits, err := ReadRunLimits(s.tree)
 	if err != nil {
 		return false, err
 	}
 	assert.That(limits.Runs > 0 && limits.Megabytes > 0, "limits keep something")
-	return runs.Prune(s.tree, limits)
+	return PruneRuns(s.tree, limits)
 }
 
 // push sends commit to the remote's ref. After a trim it replaces what's there, but only if
@@ -2519,7 +2566,7 @@ func (s RunStore) Unshared() (int, error) {
 	}
 	count := 0
 	for _, name := range names {
-		lines, err := runs.ReadLines(filepath.Join(s.tree, filepath.FromSlash(name)))
+		lines, err := ReadDayLogLines(filepath.Join(s.tree, filepath.FromSlash(name)))
 		if err != nil {
 			return 0, err
 		}
@@ -2568,24 +2615,24 @@ func (s RunStore) lock() (func(), error) {
 func AdoptRuns(tree string, capabilities string) error {
 	assert.That(filepath.IsAbs(tree), "the copy is absolute")
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
-	logs, err := filepath.Glob(filepath.Join(runs.Dir(capabilities), "*.log"))
+	logs, err := filepath.Glob(filepath.Join(RunsDir(capabilities), "*.log"))
 	if err != nil {
 		return err
 	}
 	for _, from := range logs {
-		lines, err := runs.ReadLines(from)
+		lines, err := ReadDayLogLines(from)
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(runs.Dir(tree), filepath.Base(from))
-		have, err := runs.ReadLines(target)
+		target := filepath.Join(RunsDir(tree), filepath.Base(from))
+		have, err := ReadDayLogLines(target)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		merged := runs.MergeLines(nil, lines, have)
+		merged := MergeRunLines(nil, lines, have)
 		if err := os.WriteFile(target, []byte(strings.Join(merged, "\n")+"\n"), 0o644); err != nil {
 			return err
 		}
@@ -2597,7 +2644,7 @@ func AdoptRuns(tree string, capabilities string) error {
 func adoptFiles(tree string, capabilities string) error {
 	assert.That(filepath.IsAbs(tree), "the copy is absolute")
 	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
-	from := filepath.Join(runs.Dir(capabilities), "files")
+	from := filepath.Join(RunsDir(capabilities), "files")
 	copied := 0
 	err := filepath.WalkDir(from, func(at string, entry fs.DirEntry, err error) error {
 		if err != nil || !entry.Type().IsRegular() {
@@ -2610,7 +2657,7 @@ func adoptFiles(tree string, capabilities string) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(runs.Dir(tree), "files", relative)
+		target := filepath.Join(RunsDir(tree), "files", relative)
 		if _, err := os.Stat(target); err == nil {
 			return nil
 		}
@@ -2622,12 +2669,12 @@ func adoptFiles(tree string, capabilities string) error {
 	return err
 }
 
-// copyFile copies one attached file, which CopyFiles already held to runs.FileBytesMax.
+// copyFile copies one attached file, which CopyAttachedFiles already held to AttachedFileBytesMax.
 // Ref: https://pkg.go.dev/io#Copy
 func copyFile(source string, target string) error {
 	assert.That(source != target, "a file isn't copied onto itself")
 	assert.That(filepath.IsAbs(target), "the target is absolute")
-	if err := runs.CheckFile(source); err != nil {
+	if err := CheckAttachedFile(source); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -2642,7 +2689,7 @@ func copyFile(source string, target string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, io.LimitReader(in, runs.FileBytesMax)); err != nil {
+	if _, err := io.Copy(out, io.LimitReader(in, AttachedFileBytesMax)); err != nil {
 		return errors.Join(err, out.Close())
 	}
 	return out.Close()
@@ -2650,7 +2697,7 @@ func copyFile(source string, target string) error {
 
 // merge brings what the remote's ref holds into the copy, three ways: base is the remote's
 // ref as this device last saw it. A day's log keeps the remote's lines and this device's new
-// ones (runs.MergeLines). A file the remote added comes in; one it removed since base goes,
+// ones (MergeRunLines). A file the remote added comes in; one it removed since base goes,
 // so a trim on another device isn't undone here; one only this device has stays. The
 // remote's limits file wins.
 func (s RunStore) merge(base string, remote string) error {
@@ -2679,7 +2726,7 @@ func (s RunStore) merge(base string, remote string) error {
 		if isLog(name) {
 			continue
 		}
-		if name == runs.LimitsFileName || (!localFiles[name] && !baseFiles[name]) {
+		if name == RunLimitsFileName || (!localFiles[name] && !baseFiles[name]) {
 			incoming = append(incoming, name)
 		}
 	}
@@ -2724,12 +2771,12 @@ func (s RunStore) mergeLogs(base string, remote string, localFiles map[string]bo
 	for _, name := range names {
 		local := []string{}
 		if localFiles[name] {
-			local, err = runs.ReadLines(filepath.Join(s.tree, filepath.FromSlash(name)))
+			local, err = ReadDayLogLines(filepath.Join(s.tree, filepath.FromSlash(name)))
 			if err != nil {
 				return err
 			}
 		}
-		merged := runs.MergeLines(linesOf(baseLogs[name]), local, linesOf(remoteLogs[name]))
+		merged := MergeRunLines(linesOf(baseLogs[name]), local, linesOf(remoteLogs[name]))
 		if err := s.writeLog(name, merged); err != nil {
 			return err
 		}
@@ -2753,7 +2800,7 @@ func linesOf(text []byte) []string {
 // writeLog writes a day's log in the copy, or removes it when no line is left.
 func (s RunStore) writeLog(name string, lines []string) error {
 	assert.That(isLog(name), "a day's log is written")
-	assert.That(len(lines) <= treeFilesMax*runs.FieldsMax, "lines stay bounded")
+	assert.That(len(lines) <= treeFilesMax*RunFieldsMax, "lines stay bounded")
 	if len(lines) == 0 {
 		return s.removeFile(name)
 	}
@@ -2886,6 +2933,522 @@ func (s RunStore) removeFile(name string) error {
 	parent := filepath.Dir(target)
 	// bound: each step goes one folder up, and stops at the copy.
 	for parent != s.tree && strings.HasPrefix(parent, s.tree) {
+		// Remove fails on a folder that isn't empty, which ends the walk.
+		// Ref: https://pkg.go.dev/os#Remove
+		if os.Remove(parent) != nil {
+			return nil
+		}
+		parent = filepath.Dir(parent)
+	}
+	return nil
+}
+
+// From internal/runs: writing a run, its attached files and its note, the file left in runs/
+// once they move off main, the three-way merge of a day's log, and trimming the ref. Reading the
+// run log is in big_helpers.go.
+
+// AppendRun adds run to its day's file, making runs/ if needed.
+func AppendRun(capabilities string, run Run) error {
+	assert.That(!run.Time.IsZero(), "a run has a time")
+	assert.That(run.Result == RunResultPass || run.Result == RunResultFail, "a run has a result")
+	line := formatRun(run)
+	if len(line) > RunLineLengthBytesMax {
+		return fmt.Errorf("the run line for %s is %d bytes, more than %d", run.Key, len(line),
+			RunLineLengthBytesMax)
+	}
+	if err := os.MkdirAll(RunsDir(capabilities), 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(RunsDir(capabilities), run.Time.Format(time.DateOnly)+".log")
+	// O_APPEND makes each write land at the end of the file, so the log is never rewritten.
+	// Ref: https://pkg.go.dev/os#OpenFile
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := file.WriteString(line + "\n"); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+// FreeRunSecondsMax bounds how many seconds FreeRunTime looks past a run's time.
+const FreeRunSecondsMax = 60
+
+// FreeRunTime is the first whole second from at on that no run of key was recorded at and no
+// folder of key's files is named after. A run's files are found from its key and time, to the
+// second, so two runs of one scenario in the same second would share a folder: the later one
+// is recorded a second on instead, and the run line's format stays as it is.
+func FreeRunTime(capabilities string, key string, at time.Time) (time.Time, error) {
+	assert.That(filepath.IsAbs(capabilities), "capabilities is absolute")
+	assert.That(key != "", "a run has a key")
+	candidate := at.Truncate(time.Second)
+	for range FreeRunSecondsMax {
+		taken, err := runTimeTaken(capabilities, key, candidate)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if !taken {
+			assert.That(!candidate.Before(at.Truncate(time.Second)), "a run never moves back")
+			return candidate, nil
+		}
+		candidate = candidate.Add(time.Second)
+	}
+	return time.Time{}, fmt.Errorf("%s has a run in each of the %d seconds from %s", key,
+		FreeRunSecondsMax, at.Format(time.RFC3339))
+}
+
+// runTimeTaken is true when key has a run line at at, in that day's file, or a files folder
+// named after at.
+func runTimeTaken(capabilities string, key string, at time.Time) (bool, error) {
+	assert.That(key != "", "a run has a key")
+	assert.That(at.Equal(at.Truncate(time.Second)), "run times are whole seconds")
+	if _, err := os.Stat(AttachedFilesDir(capabilities, key, at)); err == nil {
+		return true, nil
+	}
+	found, err := readRunFile(filepath.Join(RunsDir(capabilities), at.Format(time.DateOnly)+".log"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, run := range found {
+		if run.Key == key && run.Time.Equal(at) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// CopyAttachedFiles copies each of paths into run's folder, keeping their names; the originals stay
+// where they are. If any copy fails, the folder is removed again, so no run points at half its
+// files.
+func CopyAttachedFiles(capabilities string, run Run, paths []string) error {
+	assert.That(len(paths) <= FilesPerRunMax, "attached files stay bounded")
+	assert.That(namesUnique(paths), "attached files have different names")
+	if len(paths) == 0 {
+		return nil
+	}
+	folder := AttachedFilesDir(capabilities, run.Key, run.Time)
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if err := copyAttachedFile(path, filepath.Join(folder, filepath.Base(path))); err != nil {
+			return errors.Join(err, os.RemoveAll(folder))
+		}
+	}
+	return nil
+}
+
+// copyAttachedFile copies one regular file of at most AttachedFileBytesMax bytes from source to
+// target.
+// Ref: https://pkg.go.dev/io#Copy
+func copyAttachedFile(source string, target string) error {
+	assert.That(source != target, "a file isn't copied onto itself")
+	assert.That(filepath.IsAbs(target), "target is absolute")
+	if err := CheckAttachedFile(source); err != nil {
+		return err
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	// LimitReader stops a file that grew since CheckAttachedFile from filling the disk.
+	// Ref: https://pkg.go.dev/io#LimitReader
+	written, err := io.Copy(out, io.LimitReader(in, AttachedFileBytesMax+1))
+	if err != nil {
+		return errors.Join(err, out.Close())
+	}
+	if written > AttachedFileBytesMax {
+		return errors.Join(fmt.Errorf("%s grew past %d MB while it was copied",
+			filepath.Base(source), AttachedFileBytesMax>>20), out.Close())
+	}
+	return out.Close()
+}
+
+// namesUnique is true when no two of paths share a file name.
+func namesUnique(paths []string) bool {
+	assert.That(len(paths) <= FilesPerRunMax, "paths stay bounded")
+	seen := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		if seen[filepath.Base(path)] {
+			return false
+		}
+		seen[filepath.Base(path)] = true
+	}
+	return true
+}
+
+// NoteSummary is what a run line keeps of note: its first line that has text, any Markdown
+// heading marks taken off. "## Retry button\nIt's below the fold" gives "Retry button".
+func NoteSummary(note string) string {
+	assert.That(len(note) <= RunNoteBytesMax, "a note fits RunNoteBytesMax")
+	for _, line := range strings.Split(note, "\n") {
+		trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	assert.That(strings.TrimSpace(note) == "" || strings.Trim(note, "#\n\t\r ") == "",
+		"only a note with no text has no summary")
+	return ""
+}
+
+// WriteRunNote keeps note whole as note.md in run's folder, making the folder if needed.
+func WriteRunNote(capabilities string, run Run, note string) error {
+	assert.That(len(note) <= RunNoteBytesMax, "a note fits RunNoteBytesMax")
+	assert.That(note != "", "an empty note isn't written")
+	folder := AttachedFilesDir(capabilities, run.Key, run.Time)
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(folder, RunNoteFileName), []byte(note), 0o644)
+}
+
+// OffMainFileName is the file left in capabilities/runs/ once its runs moved to the ref: it
+// says where they went, for anyone who looks.
+const OffMainFileName = "off-main.md"
+
+// MergeRunLines merges a day's log three ways: remote's lines, then local lines that base didn't
+// have, each once. A line base had and remote dropped stays dropped, so a trim on one device
+// isn't undone by another.
+func MergeRunLines(base []string, local []string, remote []string) []string {
+	assert.That(len(local) <= RunLineLengthBytesMax, "lines stay bounded")
+	assert.That(len(remote) <= RunLineLengthBytesMax, "lines stay bounded")
+	inBase := make(map[string]bool, len(base))
+	for _, line := range base {
+		inBase[line] = true
+	}
+	merged := make([]string, 0, len(remote)+len(local))
+	seen := make(map[string]bool, len(remote)+len(local))
+	for _, line := range remote {
+		if line != "" && !seen[line] {
+			merged, seen[line] = append(merged, line), true
+		}
+	}
+	for _, line := range local {
+		if line != "" && !seen[line] && !inBase[line] {
+			merged, seen[line] = append(merged, line), true
+		}
+	}
+	assert.That(len(merged) <= len(remote)+len(local), "a merge adds no line")
+	return merged
+}
+
+// What the ref keeps. It holds the newest runs only, so it can't grow without end: past
+// either limit the oldest runs go, until both are at PruneToPercent or less, so it isn't
+// trimmed on every run. The limits live in the ref's own limits file, so every device trims
+// the same way. See "Old runs are dropped" in capabilities/keep-runs-off-main.
+const (
+	// RunLimitsFileName is the limits file at the root of the ref's copy.
+	RunLimitsFileName = "limits"
+	// RunsKeptDefault is how many runs the ref keeps when its limits file doesn't say.
+	RunsKeptDefault = 1000
+	// MegabytesKeptDefault is how many MB of runs the ref keeps when its limits file doesn't
+	// say. GitHub asks for repositories under 1 GB, ideally; this leaves most of that for code.
+	// Ref: https://docs.github.com/en/repositories/working-with-files/managing-large-files
+	MegabytesKeptDefault = 250
+	// PruneToPercent is how far a trim goes below each limit.
+	PruneToPercent = 80
+	// runLimitsBytesMax bounds the limits file: two short lines.
+	runLimitsBytesMax = 1024
+	// RunLimitMax bounds either limit: a million runs, or a million MB.
+	RunLimitMax = 1_000_000
+)
+
+// RunLimits bound what the ref keeps: the newest Runs runs, or Megabytes MB of them, whichever
+// is fewer. A run's size is its line and its files folder.
+type RunLimits struct {
+	Runs      int
+	Megabytes int
+}
+
+// DefaultRunLimits are the limits of a ref whose limits file doesn't say.
+func DefaultRunLimits() RunLimits {
+	limits := RunLimits{Runs: RunsKeptDefault, Megabytes: MegabytesKeptDefault}
+	assert.That(limits.Runs > 0, "the default keeps runs")
+	assert.That(limits.Megabytes > 0, "the default keeps bytes")
+	return limits
+}
+
+// ReadRunLimits reads root/limits: a "runs N" line and a "megabytes N" line. A missing file, or
+// a missing line, gives the default.
+func ReadRunLimits(root string) (RunLimits, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	limits := DefaultRunLimits()
+	path := filepath.Join(root, RunLimitsFileName)
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return limits, nil
+	}
+	if err != nil {
+		return RunLimits{}, err
+	}
+	if info.Size() > runLimitsBytesMax {
+		return RunLimits{}, fmt.Errorf("%s is %d bytes, more than %d", path, info.Size(),
+			runLimitsBytesMax)
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return RunLimits{}, err
+	}
+	for _, line := range strings.Split(string(text), "\n") {
+		name, value, _ := strings.Cut(strings.TrimSpace(line), " ")
+		number, err := strconv.Atoi(strings.TrimSpace(value))
+		if name == "" {
+			continue
+		}
+		if err != nil || number < 1 || number > RunLimitMax {
+			return RunLimits{}, fmt.Errorf("%s: %q isn't a limit from 1 to %d", path, line,
+				RunLimitMax)
+		}
+		switch name {
+		case "runs":
+			limits.Runs = number
+		case "megabytes":
+			limits.Megabytes = number
+		default:
+			return RunLimits{}, fmt.Errorf("%s: no limit is called %q", path, name)
+		}
+	}
+	return limits, nil
+}
+
+// WriteRunLimits writes root/limits.
+func WriteRunLimits(root string, limits RunLimits) error {
+	assert.That(limits.Runs > 0 && limits.Runs <= RunLimitMax, "a run limit is in range")
+	assert.That(limits.Megabytes > 0 && limits.Megabytes <= RunLimitMax, "a MB limit is in range")
+	text := fmt.Sprintf("runs %d\nmegabytes %d\n", limits.Runs, limits.Megabytes)
+	return os.WriteFile(filepath.Join(root, RunLimitsFileName), []byte(text), 0o644)
+}
+
+// logLine is one line of a day's log, with what a trim weighs it by.
+type logLine struct {
+	file  string // the day's log it's in
+	text  string
+	run   Run
+	read  bool  // false for a line that can't be read; it's kept and not counted
+	bytes int64 // the line and its files folder
+}
+
+// PruneRuns trims root/runs to limits, when either is passed: it keeps the newest runs, with their
+// files, until both are at PruneToPercent or less, and each scenario's newest run line
+// whatever its age, so none goes back to "Never run". It says whether anything went.
+func PruneRuns(root string, limits RunLimits) (bool, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(limits.Runs > 0 && limits.Megabytes > 0, "limits keep something")
+	lines, err := readLogLines(root)
+	if err != nil {
+		return false, err
+	}
+	count, total := 0, int64(0)
+	for _, line := range lines {
+		if line.read {
+			count, total = count+1, total+line.bytes
+		}
+	}
+	bytesMax := int64(limits.Megabytes) << 20
+	if count <= limits.Runs && total <= bytesMax {
+		return false, nil
+	}
+	kept := keptLines(lines, limits.Runs*PruneToPercent/100, bytesMax*PruneToPercent/100)
+	assert.That(len(kept) <= len(lines), "a trim keeps only lines there are")
+	return rewriteLogs(root, lines, kept)
+}
+
+// readLogLines reads every line of root's day logs, weighed.
+func readLogLines(root string) ([]logLine, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	paths, err := filepath.Glob(filepath.Join(RunsDir(root), "*.log"))
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) > RunLogFilesMax {
+		return nil, fmt.Errorf("runs/ holds %d files, more than %d", len(paths), RunLogFilesMax)
+	}
+	lines := make([]logLine, 0, len(paths)*8)
+	for _, path := range paths {
+		texts, err := ReadDayLogLines(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, text := range texts {
+			line := logLine{file: path, text: text, bytes: int64(len(text) + 1)}
+			if run, err := ParseRun(text); err == nil {
+				line.run, line.read = run, true
+				line.bytes += runFilesFolderBytes(AttachedFilesDir(root, run.Key, run.Time))
+			}
+			lines = append(lines, line)
+		}
+	}
+	return lines, nil
+}
+
+// ReadDayLogLines reads a day's log as its lines, blank ones left out.
+// Ref: https://pkg.go.dev/bufio#Scanner.Buffer
+func ReadDayLogLines(path string) ([]string, error) {
+	assert.That(strings.HasSuffix(path, ".log"), "path is a run file")
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 4096), RunLineLengthBytesMax+1)
+	texts := make([]string, 0, 16)
+	// bound: Scan stops at the end of the file, which holds one day of runs.
+	for scanner.Scan() {
+		if text := scanner.Text(); strings.TrimSpace(text) != "" {
+			texts = append(texts, text)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	assert.That(len(texts) >= 0, "lines are counted")
+	return texts, file.Close()
+}
+
+// runFilesFolderBytes is the size of a run's files folder: one level, as CopyAttachedFiles makes
+// it.
+func runFilesFolderBytes(folder string) int64 {
+	assert.That(filepath.IsAbs(folder), "the folder is absolute")
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		return 0
+	}
+	total := int64(0)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && info.Mode().IsRegular() {
+			total += info.Size()
+		}
+	}
+	assert.That(total >= 0, "sizes add up")
+	return total
+}
+
+// keptLines picks which lines a trim keeps, by index: lines that can't be read, the newest
+// runs while both counts stay within runsMax and bytesMax, and each run key and row's newest.
+// A line in the map stays; true keeps its files too.
+func keptLines(lines []logLine, runsMax int, bytesMax int64) map[int]bool {
+	assert.That(runsMax >= 0, "a run limit isn't negative")
+	assert.That(bytesMax >= 0, "a byte limit isn't negative")
+	order := make([]int, 0, len(lines))
+	kept := make(map[int]bool, len(lines))
+	for index, line := range lines {
+		if line.read {
+			order = append(order, index)
+		} else {
+			kept[index] = true
+		}
+	}
+	// Newest first; ties broken by key, then text, so every device picks the same runs.
+	// Ref: https://pkg.go.dev/sort#Slice
+	sort.Slice(order, func(a, b int) bool {
+		first, second := lines[order[a]], lines[order[b]]
+		if !first.run.Time.Equal(second.run.Time) {
+			return first.run.Time.After(second.run.Time)
+		}
+		if first.run.Key != second.run.Key {
+			return first.run.Key < second.run.Key
+		}
+		return first.text < second.text
+	})
+	count, total := 0, int64(0)
+	for _, index := range order {
+		if count+1 > runsMax || total+lines[index].bytes > bytesMax {
+			break
+		}
+		kept[index], count, total = true, count+1, total+lines[index].bytes
+	}
+	newest := make(map[string]bool, len(order))
+	for _, index := range order {
+		if row := runRowKey(lines[index].run); !newest[row] {
+			newest[row] = true
+			if !kept[index] {
+				kept[index] = false // the line stays; its files go
+			}
+		}
+	}
+	return kept
+}
+
+// runRowKey names a run key and its row's values, the unit whose newest run is always kept.
+func runRowKey(run Run) string {
+	assert.That(run.Key != "", "a run has a key")
+	assert.That(len(run.Values) <= RunFieldsMax, "a row stays bounded")
+	key := run.Key
+	for _, value := range run.Values {
+		key += "\t" + value.Name + "=" + value.Value
+	}
+	return key
+}
+
+// rewriteLogs writes each day's log with only its kept lines, removes a log left empty, and
+// removes the files folders of runs kept without their files. It says whether anything went.
+func rewriteLogs(root string, lines []logLine, kept map[int]bool) (bool, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(len(kept) <= len(lines), "only lines are kept")
+	byFile := make(map[string][]string, 8)
+	files := make([]string, 0, 8)
+	changed := false
+	for index, line := range lines {
+		if _, seen := byFile[line.file]; !seen {
+			files, byFile[line.file] = append(files, line.file), []string{}
+		}
+		withFiles, stays := kept[index]
+		if stays {
+			byFile[line.file] = append(byFile[line.file], line.text)
+		}
+		folder := ""
+		if line.read {
+			folder = AttachedFilesDir(root, line.run.Key, line.run.Time)
+		}
+		if _, err := os.Stat(folder); folder != "" && !withFiles && err == nil {
+			if err := removeRunFilesFolder(root, folder); err != nil {
+				return false, err
+			}
+			changed = true
+		}
+		changed = changed || !stays
+	}
+	for _, file := range files {
+		if err := writeDayLog(file, byFile[file]); err != nil {
+			return false, err
+		}
+	}
+	return changed, nil
+}
+
+// writeDayLog writes a day's log, or removes it when no line is left.
+func writeDayLog(path string, texts []string) error {
+	assert.That(strings.HasSuffix(path, ".log"), "path is a run file")
+	assert.That(len(texts) <= RunLogFilesMax*RunLineLengthBytesMax, "lines stay bounded")
+	if len(texts) == 0 {
+		return os.Remove(path)
+	}
+	return os.WriteFile(path, []byte(strings.Join(texts, "\n")+"\n"), 0o644)
+}
+
+// removeRunFilesFolder removes a run's files folder, then each parent left empty, up to runs/files.
+func removeRunFilesFolder(root string, folder string) error {
+	assert.That(filepath.IsAbs(folder), "the folder is absolute")
+	stop := filepath.Join(RunsDir(root), "files")
+	assert.That(strings.HasPrefix(folder, stop+string(filepath.Separator)), "it's a run's folder")
+	if err := os.RemoveAll(folder); err != nil {
+		return err
+	}
+	parent := filepath.Dir(folder)
+	// bound: each step goes one folder up, and stops at runs/files.
+	for parent != stop && strings.HasPrefix(parent, stop) {
 		// Remove fails on a folder that isn't empty, which ends the walk.
 		// Ref: https://pkg.go.dev/os#Remove
 		if os.Remove(parent) != nil {
@@ -3225,7 +3788,7 @@ func QuoteBashWord(text string) string {
 // "Create capabilities folder" and cuts a branch's offers with readOnly (allOffers and Choose,
 // offers.go). createCapabilities writes with writeNew (big_helpers.go), which Write stories'
 // NewScenario uses too. Open starts Keep runs off main's sync (openRunStore), and OpenBranch links
-// a branch's copy to the ref the project keeps runs in (runs.LinkRefCopy). Window's branch fields
+// a branch's copy to the ref the project keeps runs in (LinkRunsRefCopy). Window's branch fields
 // are in window.go's types. The end of this section, from internal/branch, copies a branch out of
 // git. The terminal scenarios are openFolder in cmd/givens/main.go and the TUI.
 
@@ -3514,7 +4077,7 @@ func (w *Window) OpenBranch(name string) (*Window, error) {
 		return nil, err
 	}
 	// Runs aren't kept per branch: the branch's window reads the ref this project keeps.
-	if err := runs.LinkRefCopy(copied, w.origin()); err != nil {
+	if err := LinkRunsRefCopy(copied, w.origin()); err != nil {
 		return nil, err
 	}
 	return w.app.openBranchWindow(copied, w.origin(), name)
@@ -3844,6 +4407,26 @@ func git(dir string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// From internal/runs: a branch's copy reads the runs its project keeps off main. The run log
+// is in big_helpers.go.
+
+// LinkRunsRefCopy writes the link file into copied, a branch's copy of the capabilities folder at
+// origin, so the branch's window reads the runs origin keeps off main. Nothing is written when
+// origin isn't in a git repository.
+func LinkRunsRefCopy(copied string, origin string) error {
+	assert.That(filepath.IsAbs(copied), "the copy is absolute")
+	assert.That(filepath.IsAbs(origin), "the origin is absolute")
+	tree := RunsRefCopy(origin)
+	if tree == "" {
+		return nil
+	}
+	if err := os.MkdirAll(RunsDir(copied), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(RunsDir(copied), RunsRefCopyLinkName), []byte(tree+"\n"),
+		0o644)
+}
+
 // Feature: Read a capability
 //
 // capabilities/read-a-capability. Selecting a capability shows its story, its scenarios and its
@@ -3891,7 +4474,7 @@ const RunsShownMax = 20
 // RunLine is one recorded run as a scenario's page lists it, so what's been tried shows
 // before dropping in. Records.swift's RunRecord.
 type RunLine struct {
-	Result string `json:"result"` // runs.ResultPass or runs.ResultFail
+	Result string `json:"result"` // RunResultPass or RunResultFail
 	Text   string `json:"text"`   // "Passed today at 14:05 by Sam", " · card=expired" for a row
 	Note   string `json:"note"`   // what was written with the run, or ""
 	// Files are the paths of the files kept with the run, like a screenshot.
@@ -3917,7 +4500,7 @@ func (w *Window) History(scenario project.Scenario) []RunLine {
 		w.histories = make(map[string][]RunLine, 16)
 	}
 	lines := []RunLine{}
-	if recorded, err := runs.Read(w.project.Root); err == nil && scenario.Slug != "" {
+	if recorded, err := ReadRuns(w.project.Root); err == nil && scenario.Slug != "" {
 		lines = historyOf(w.project.Root, recorded, scenario.Key(), now)
 	}
 	w.histories[key] = lines
@@ -3926,10 +4509,10 @@ func (w *Window) History(scenario project.Scenario) []RunLine {
 
 // historyOf picks out one scenario's runs, by its run key or a row's key under it, newest
 // first.
-func historyOf(capabilities string, recorded []runs.Run, key string, now time.Time) []RunLine {
+func historyOf(capabilities string, recorded []Run, key string, now time.Time) []RunLine {
 	assert.That(strings.Count(key, "/") == 1, "a scenario key is capability/slug")
 	assert.That(!now.IsZero(), "now is a time")
-	mine := make([]runs.Run, 0, 8)
+	mine := make([]Run, 0, 8)
 	for _, run := range recorded {
 		if run.Key == key || strings.HasPrefix(run.Key, key+"/") {
 			mine = append(mine, run)
@@ -3940,22 +4523,22 @@ func historyOf(capabilities string, recorded []runs.Run, key string, now time.Ti
 	lines := make([]RunLine, 0, min(len(mine), RunsShownMax))
 	for _, run := range mine[:min(len(mine), RunsShownMax)] {
 		// A note.md that can't be read leaves the run with its one-line note.
-		markdown, _ := runs.ReadNote(capabilities, run)
+		markdown, _ := ReadRunNote(capabilities, run)
 		lines = append(lines, RunLine{
 			Result: run.Result, Text: runText(run, now), Note: run.Note,
 			Files: runFiles(capabilities, run), NoteMarkdown: markdown,
-			Folder: runs.FolderOf(capabilities, run),
+			Folder: AttachedFilesFolder(capabilities, run),
 		})
 	}
 	return lines
 }
 
 // runText says one run as a person would: "Failed yesterday at 09:12 by Sam · card=expired".
-func runText(run runs.Run, now time.Time) string {
+func runText(run Run, now time.Time) string {
 	assert.That(!run.Time.IsZero(), "a run has a time")
-	assert.That(len(run.Values) <= runs.FieldsMax, "a row stays bounded")
+	assert.That(len(run.Values) <= RunFieldsMax, "a row stays bounded")
 	text := "Failed"
-	if run.Result == runs.ResultPass {
+	if run.Result == RunResultPass {
 		text = "Passed"
 	}
 	when := run.Time.In(now.Location())
@@ -4023,6 +4606,27 @@ func gherkinOf(scenario Scenario) string {
 		lines = append(lines, "  "+step)
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// From internal/runs: a run's whole note, for its history. The run log is in big_helpers.go.
+
+// ReadRunNote is run's whole note from its note.md, or "" when it has none.
+func ReadRunNote(capabilities string, run Run) (string, error) {
+	assert.That(run.Key != "", "a run has a key")
+	assert.That(!run.Time.IsZero(), "a run has a time")
+	path := filepath.Join(AttachedFilesFolder(capabilities, run), RunNoteFileName)
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if info.Size() > RunNoteBytesMax {
+		return "", fmt.Errorf("%s is %d bytes, more than %d", path, info.Size(), RunNoteBytesMax)
+	}
+	content, err := os.ReadFile(path)
+	return string(content), err
 }
 
 // Feature: Search everything
@@ -4564,9 +5168,9 @@ func (w *Window) helperCode(file string, line int) string {
 
 // stepsText is the scenario's block as it bears on a run: tags, steps and Examples, or only
 // the given row of them.
-func stepsText(scenario project.Scenario, row []runs.Pair) string {
+func stepsText(scenario project.Scenario, row []RunPair) string {
 	assert.That(scenario.Name != "", "the scenario has a name")
-	assert.That(len(row) <= runs.FieldsMax, "a row stays bounded")
+	assert.That(len(row) <= RunFieldsMax, "a row stays bounded")
 	var text strings.Builder
 	text.WriteString(strings.Join(scenario.Tags, " ") + "\n")
 	for _, step := range append(append([]project.Step{}, scenario.Background...),
@@ -4647,7 +5251,7 @@ func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Sc
 
 // calledHelpers fingerprints every helper the scenarios' setup scripts call, each seen from
 // its own capability, nested calls included, sorted by name.
-func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]runs.Pair, error) {
+func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]RunPair, error) {
 	assert.That(loaded != nil, "the project is loaded")
 	assert.That(len(scenarios) > 0, "there's at least the scenario itself")
 	shared, err := HelpersInFolder(loaded.Root, "", "")
@@ -4676,7 +5280,7 @@ func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]run
 }
 
 // sortedParts hashes each body, by name, in name order.
-func sortedParts(bodies map[string]string) []runs.Pair {
+func sortedParts(bodies map[string]string) []RunPair {
 	assert.That(bodies != nil, "there's a map of bodies")
 	assert.That(len(bodies) <= HelpersMax, "helpers stay bounded")
 	names := make([]string, 0, len(bodies))
@@ -4684,9 +5288,9 @@ func sortedParts(bodies map[string]string) []runs.Pair {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	parts := make([]runs.Pair, 0, len(names))
+	parts := make([]RunPair, 0, len(names))
 	for _, name := range names {
-		parts = append(parts, runs.Pair{Name: name, Value: hash(bodies[name])})
+		parts = append(parts, RunPair{Name: name, Value: hash(bodies[name])})
 	}
 	return parts
 }
@@ -4694,9 +5298,9 @@ func sortedParts(bodies map[string]string) []runs.Pair {
 // FingerprintChanged names the first part of now that differs from then, a run's fingerprint,
 // as a person would say it: "steps", "setup", "checkout/pay-with-saved-card setup" or a
 // helper's name. It's "" when nothing changed.
-func FingerprintChanged(then []runs.Pair, now []runs.Pair) string {
-	assert.That(len(then) <= runs.FieldsMax, "then stays bounded")
-	assert.That(len(now) <= runs.FieldsMax, "now stays bounded")
+func FingerprintChanged(then []RunPair, now []RunPair) string {
+	assert.That(len(then) <= RunFieldsMax, "then stays bounded")
+	assert.That(len(now) <= RunFieldsMax, "now stays bounded")
 	before := make(map[string]string, len(then))
 	for _, part := range then {
 		before[part.Name] = part.Value
@@ -6236,7 +6840,7 @@ func (w *Window) Rename(name string, newName string) error {
 		return fmt.Errorf("%s: %w", name, ErrNotFound)
 	}
 	rename := func() error { return w.renameScenario(scenario, newName) }
-	recorded, err := runs.Read(w.path)
+	recorded, err := ReadRuns(w.path)
 	if err != nil {
 		return err
 	}

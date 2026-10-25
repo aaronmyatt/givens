@@ -752,3 +752,42 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - tags_test.go is internal/app/tag_expression_test.go. Two errors the longer names pushed past
   100 columns were wrapped.
 - big.go 6,937 lines (+0), big_helpers.go 1,718 (+196), 25% of big.go.
+
+## internal/runs folds in (2026-10-25)
+- internal/runs is gone. The run log is in big_helpers.go before the scenario statuses, under
+  the package doc: the line format and its limits, `Run`, `RunPair`, `RunKey`, `RunsDir`,
+  reading (`ReadRuns`, `ReadRunsFolder`, `ParseRun`, `LatestRun`), the attached files' folder
+  and checks (`AttachedFilesDir`, `CheckAttachedFile`, `FilesPerRunMax`, the note limits), and
+  the ref's copy (`RunsRefCopy`, `GitCommonDir`, `AttachedFilesFolder`): Drop in, Keep runs off
+  main, Read a capability, Share setup and Write stories read it.
+- One-story parts went to their sections' ends: writing a run (`AppendRun`), `FreeRunTime`,
+  `CopyAttachedFiles`, the note's summary and file, `OffMainFileName`, `MergeRunLines` and all
+  of prune.go to Keep runs off main, after the run store; `RunAuthor` and `AttachedFiles` to
+  Drop in; `ReadRunNote` to Read a capability; `LinkRunsRefCopy` to Open a project. The
+  attached-files const block was split: `FreeRunSecondsMax` went with `FreeRunTime`.
+- Renames (most leaned on the qualifier): `Read` -> `ReadRuns`, `ReadFolder` ->
+  `ReadRunsFolder`, `Append`/`Parse`/`Latest`/`Prune` -> `AppendRun`/`ParseRun`/`LatestRun`/
+  `PruneRuns`, `Key` -> `RunKey`, `Dir` -> `RunsDir`, `Pair` -> `RunPair`, `Author` ->
+  `RunAuthor`, `ResultPass`/`ResultFail` -> `RunResultPass`/`RunResultFail`, `ErrBadLine` ->
+  `ErrBadRunLine`, `RunFilesMax` -> `RunLogFilesMax` (beside the attached files, "run files"
+  misled), `LineLengthBytesMax`/`FieldsMax` get a `Run` prefix; attached files say so:
+  `Files`/`FilesDir`/`FolderOf`/`CheckFile`/`CopyFiles`/`FileBytesMax` ->
+  `AttachedFiles`/`AttachedFilesDir`/`AttachedFilesFolder`/`CheckAttachedFile`/
+  `CopyAttachedFiles`/`AttachedFileBytesMax`, and the clash `copyFile` -> `copyAttachedFile`
+  (Keep runs off main's `copyFile` copies runs/files into the ref); `FreeTime` -> `FreeRunTime`; notes:
+  `Summary` -> `NoteSummary`, `WriteNote`/`ReadNote`/`NoteFileName`/`NoteBytesMax` get a `Run`;
+  the ref: `RefCopy`/`LinkRefCopy`/`RefCopyLinkName`/`RefDirName` -> `RunsRefCopy`/
+  `LinkRunsRefCopy`/`RunsRefCopyLinkName`/`RunsRefDirName` (like runref's `RunsRef`); limits:
+  `Limits`/`DefaultLimits`/`ReadLimits`/`WriteLimits`/`LimitMax`/`LimitsFileName` get a `Run`;
+  `ReadLines` -> `ReadDayLogLines`; unexported: `format` -> `formatRun`, `readFile` ->
+  `readRunFile`, `timeTaken` -> `runTimeTaken`, `rowKey` -> `runRowKey` (app's rows are outline
+  rows), `removeFolder` -> `removeRunFilesFolder`, `folderBytes` -> `runFilesFolderBytes`,
+  `writeLog` -> `writeDayLog`. `Run`, `GitCommonDir`, `FilesPerRunMax`, `OffMainFileName`,
+  `RunsKeptDefault`, `MegabytesKeptDefault`, `PruneToPercent` and the other unexported names kept
+  theirs: `Run` is the word every story uses.
+- Tests: runs_test.go, files_test.go and prune_test.go are internal/app/runs_test.go,
+  runs_files_test.go and runs_prune_test.go. Lines the longer names pushed past 100 columns
+  were rewrapped. Comments that said `runs.X` or internal/runs (Drop in's attached files, Keep
+  runs off main's opening comment and run store, Open a project's branch note) name the new
+  names; big.go's header list drops runs.
+- big.go 7,541 lines (+604), big_helpers.go 2,120 (+402), 28% of big.go.

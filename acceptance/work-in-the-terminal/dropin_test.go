@@ -10,7 +10,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/runs"
 )
 
 // outline is a Scenario Outline added to checkout.feature, with two rows and a setup.
@@ -211,14 +210,14 @@ func (s *state) markNoteRecord() error {
 }
 
 // latestRun is the newest run of Card declined.
-func (s *state) latestRun() (runs.Run, error) {
-	recorded, err := runs.Read(s.Capabilities())
+func (s *state) latestRun() (app.Run, error) {
+	recorded, err := app.ReadRuns(s.Capabilities())
 	if err != nil {
-		return runs.Run{}, err
+		return app.Run{}, err
 	}
-	latest, ok := runs.Latest(recorded, "checkout/card-declined", nil)
+	latest, ok := app.LatestRun(recorded, "checkout/card-declined", nil)
 	if !ok {
-		return runs.Run{}, fmt.Errorf("no run was recorded:\n%s", s.model.Text())
+		return app.Run{}, fmt.Errorf("no run was recorded:\n%s", s.model.Text())
 	}
 	return latest, nil
 }
@@ -228,7 +227,7 @@ func (s *state) recordedWithNote() error {
 	if err != nil {
 		return err
 	}
-	if latest.Note != "Declined as expected" || latest.Result != runs.ResultPass {
+	if latest.Note != "Declined as expected" || latest.Result != app.RunResultPass {
 		return fmt.Errorf("the run is %+v", latest)
 	}
 	return nil
@@ -282,7 +281,7 @@ func (s *state) screenshotKept() error {
 	if err != nil {
 		return err
 	}
-	kept := filepath.Join(runs.FolderOf(s.Capabilities(), latest), "shot.png")
+	kept := filepath.Join(app.AttachedFilesFolder(s.Capabilities(), latest), "shot.png")
 	if _, err := os.Stat(kept); err != nil {
 		return fmt.Errorf("the screenshot isn't kept with the run: %w", err)
 	}

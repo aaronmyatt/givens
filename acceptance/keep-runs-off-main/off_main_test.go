@@ -14,7 +14,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/runs"
 )
 
 const capability = "keep-runs-off-main"
@@ -119,7 +118,7 @@ func (s *state) remoteHolds(names ...string) error {
 		if err != nil {
 			return err
 		}
-		if !slices.ContainsFunc(held, func(run runs.Run) bool { return run.Key == key }) {
+		if !slices.ContainsFunc(held, func(run app.Run) bool { return run.Key == key }) {
 			return fmt.Errorf("the remote's %s holds no run of %s: %+v", app.RunsRef, key, held)
 		}
 	}
@@ -132,18 +131,18 @@ func (s *state) workingTreeHolds(name string) error {
 	if err != nil {
 		return err
 	}
-	held, err := runs.ReadFolder(s.Capabilities())
+	held, err := app.ReadRunsFolder(s.Capabilities())
 	if err != nil {
 		return err
 	}
-	if !slices.ContainsFunc(held, func(run runs.Run) bool { return run.Key == key }) {
+	if !slices.ContainsFunc(held, func(run app.Run) bool { return run.Key == key }) {
 		return fmt.Errorf("capabilities/runs holds no run of %s: %+v", key, held)
 	}
 	return nil
 }
 
 func (s *state) onlyMarker() error {
-	entries, err := os.ReadDir(runs.Dir(s.Capabilities()))
+	entries, err := os.ReadDir(app.RunsDir(s.Capabilities()))
 	if err != nil {
 		return err
 	}
@@ -151,7 +150,7 @@ func (s *state) onlyMarker() error {
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}
-	if !slices.Equal(names, []string{runs.OffMainFileName}) {
+	if !slices.Equal(names, []string{app.OffMainFileName}) {
 		return fmt.Errorf("capabilities/runs holds %q", names)
 	}
 	return nil
@@ -236,7 +235,7 @@ func (s *state) remoteHoldsNewest(count string, name string) error {
 	if err != nil {
 		return err
 	}
-	mine := slices.DeleteFunc(held, func(run runs.Run) bool { return run.Key != key })
+	mine := slices.DeleteFunc(held, func(run app.Run) bool { return run.Key != key })
 	if len(mine) != want {
 		return fmt.Errorf("the remote holds %d runs of %s, not %d", len(mine), key, want)
 	}
@@ -244,7 +243,7 @@ func (s *state) remoteHoldsNewest(count string, name string) error {
 	// are its newest want-1, and the rest were dropped.
 	s.dropped = s.times[:max(len(s.times)-(want-1), 0)]
 	for _, old := range s.dropped {
-		if slices.ContainsFunc(mine, func(run runs.Run) bool { return run.Time.Equal(old) }) {
+		if slices.ContainsFunc(mine, func(run app.Run) bool { return run.Time.Equal(old) }) {
 			return fmt.Errorf("the remote still holds the run at %s", old.Format(time.RFC3339))
 		}
 	}
@@ -262,7 +261,7 @@ func (s *state) historyDropped() error {
 		return err
 	}
 	for _, old := range s.dropped {
-		if folder := runs.FilesDir("/", "x/y", old); strings.Contains(objects,
+		if folder := app.AttachedFilesDir("/", "x/y", old); strings.Contains(objects,
 			filepath.Base(folder)) {
 			return fmt.Errorf("the ref's history still holds %s", filepath.Base(folder))
 		}
@@ -322,7 +321,7 @@ func (s *state) setLimits(count string, megabytes string) error {
 	if err := window.Choose(app.OfferChangeRunLimits); err != nil {
 		return err
 	}
-	limits := runs.Limits{}
+	limits := app.RunLimits{}
 	if limits.Runs, err = strconv.Atoi(count); err != nil {
 		return err
 	}
@@ -334,7 +333,7 @@ func (s *state) setLimits(count string, megabytes string) error {
 
 // remoteLimits expects the remote's ref to hold a limits file with these limits.
 func (s *state) remoteLimits(count string, megabytes string) error {
-	text, err := git(s.remote, "show", app.RunsRef+":"+runs.LimitsFileName)
+	text, err := git(s.remote, "show", app.RunsRef+":"+app.RunLimitsFileName)
 	if err != nil {
 		return err
 	}

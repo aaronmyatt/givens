@@ -1,4 +1,4 @@
-package runs
+package app
 
 import (
 	"os"
@@ -23,15 +23,15 @@ func TestCopyFilesAndList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := CopyFiles(root, run, paths); err != nil {
+	if err := CopyAttachedFiles(root, run, paths); err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(root, "runs", "files", "checkout", "card-declined",
 		"2026-10-12T133805Z")
-	if got := FilesDir(root, run.Key, run.Time); got != want {
+	if got := AttachedFilesDir(root, run.Key, run.Time); got != want {
 		t.Errorf("FilesDir = %s, want %s", got, want)
 	}
-	names, err := Files(root, run)
+	names, err := AttachedFiles(root, run)
 	if err != nil || !slices.Equal(names, []string{"declined.png", "z.log"}) {
 		t.Errorf("Files = %q, %v", names, err)
 	}
@@ -48,18 +48,19 @@ func TestCopyFilesFailsWhole(t *testing.T) {
 	if err := os.WriteFile(good, []byte("ok"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := CopyFiles(root, run, []string{good, filepath.Join(from, "gone.txt")}); err == nil {
+	if err := CopyAttachedFiles(root, run,
+		[]string{good, filepath.Join(from, "gone.txt")}); err == nil {
 		t.Fatal("CopyFiles copied a file that isn't there")
 	}
-	if _, err := os.Stat(FilesDir(root, run.Key, run.Time)); !os.IsNotExist(err) {
+	if _, err := os.Stat(AttachedFilesDir(root, run.Key, run.Time)); !os.IsNotExist(err) {
 		t.Errorf("the run's folder was left behind: %v", err)
 	}
-	if names, err := Files(root, run); err != nil || len(names) != 0 {
+	if names, err := AttachedFiles(root, run); err != nil || len(names) != 0 {
 		t.Errorf("Files = %q, %v", names, err)
 	}
 }
 
-// TestCheckFileTooBig turns down a file over FileBytesMax. Truncate makes a sparse file, so
+// TestCheckFileTooBig turns down a file over AttachedFileBytesMax. Truncate makes a sparse file, so
 // the test writes no data.
 // Ref: https://pkg.go.dev/os#Truncate
 func TestCheckFileTooBig(t *testing.T) {
@@ -67,13 +68,14 @@ func TestCheckFileTooBig(t *testing.T) {
 	if err := os.WriteFile(path, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Truncate(path, FileBytesMax+1); err != nil {
+	if err := os.Truncate(path, AttachedFileBytesMax+1); err != nil {
 		t.Fatal(err)
 	}
-	if err := CheckFile(path); err == nil || !strings.Contains(err.Error(), "more than 100 MB") {
+	if err := CheckAttachedFile(path); err == nil ||
+		!strings.Contains(err.Error(), "more than 100 MB") {
 		t.Errorf("CheckFile = %v", err)
 	}
-	if err := CheckFile(filepath.Dir(path)); err == nil {
+	if err := CheckAttachedFile(filepath.Dir(path)); err == nil {
 		t.Error("CheckFile took a folder")
 	}
 }
@@ -83,19 +85,19 @@ func TestNote(t *testing.T) {
 	root := t.TempDir()
 	run := Run{Time: time.Date(2026, time.October, 12, 9, 0, 0, 0, time.UTC), Key: "a/b"}
 	note := "\n## Retry button\n\n- below the fold\n"
-	if got := Summary(note); got != "Retry button" {
+	if got := NoteSummary(note); got != "Retry button" {
 		t.Errorf("Summary = %q", got)
 	}
-	if got, err := ReadNote(root, run); err != nil || got != "" {
+	if got, err := ReadRunNote(root, run); err != nil || got != "" {
 		t.Errorf("ReadNote with no note = %q, %v", got, err)
 	}
-	if err := WriteNote(root, run, note); err != nil {
+	if err := WriteRunNote(root, run, note); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := ReadNote(root, run); err != nil || got != note {
+	if got, err := ReadRunNote(root, run); err != nil || got != note {
 		t.Errorf("ReadNote = %q, %v", got, err)
 	}
-	if names, err := Files(root, run); err != nil || len(names) != 0 {
+	if names, err := AttachedFiles(root, run); err != nil || len(names) != 0 {
 		t.Errorf("Files lists the note: %q, %v", names, err)
 	}
 }
@@ -106,22 +108,23 @@ func TestFreeTime(t *testing.T) {
 	root := t.TempDir()
 	at := time.Date(2026, time.October, 12, 21, 38, 5, 400, time.FixedZone("MYT", 8*3600))
 	whole := at.Truncate(time.Second)
-	free, err := FreeTime(root, "checkout/card-declined", at)
+	free, err := FreeRunTime(root, "checkout/card-declined", at)
 	if err != nil || !free.Equal(whole) {
 		t.Fatalf("with no runs, FreeTime = %s, %v; want %s", free, err, whole)
 	}
-	run := Run{Time: whole, Key: "checkout/card-declined", Result: ResultPass}
-	if err := Append(root, run); err != nil {
+	run := Run{Time: whole, Key: "checkout/card-declined", Result: RunResultPass}
+	if err := AppendRun(root, run); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(FilesDir(root, run.Key, whole.Add(time.Second)), 0o755); err != nil {
+	if err := os.MkdirAll(AttachedFilesDir(root, run.Key, whole.Add(time.Second)),
+		0o755); err != nil {
 		t.Fatal(err)
 	}
-	free, err = FreeTime(root, run.Key, at)
+	free, err = FreeRunTime(root, run.Key, at)
 	if want := whole.Add(2 * time.Second); err != nil || !free.Equal(want) {
 		t.Errorf("past a line and a folder, FreeTime = %s, %v; want %s", free, err, want)
 	}
-	free, err = FreeTime(root, "checkout/empty-cart", at)
+	free, err = FreeRunTime(root, "checkout/empty-cart", at)
 	if err != nil || !free.Equal(whole) {
 		t.Errorf("for another key, FreeTime = %s, %v; want %s", free, err, whole)
 	}

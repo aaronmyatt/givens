@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"givens/internal/runs"
 )
 
 // device is one clone of a shared repository, with its capabilities folder and its store.
@@ -72,7 +70,7 @@ func shared(t *testing.T, n int) (string, []device) {
 func recordAt(key string, s int) func(string) error {
 	return func(tree string) error {
 		at := time.Date(2026, time.October, 17, 9, 0, s, 0, time.UTC)
-		folder := runs.FilesDir(tree, key, at)
+		folder := AttachedFilesDir(tree, key, at)
 		if err := os.MkdirAll(folder, 0o755); err != nil {
 			return err
 		}
@@ -80,7 +78,7 @@ func recordAt(key string, s int) func(string) error {
 		if err := os.WriteFile(filepath.Join(folder, "shot.png"), shot, 0o644); err != nil {
 			return err
 		}
-		return runs.Append(tree, runs.Run{Time: at, Key: key, Result: runs.ResultPass})
+		return AppendRun(tree, Run{Time: at, Key: key, Result: RunResultPass})
 	}
 }
 
@@ -94,7 +92,7 @@ func remoteKeys(t *testing.T, remote string) []string {
 			continue
 		}
 		for _, line := range strings.Split(run(t, remote, "show", RunsRef+":"+name), "\n") {
-			if parsed, err := runs.Parse(line); err == nil {
+			if parsed, err := ParseRun(line); err == nil {
 				found = append(found, parsed.Key+"@"+parsed.Time.Format("05"))
 			}
 		}
@@ -121,11 +119,11 @@ func TestShareAndFetch(t *testing.T) {
 	if err := second.store.Change(nil, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
-	all, err := runs.Read(second.capabilities)
+	all, err := ReadRuns(second.capabilities)
 	if err != nil || len(all) != 1 {
 		t.Fatalf("the other device reads %+v, %v", all, err)
 	}
-	names, err := runs.Files(second.capabilities, all[0])
+	names, err := AttachedFiles(second.capabilities, all[0])
 	if err != nil || !slices.Equal(names, []string{"shot.png"}) {
 		t.Errorf("the other device has the files %q, %v", names, err)
 	}
@@ -187,7 +185,7 @@ func TestTrim(t *testing.T) {
 	remote, devices := shared(t, 2)
 	first, second := devices[0], devices[1]
 	limit := func(tree string) error {
-		return runs.WriteLimits(tree, runs.Limits{Runs: 5, Megabytes: 250})
+		return WriteRunLimits(tree, RunLimits{Runs: 5, Megabytes: 250})
 	}
 	if err := first.store.Change(limit, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
@@ -220,7 +218,7 @@ func TestTrim(t *testing.T) {
 	if got := remoteKeys(t, remote); !slices.Equal(got, want) {
 		t.Errorf("a device that had the old runs brought back %q", got)
 	}
-	all, err := runs.ReadFolder(second.store.Tree())
+	all, err := ReadRunsFolder(second.store.Tree())
 	if err != nil || len(all) != 4 {
 		t.Errorf("the other device keeps %d runs, %v; want 4", len(all), err)
 	}
@@ -237,11 +235,11 @@ func TestAdopt(t *testing.T) {
 	if err := from.store.Change(adopt, RunsNetworkTimeout); err != nil {
 		t.Fatal(err)
 	}
-	all, err := runs.ReadFolder(from.store.Tree())
+	all, err := ReadRunsFolder(from.store.Tree())
 	if err != nil || len(all) != 1 {
 		t.Fatalf("the copy holds %+v, %v", all, err)
 	}
-	if _, err := os.Stat(runs.FilesDir(from.store.Tree(), all[0].Key, all[0].Time)); err != nil {
+	if _, err := os.Stat(AttachedFilesDir(from.store.Tree(), all[0].Key, all[0].Time)); err != nil {
 		t.Errorf("the run's files weren't adopted: %v", err)
 	}
 }

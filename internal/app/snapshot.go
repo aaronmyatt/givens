@@ -8,7 +8,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/runs"
 )
 
 // The snapshot is the whole app as `givens serve` sends it after every call. Its JSON keys
@@ -336,7 +335,7 @@ func linedUp(steps []string) []string {
 // rowLine is an outline row as one line: its values in column-name order, then its status,
 // like "card=expired — Never run". WindowModel.rowLine in Swift says it the same way.
 func rowLine(row model.DropInRow) string {
-	assert.That(len(row.Values) <= runs.FieldsMax, "a row stays bounded")
+	assert.That(len(row.Values) <= RunFieldsMax, "a row stays bounded")
 	assert.That(row.Status != "", "a row has a status")
 	columns := make([]string, 0, len(row.Values))
 	for column := range row.Values {

@@ -10,7 +10,6 @@ import (
 
 	"givens/acceptance/world"
 	"givens/internal/app"
-	"givens/internal/runs"
 	"givens/internal/slug"
 )
 
@@ -135,8 +134,8 @@ func (s *state) keepsOffMainWithLimit(count int) error {
 	if !ok {
 		return fmt.Errorf("the sample shop isn't in a git repository")
 	}
-	limits := runs.Limits{Runs: count, Megabytes: runs.MegabytesKeptDefault}
-	limit := func(tree string) error { return runs.WriteLimits(tree, limits) }
+	limits := app.RunLimits{Runs: count, Megabytes: app.MegabytesKeptDefault}
+	limit := func(tree string) error { return app.WriteRunLimits(tree, limits) }
 	return store.Change(limit, app.RunsNetworkTimeout)
 }
 
@@ -224,7 +223,7 @@ func (s *state) recordedRuns(name string, count int) error {
 
 // writeShot writes one passing run of key at at, with a screenshot, under root.
 func writeShot(root string, key string, at time.Time) error {
-	folder := runs.FilesDir(root, key, at)
+	folder := app.AttachedFilesDir(root, key, at)
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		return err
 	}
@@ -232,7 +231,7 @@ func writeShot(root string, key string, at time.Time) error {
 		0o644); err != nil {
 		return err
 	}
-	return runs.Append(root, runs.Run{Time: at, Key: key, Result: runs.ResultPass})
+	return app.AppendRun(root, app.Run{Time: at, Key: key, Result: app.RunResultPass})
 }
 
 // runKey is the run key of a sample shop scenario: <capability>/<slug>.
@@ -245,12 +244,12 @@ func (s *state) runKey(name string) (string, error) {
 }
 
 // remoteRuns lists the runs the remote's refs/givens/runs holds.
-func (s *state) remoteRuns() ([]runs.Run, error) {
+func (s *state) remoteRuns() ([]app.Run, error) {
 	names, err := git(s.remote, "ls-tree", "-r", "--name-only", app.RunsRef)
 	if err != nil {
 		return nil, err
 	}
-	found := make([]runs.Run, 0, 8)
+	found := make([]app.Run, 0, 8)
 	for _, name := range strings.Split(names, "\n") {
 		if !strings.HasPrefix(name, "runs/") || !strings.HasSuffix(name, ".log") ||
 			strings.Count(name, "/") != 1 {
@@ -261,7 +260,7 @@ func (s *state) remoteRuns() ([]runs.Run, error) {
 			return nil, err
 		}
 		for _, line := range strings.Split(text, "\n") {
-			if run, err := runs.Parse(line); err == nil {
+			if run, err := app.ParseRun(line); err == nil {
 				found = append(found, run)
 			}
 		}

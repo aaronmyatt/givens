@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"givens/internal/app"
-	"givens/internal/runs"
 )
 
 const gitTimeout = 20 * time.Second
@@ -222,7 +221,7 @@ func (s *state) copiedIntoRunFolder(name string) error {
 	if err != nil {
 		return err
 	}
-	copied := filepath.Join(runs.FilesDir(s.Capabilities(), s.runKey, at), name)
+	copied := filepath.Join(app.AttachedFilesDir(s.Capabilities(), s.runKey, at), name)
 	content, err := os.ReadFile(copied)
 	if err != nil {
 		return fmt.Errorf("%s isn't in the run's folder: %w", name, err)

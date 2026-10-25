@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"givens/acceptance/world"
-	"givens/internal/runs"
+	"givens/internal/app"
 )
 
 // noteSteps cover a run note written in Markdown, kept whole as note.md.
@@ -57,7 +57,7 @@ func (s *state) runFolder() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return runs.FilesDir(s.Capabilities(), s.runKey, at), nil
+	return app.AttachedFilesDir(s.Capabilities(), s.runKey, at), nil
 }
 
 func (s *state) noteKept() error {
@@ -65,7 +65,7 @@ func (s *state) noteKept() error {
 	if err != nil {
 		return err
 	}
-	content, err := os.ReadFile(filepath.Join(folder, runs.NoteFileName))
+	content, err := os.ReadFile(filepath.Join(folder, app.RunNoteFileName))
 	if err != nil {
 		return fmt.Errorf("the run's folder has no note.md: %w", err)
 	}

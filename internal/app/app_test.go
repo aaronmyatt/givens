@@ -11,7 +11,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/kit"
-	"givens/internal/runs"
 )
 
 // fakes stands in for the clipboard, the Trash and the clock.
@@ -258,13 +257,13 @@ func TestLeaveDropIn(t *testing.T) {
 // TestHistoryOf lists one scenario's runs, rows included, newest first, in words.
 func TestHistoryOf(t *testing.T) {
 	now := time.Date(2026, time.October, 10, 9, 0, 0, 0, time.UTC)
-	recorded := []runs.Run{
-		{Time: now.AddDate(0, 0, -3), Key: "checkout/card-declined", Result: runs.ResultPass},
-		{Time: now.Add(-time.Hour), Key: "checkout/card-declined", Result: runs.ResultFail,
+	recorded := []Run{
+		{Time: now.AddDate(0, 0, -3), Key: "checkout/card-declined", Result: RunResultPass},
+		{Time: now.Add(-time.Hour), Key: "checkout/card-declined", Result: RunResultFail,
 			Author: "Sam", Note: "banner overlaps"},
 		{Time: now.AddDate(0, 0, -1), Key: "checkout/card-declined/cards",
-			Result: runs.ResultPass, Values: []runs.Pair{{Name: "card", Value: "expired"}}},
-		{Time: now, Key: "checkout/empty-cart", Result: runs.ResultPass},
+			Result: RunResultPass, Values: []RunPair{{Name: "card", Value: "expired"}}},
+		{Time: now, Key: "checkout/empty-cart", Result: RunResultPass},
 	}
 	got := historyOf(t.TempDir(), recorded, "checkout/card-declined", now)
 	want := []string{
@@ -283,7 +282,7 @@ func TestHistoryOf(t *testing.T) {
 			t.Errorf("run %d lists files with no folder: %q", index, line.Files)
 		}
 	}
-	if got[0].Note != "banner overlaps" || got[0].Result != runs.ResultFail {
+	if got[0].Note != "banner overlaps" || got[0].Result != RunResultFail {
 		t.Errorf("the newest run is %+v, want the failed one with its note", got[0])
 	}
 }
