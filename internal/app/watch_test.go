@@ -1,4 +1,4 @@
-package watch
+package app
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestChanged(t *testing.T) {
+func TestWatcherChanged(t *testing.T) {
 	root := t.TempDir()
 	feature := filepath.Join(root, "checkout", "checkout.feature")
 	if err := os.MkdirAll(filepath.Dir(feature), 0o755); err != nil {
@@ -17,11 +17,11 @@ func TestChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	watcher, err := New(root, start)
+	watcher, err := NewWatcher(root, start)
 	if err != nil {
 		t.Fatal(err)
 	}
-	later := start.Add(Interval)
+	later := start.Add(WatchInterval)
 	if changed, err := watcher.Changed(later); err != nil || changed {
 		t.Fatalf("nothing changed, but Changed = %v, %v", changed, err)
 	}
@@ -29,10 +29,10 @@ func TestChanged(t *testing.T) {
 		0o644); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := watcher.Changed(later.Add(Interval / 2)); err != nil || changed {
+	if changed, err := watcher.Changed(later.Add(WatchInterval / 2)); err != nil || changed {
 		t.Fatalf("looked again before Interval passed: %v, %v", changed, err)
 	}
-	if changed, err := watcher.Changed(later.Add(Interval)); err != nil || !changed {
+	if changed, err := watcher.Changed(later.Add(WatchInterval)); err != nil || !changed {
 		t.Fatalf("an edit wasn't seen: %v, %v", changed, err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
@@ -41,7 +41,7 @@ func TestChanged(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".git", "HEAD"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := watcher.Changed(later.Add(2 * Interval)); err != nil || changed {
+	if changed, err := watcher.Changed(later.Add(2 * WatchInterval)); err != nil || changed {
 		t.Fatalf("a hidden folder counted as a change: %v, %v", changed, err)
 	}
 }

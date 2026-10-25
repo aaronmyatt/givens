@@ -31,7 +31,6 @@ import (
 	"givens/internal/runs"
 	"givens/internal/slug"
 	"givens/internal/spec"
-	"givens/internal/watch"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -504,7 +503,7 @@ func (w *Window) reload() error {
 	}
 	w.restoreKit()
 	// The watcher's first look comes before the load, so a write in between is seen next time.
-	watcher, err := watch.New(w.path, time.Now())
+	watcher, err := NewWatcher(w.path, time.Now())
 	if err != nil {
 		return err
 	}

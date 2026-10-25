@@ -28,8 +28,8 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, runref, setup, tags, slug, markdown, helpers, kit,
-//     starter and watch: domain packages, each with one job and its own tests.
+//   - internal/spec, project, runs, runref, setup, tags, slug, markdown, helpers, kit and
+//     starter: domain packages, each with one job and its own tests.
 
 package app
 
@@ -2391,15 +2391,15 @@ func (s *Session) stopBlock() error {
 // capabilities/open-a-project. Opening a folder finds its capabilities folder, reads it into a
 // window and watches it; nothing is copied, so files other tools write show up. The loading every
 // story reads through is in big_helpers.go: findCapabilities, reload, refresh (which "Files written
-// by other tools appear" runs on), findCapability and findScenario; so is writable, which every
-// change asks of a branch's window. Code elsewhere: core glue shows MessageNoCapabilities and
-// branchMessages (Snapshot, snapshot.go), and offers and runs "Create capabilities folder" and cuts
-// a branch's offers with readOnly (allOffers and Choose, offers.go). createCapabilities writes with
-// writeNew (big_helpers.go), which Write stories' NewScenario uses too. Open starts Keep runs off
-// main's sync (openRunStore), and OpenBranch links a branch's copy to the ref the project keeps
-// runs in (runs.LinkRefCopy). Window's branch fields are in window.go's types. The end of this
-// section, from internal/branch, copies a branch out of git. The terminal scenarios are openFolder
-// in cmd/givens/main.go and the TUI.
+// by other tools appear" runs on; its Watcher is under that scenario here), findCapability and
+// findScenario; so is writable, which every change asks of a branch's window. Code elsewhere: core
+// glue shows MessageNoCapabilities and branchMessages (Snapshot, snapshot.go), and offers and runs
+// "Create capabilities folder" and cuts a branch's offers with readOnly (allOffers and Choose,
+// offers.go). createCapabilities writes with writeNew (big_helpers.go), which Write stories'
+// NewScenario uses too. Open starts Keep runs off main's sync (openRunStore), and OpenBranch links
+// a branch's copy to the ref the project keeps runs in (runs.LinkRefCopy). Window's branch fields
+// are in window.go's types. The end of this section, from internal/branch, copies a branch out of
+// git. The terminal scenarios are openFolder in cmd/givens/main.go and the TUI.
 
 // CloseWindow closes this window. Closing the last project window leaves nothing to reopen
 // at the next launch. A branch's window takes its copy with it. Needed by "Reopen a recent
@@ -2513,6 +2513,122 @@ func (w *Window) createCapabilities() error {
 	}
 	w.path, w.found = root, true
 	return w.reload()
+}
+
+// Scenario: Files written by other tools appear
+
+// From internal/watch, which notices changes to a capabilities folder by polling: it lists
+// every file's path, size and modification time, and compares that with the last look. reload
+// and refresh (big_helpers.go) start a window's watcher and look with it.
+//
+// Polling keeps Givens on the standard library and works the same for the CLI, the steps and
+// the app. Cost: one stat per file per look; a 1000-file folder is about a millisecond.
+// FSEvents was the other option; see tasks/foundation/notes.md.
+
+// Limits. Tiger Style: put a limit on everything.
+// Ref: https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md#safety
+const (
+	// WatchInterval is the least time between two looks. Changes show within 2 seconds, so it's
+	// well under that.
+	WatchInterval = 500 * time.Millisecond
+	// WatchFilesMax bounds the files one look lists.
+	WatchFilesMax = 20000
+)
+
+// watchedFile is what a look records for one watchedFile.
+type watchedFile struct {
+	size     int64
+	modified time.Time
+}
+
+// Watcher remembers the last look at one folder.
+type Watcher struct {
+	root   string
+	last   map[string]watchedFile
+	looked time.Time
+}
+
+// NewWatcher takes a first look at root.
+func NewWatcher(root string, now time.Time) (*Watcher, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	assert.That(!now.IsZero(), "now is a time")
+	files, err := look(root)
+	if err != nil {
+		return nil, err
+	}
+	return &Watcher{root: root, last: files, looked: now}, nil
+}
+
+// Changed looks again when Interval has passed since the last look, and is true when a file
+// was added, removed or changed since. now is the wall clock: callers pass time.Now().
+func (w *Watcher) Changed(now time.Time) (bool, error) {
+	assert.That(w != nil, "changed runs on a watcher")
+	assert.That(!now.IsZero(), "now is a time")
+	if now.Sub(w.looked) < WatchInterval {
+		return false, nil
+	}
+	return w.Look(now)
+}
+
+// Look looks again now, whatever the time since the last look, and is true when a file was
+// added, removed or changed since. A reader that must not see stale files uses it; one that
+// polls on a timer uses Changed.
+func (w *Watcher) Look(now time.Time) (bool, error) {
+	assert.That(w != nil, "look runs on a watcher")
+	assert.That(!now.IsZero(), "now is a time")
+	files, err := look(w.root)
+	if err != nil {
+		return false, err
+	}
+	changed := !same(w.last, files)
+	w.last, w.looked = files, now
+	return changed, nil
+}
+
+// look lists every file under root. Hidden folders are skipped: .git changes on every commit.
+func look(root string) (map[string]watchedFile, error) {
+	assert.That(filepath.IsAbs(root), "root is absolute")
+	files := make(map[string]watchedFile, 256)
+	// WalkDir visits each entry once and never follows symlinks, so it ends.
+	// Ref: https://pkg.go.dev/path/filepath#WalkDir
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() && path != root && entry.Name()[0] == '.' {
+			return filepath.SkipDir
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if len(files) >= WatchFilesMax {
+			return fmt.Errorf("%s holds more than %d files", root, WatchFilesMax)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		files[path] = watchedFile{size: info.Size(), modified: info.ModTime()}
+		return nil
+	})
+	assert.That(len(files) <= WatchFilesMax, "a look stays bounded")
+	return files, err
+}
+
+// same is true when two looks list the same files with the same sizes and times.
+func same(before map[string]watchedFile, after map[string]watchedFile) bool {
+	assert.That(len(before) <= WatchFilesMax, "before stays bounded")
+	assert.That(len(after) <= WatchFilesMax, "after stays bounded")
+	if len(before) != len(after) {
+		return false
+	}
+	for path, was := range before {
+		now, ok := after[path]
+		if !ok || now.size != was.size || !now.modified.Equal(was.modified) {
+			return false
+		}
+	}
+	return true
 }
 
 // Scenario: Read capabilities from another branch

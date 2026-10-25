@@ -635,3 +635,17 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Open a project's opening comment and the "Read capabilities from another branch" note named
   internal/branch; they point at the section's end now.
 - big.go 5,873 lines, big_helpers.go 900 (+0).
+
+## internal/watch folds in (2026-10-25)
+- internal/watch is gone. All of it is in Open a project's section under a new "Files written
+  by other tools appear" heading, before the branch scenarios, with its package doc as the
+  opening comment.
+- Not big_helpers.go, though every story reads through it: its only callers are reload and
+  refresh, helpers. Same call as `outlineStatus` under `StatusOf`: the helper is the shared way
+  in, and the watcher is this one scenario's.
+- Renames: `New` -> `NewWatcher` (clashed with app's `New`), `Interval` -> `WatchInterval`,
+  `FilesMax` -> `WatchFilesMax`, the type `file` -> `watchedFile`; the test `TestChanged` ->
+  `TestWatcherChanged` (clashed with fingerprint's, folded in first). `look` and `same` kept.
+- watch_test.go is internal/app/watch_test.go. big.go's header list and Open a project's
+  opening comment updated; `_archive/internal/serve` still says `watch.Interval`, left as is.
+- big.go 5,989 lines, big_helpers.go 899 (-1, an import line).
