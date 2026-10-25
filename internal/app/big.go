@@ -2668,18 +2668,20 @@ func (w *Window) emptyView() string {
 // files: a new story or scenario goes straight into its .feature file, and the editor holds one
 // file's whole text, checks it, and writes back only what changed. Code elsewhere: Edit and
 // readEditable, which open and read a file for the editor, are in big_helpers.go, since Gherkin
-// files, Share setup, Update the kit and Drop in open files in the editor too, and Tags'
-// flagTodo reads with readEditable; so is writeNew, which Open a project's createCapabilities
-// writes with too. The suggestions count steps with uniqueSteps, and shellProblems shares the
-// bash -n limits and bashError with Share setup (both big_helpers.go). Core glue offers
-// OfferNewStory, OfferNewScenario (with the page offers) and editorOffers and runs
-// chooseInEditor (allOffers and Choose, offers.go), types into the editor (Type, input.go),
-// calls editShown on KeyEdit (Press, input.go), closes the editor before selecting
-// (closeEditor in Select, selection.go), and shows it (Snapshot, snapshot.go). Editor, the
-// drafts, marks, suggestions and preview lines, and the editing limits are types in edit.go;
-// EditorSnapshot is in snapshot.go. The terminal edits in the developer's editor: `givens new`
-// and `givens edit` (cmd/givens/new.go and edit.go) and the TUI's e, s and n (internal/tui)
-// hand the text over through internal/termedit.
+// files, Share setup, Update the kit and Drop in open files in the editor too, and Tags' flagTodo
+// reads with readEditable; so is writeNew, which Open a project's createCapabilities writes with
+// too, and so are trash and withoutTrashed, since Keep runs off main's moveRunsOffMain sends files
+// to the Trash too and reload leaves out what's waiting to go (App's pendingTrash is in app.go).
+// The suggestions count steps with uniqueSteps, and shellProblems shares the bash -n limits and
+// bashError with Share setup (both big_helpers.go). Core glue offers OfferNewStory,
+// OfferNewScenario (with the page offers) and editorOffers and runs chooseInEditor (allOffers and
+// Choose, offers.go), types into the editor (Type, input.go), calls editShown on KeyEdit (Press,
+// input.go), closes the editor before selecting (closeEditor in Select, selection.go), and shows it
+// (Snapshot, snapshot.go). Editor, the drafts, marks, suggestions and preview lines, and the
+// editing limits are types in edit.go; EditorSnapshot is in snapshot.go. The terminal edits in the
+// developer's editor: `givens new` and `givens edit` (cmd/givens/new.go and edit.go) and the TUI's
+// e, s and n (internal/tui) hand the text over through internal/termedit; `givens rename` and
+// `givens delete` are cmd/givens/manage.go.
 
 // Authoring offers.
 const (
@@ -3110,6 +3112,344 @@ func shellProblems(text string) []EditorMark {
 		}
 	}
 	return marks
+}
+
+// Scenario: Rename a scenario
+// Scenario: Warned before a rename
+// Scenario: A renamed scenario starts at Never run
+// Scenario: Scenarios built on it are unverified too
+
+// Rename renames a scenario or a capability by its name. When the rename would start runs
+// over, it asks first, offering "Rename" and "Cancel"; otherwise it renames at once:
+// the Scenario: or Feature: line, the setup files or folder, and every from line that names it.
+// Needed by the rename scenarios in capabilities/write-stories-and-scenarios.
+func (w *Window) Rename(name string, newName string) error {
+	assert.That(w != nil, "rename runs on a window")
+	assert.That(name != "", "rename names what to rename")
+	assert.That(newName != "", "rename names the new name")
+	assert.That(len(newName) <= NameLengthMax, "the new name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	if slug.Of(newName) == "" {
+		return errors.New("a name needs letters or digits")
+	}
+	if capability, ok := w.findCapability(name); ok {
+		return w.renameCapability(capability, newName)
+	}
+	scenario, ok := w.findScenario(name)
+	if !ok {
+		return fmt.Errorf("%s: %w", name, ErrNotFound)
+	}
+	rename := func() error { return w.renameScenario(scenario, newName) }
+	recorded, err := runs.Read(w.path)
+	if err != nil {
+		return err
+	}
+	for _, run := range recorded {
+		if run.Key == scenario.Key() || strings.HasPrefix(run.Key, scenario.Key()+"/") {
+			w.ask("Renaming starts "+scenario.Name+"'s runs over", "Rename", rename)
+			return nil
+		}
+	}
+	return rename()
+}
+
+// renameScenario rewrites the scenario's Scenario: line, then moves its setup files and
+// updates from lines, unless another scenario still makes the old slug.
+func (w *Window) renameScenario(scenario project.Scenario, newName string) error {
+	assert.That(scenario.Line > 0, "a loaded scenario has a line")
+	assert.That(slug.Of(newName) != "", "the new name makes a slug")
+	capability, ok := w.findCapability(scenario.Capability)
+	if !ok {
+		return fmt.Errorf("%s: %w", scenario.Capability, ErrNotFound)
+	}
+	if err := renameLine(capability.FeaturePath, scenario.Line, newName); err != nil {
+		return err
+	}
+	newSlug := slug.Of(newName)
+	if slugClash(capability, scenario) == "" && newSlug != scenario.Slug {
+		if err := moveSetup(capability.Dir, scenario.Slug, newSlug); err != nil {
+			return err
+		}
+		from := capability.Slug + "/" + scenario.Slug
+		if err := w.updateFromLines(from, capability.Slug+"/"+newSlug); err != nil {
+			return err
+		}
+	}
+	if w.selectedScenario == scenario.Capability+"/"+scenario.Name {
+		w.selected, w.selectedScenario = newName, scenario.Capability+"/"+newName
+	}
+	return w.reload()
+}
+
+// renameLine replaces the name after the keyword on one line of a .feature file, keeping the
+// rest of the file byte for byte.
+func renameLine(path string, line int64, newName string) error {
+	assert.That(line > 0, "lines count from 1")
+	assert.That(!strings.Contains(newName, "\n"), "a name is one line")
+	text, err := readEditable(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(text, "\n")
+	if line > int64(len(lines)) {
+		return fmt.Errorf("%s has no line %d", filepath.Base(path), line)
+	}
+	keyword, _, ok := strings.Cut(lines[line-1], ":")
+	if !ok {
+		return fmt.Errorf("%s line %d has no keyword", filepath.Base(path), line)
+	}
+	lines[line-1] = keyword + ": " + newName
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// moveSetup renames scripts/<from>.sh, .md and .teardown.sh to <to>, leaving any that would
+// overwrite a file.
+func moveSetup(dir string, from string, to string) error {
+	assert.That(from != "" && to != "", "both slugs are given")
+	assert.That(from != to, "a move changes the name")
+	for _, suffix := range []string{".sh", ".md", ".teardown.sh"} {
+		source := filepath.Join(dir, "scripts", from+suffix)
+		target := filepath.Join(dir, "scripts", to+suffix)
+		if _, err := os.Stat(source); err != nil {
+			continue
+		}
+		if _, err := os.Stat(target); err == nil {
+			continue
+		}
+		if err := os.Rename(source, target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// updateFromLines changes every `from <old>` line in the project's setup scripts to name
+// replacement, keeping any row values after it. Both are run keys. It reads the scripts on
+// disk, so a script renamed a moment ago is found under its new name.
+func (w *Window) updateFromLines(old string, replacement string) error {
+	assert.That(strings.Count(old, "/") == 1, "old is a run key")
+	assert.That(strings.Count(replacement, "/") == 1, "replacement is a run key")
+	pattern := regexp.MustCompile(`(?m)^(\s*from\s+)` + regexp.QuoteMeta(old) + `(\s|$)`)
+	// Glob returns every setup script, in name order. Ref: https://pkg.go.dev/path/filepath#Glob
+	scripts, err := filepath.Glob(filepath.Join(w.path, "*", "scripts", "*.sh"))
+	if err != nil {
+		return err
+	}
+	for _, script := range scripts {
+		text, err := readEditable(script)
+		if err != nil {
+			return err
+		}
+		updated := pattern.ReplaceAllString(text, "${1}"+replacement+"${2}")
+		if updated == text {
+			continue
+		}
+		if err := os.WriteFile(script, []byte(updated), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Scenario: Rename a capability
+// Scenario: Renaming a capability updates from lines
+
+// renameCapability renames a capability's Feature: line, its folder and .feature file, and
+// every from line naming one of its scenarios. Its runs stay under the old name, so its
+// scenarios start at Never run.
+func (w *Window) renameCapability(capability project.Capability, newName string) error {
+	assert.That(capability.Slug != "", "a capability has a slug")
+	assert.That(slug.Of(newName) != "", "the new name makes a slug")
+	newSlug := slug.Of(newName)
+	if newSlug != capability.Slug {
+		if _, err := os.Stat(filepath.Join(w.path, newSlug)); err == nil {
+			return fmt.Errorf("there's already a %s folder", newSlug)
+		}
+	}
+	if err := renameFeatureLine(capability.FeaturePath, newName); err != nil {
+		return err
+	}
+	if newSlug == capability.Slug {
+		return w.reload()
+	}
+	newDir := filepath.Join(w.path, newSlug)
+	if err := os.Rename(capability.Dir, newDir); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(newDir, capability.Slug+".feature"),
+		filepath.Join(newDir, newSlug+".feature")); err != nil {
+		return err
+	}
+	for _, scenario := range capability.Scenarios {
+		if err := w.updateFromLines(capability.Slug+"/"+scenario.Slug,
+			newSlug+"/"+scenario.Slug); err != nil {
+			return err
+		}
+	}
+	if w.selectedCapability == capability.Slug {
+		w.selected, w.selectedCapability = newName, newSlug
+	}
+	return w.reload()
+}
+
+// renameFeatureLine replaces the name on a .feature file's Feature: line.
+func renameFeatureLine(path string, newName string) error {
+	assert.That(strings.HasSuffix(path, ".feature"), "path is a .feature file")
+	assert.That(!strings.Contains(newName, "\n"), "a name is one line")
+	text, err := readEditable(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(text, "\n")
+	for index, line := range lines {
+		if keyword, _, ok := strings.Cut(line, "Feature:"); ok && strings.TrimSpace(keyword) == "" {
+			lines[index] = keyword + "Feature: " + newName
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+		}
+	}
+	return fmt.Errorf("%s has no Feature: line", filepath.Base(path))
+}
+
+// Scenario: Delete a scenario
+// Scenario: Delete a scenario another builds on
+// Scenario: Delete a capability
+// Scenario: Delete a capability another builds on
+
+// Delete buttons.
+const (
+	OfferDelete       = "Delete"
+	OfferDeleteAnyway = "Delete anyway"
+)
+
+// Delete asks to delete a scenario or a capability by its name, offering "Delete" and
+// "Cancel", or "Delete anyway" when another setup builds on it. Choosing it removes the
+// scenario's block and moves its setup files, or the capability's folder, to the Trash.
+// Needed by the delete scenarios in capabilities/write-stories-and-scenarios.
+func (w *Window) Delete(name string) error {
+	assert.That(w != nil, "delete runs on a window")
+	assert.That(name != "", "delete names what to delete")
+	assert.That(len(name) <= NameLengthMax, "the name fits NameLengthMax")
+	if err := w.writable(); err != nil {
+		return err
+	}
+	if capability, ok := w.findCapability(name); ok {
+		builder, err := w.builtOn(capability.Slug+"/", capability.Slug)
+		if err != nil {
+			return err
+		}
+		run := func() error { return w.deleteCapability(capability) }
+		w.askDelete(builder, builder+" builds on a scenario in "+capability.Name,
+			"Delete "+capability.Name+"?", run)
+		return nil
+	}
+	scenario, ok := w.findScenario(name)
+	if !ok {
+		return fmt.Errorf("%s: %w", name, ErrNotFound)
+	}
+	builder, err := w.builtOn(scenario.Key(), "")
+	if err != nil {
+		return err
+	}
+	run := func() error { return w.deleteScenario(scenario) }
+	w.askDelete(builder, builder+" builds on this scenario", "Delete "+scenario.Name+"?", run)
+	return nil
+}
+
+// askDelete asks before a delete: "Delete anyway" when something builds on what's deleted.
+func (w *Window) askDelete(builder string, builtMessage string, message string,
+	run func() error) {
+	assert.That(message != "", "a delete asks something")
+	assert.That(run != nil, "a delete has something to run")
+	if builder != "" {
+		w.ask(builtMessage, OfferDeleteAnyway, run)
+		return
+	}
+	w.ask(message, OfferDelete, run)
+}
+
+// builtOn names a scenario whose setup builds, through a from line, on the run key prefix,
+// leaving out scenarios in the capability skip; "" when none does.
+func (w *Window) builtOn(prefix string, skip string) (string, error) {
+	assert.That(w.project != nil, "deletes happen in a loaded project")
+	assert.That(prefix != "", "a key or prefix is given")
+	for _, capability := range w.project.Capabilities {
+		if capability.Slug == skip {
+			continue
+		}
+		for _, scenario := range capability.Scenarios {
+			if scenario.Setup == "" {
+				continue
+			}
+			text, err := helpers.ReadScript(scenario.Setup)
+			if err != nil {
+				return "", err
+			}
+			for _, from := range helpers.Froms(text) {
+				if from.Key == prefix || (strings.HasSuffix(prefix, "/") &&
+					strings.HasPrefix(from.Key, prefix)) {
+					return scenario.Name, nil
+				}
+			}
+		}
+	}
+	return "", nil
+}
+
+// deleteScenario removes a scenario's block, with its tags and the blank line before it, and
+// moves its setup files to the Trash.
+func (w *Window) deleteScenario(scenario project.Scenario) error {
+	assert.That(scenario.Line > 0, "a loaded scenario has a line")
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	capability, ok := w.findCapability(scenario.Capability)
+	if !ok {
+		return fmt.Errorf("%s: %w", scenario.Capability, ErrNotFound)
+	}
+	text, err := readEditable(capability.FeaturePath)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(text, "\n")
+	start := int(scenario.Line) - 1
+	end := blockEnd(lines, start)
+	first := start
+	tag := regexp.MustCompile(`^\s*@`)
+	// bound: first only falls, to 0 at most.
+	for first > 0 && tag.MatchString(lines[first-1]) {
+		first--
+	}
+	if first > 0 && strings.TrimSpace(lines[first-1]) == "" {
+		first--
+	}
+	kept := append(append([]string{}, lines[:first]...), lines[end:]...)
+	if err := os.WriteFile(capability.FeaturePath, []byte(strings.Join(kept, "\n")),
+		0o644); err != nil {
+		return err
+	}
+	for _, path := range []string{scenario.Setup, scenario.SetupCards, scenario.Teardown} {
+		if path == "" {
+			continue
+		}
+		if err := w.app.trash(path); err != nil {
+			return err
+		}
+	}
+	w.selected, w.selectedScenario = "", ""
+	return w.reload()
+}
+
+// deleteCapability moves a capability's folder to the Trash.
+func (w *Window) deleteCapability(capability project.Capability) error {
+	assert.That(filepath.IsAbs(capability.Dir), "a capability's folder is absolute")
+	assert.That(strings.HasPrefix(capability.Dir, w.path), "it's in this project")
+	if err := w.app.trash(capability.Dir); err != nil {
+		return err
+	}
+	if w.selectedCapability == capability.Slug {
+		w.selected, w.selectedCapability, w.selectedScenario = "", "", ""
+	}
+	return w.reload()
 }
 
 // Scenario: Preview a scenario while editing

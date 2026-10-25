@@ -374,3 +374,19 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Gherkin files', Open a project's, Share setup's and Update the kit's opening comments pointed
   at authoring.go, editor.go or editor_more.go; they now point at the section or big_helpers.go.
 - Section 680 lines, big_helpers.go +67. big.go 3,344, big_helpers.go 628. 15 of 17.
+- b) Rename and delete. rename.go and delete.go are gone. Between "A line that isn't a step"
+  and the Preview scenarios: `Rename`, `renameScenario`, `renameLine`, `moveSetup` and
+  `updateFromLines` under "Rename a scenario", "Warned before a rename", "A renamed scenario
+  starts at Never run" and "Scenarios built on it are unverified too"; `renameCapability` and
+  `renameFeatureLine` under the two capability renames; the delete offers, `Delete`,
+  `askDelete`, `builtOn`, `deleteScenario` and `deleteCapability` under the four delete
+  scenarios.
+- To big_helpers.go: `trash`, since Keep runs off main's `moveRunsOffMain` sends old run files
+  to the Trash too, and `withoutTrashed`, which `reload` and `refresh` call on every load.
+- No seams cut. `Rename` and `Delete` are also called from cmd/givens/manage.go, the edge, and
+  branch_test.go; the opening comment names manage.go.
+- Surprise: moved unchanged, `Rename`'s doc comment broke `TestBigFile`. One of its lines
+  started "// Scenario: or Feature: line, …", which reads as a Scenario heading. Rewrapped so
+  "the" starts that line; same words. A heading check that keys on a line's start can trip on
+  prose, so a comment that wraps onto "Scenario:" or "Feature:" needs the same care.
+- Section +338 lines (1,020 in all), big_helpers.go +49. big.go 3,684, big_helpers.go 677.

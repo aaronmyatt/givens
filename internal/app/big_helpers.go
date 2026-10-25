@@ -626,3 +626,52 @@ func writeNew(path string, text string) error {
 	}
 	return os.WriteFile(path, []byte(text), 0o644)
 }
+
+// trash moves a path to the Trash. Under the Mac app the move happens a moment later, so
+// until it's gone the path is pending and loads leave it out.
+func (a *App) trash(path string) error {
+	assert.That(a != nil, "trash runs on an app")
+	assert.That(filepath.IsAbs(path), "a trashed path is absolute")
+	if err := a.config.Trash.Move(path); err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		if a.pendingTrash == nil {
+			a.pendingTrash = make(map[string]bool, 4)
+		}
+		a.pendingTrash[path] = true
+	}
+	return nil
+}
+
+// withoutTrashed leaves out of a loaded project what's waiting to go to the Trash, and
+// forgets paths the Trash now has.
+func (a *App) withoutTrashed(loaded *project.Project) {
+	assert.That(a != nil, "without trashed runs on an app")
+	assert.That(loaded != nil, "a project was loaded")
+	for path := range a.pendingTrash {
+		if _, err := os.Stat(path); err != nil {
+			delete(a.pendingTrash, path)
+		}
+	}
+	if len(a.pendingTrash) == 0 {
+		return
+	}
+	kept := loaded.Capabilities[:0]
+	for _, capability := range loaded.Capabilities {
+		if a.pendingTrash[capability.Dir] {
+			continue
+		}
+		for index := range capability.Scenarios {
+			scenario := &capability.Scenarios[index]
+			for _, path := range []*string{&scenario.Setup, &scenario.SetupCards,
+				&scenario.Teardown} {
+				if a.pendingTrash[*path] {
+					*path = ""
+				}
+			}
+		}
+		kept = append(kept, capability)
+	}
+	loaded.Capabilities = kept
+}
