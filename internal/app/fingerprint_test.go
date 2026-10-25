@@ -1,4 +1,4 @@
-package fingerprint
+package app
 
 import (
 	"os"
@@ -10,8 +10,8 @@ import (
 	"givens/internal/runs"
 )
 
-// copyShop copies the sample shop's capabilities folder and returns its path.
-func copyShop(t *testing.T) string {
+// copyShopCapabilities copies the sample shop's capabilities folder and returns its path.
+func copyShopCapabilities(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "capabilities")
 	if err := os.CopyFS(root, os.DirFS("../../testdata/sample-shop/capabilities")); err != nil {
@@ -31,7 +31,7 @@ func fingerprintOf(t *testing.T, root string, key string) []runs.Pair {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parts, err := Of(loaded, scenario, nil)
+	parts, err := FingerprintOf(loaded, scenario, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,27 +56,29 @@ func edit(t *testing.T, root string, rel string, old string, replacement string)
 }
 
 func TestChanged(t *testing.T) {
-	root := copyShop(t)
+	root := copyShopCapabilities(t)
 	declined := fingerprintOf(t, root, "checkout/card-declined")
 	invite := fingerprintOf(t, root, "invites/accept-invite")
 	edit(t, root, "_shared/users.sh", `ok "seeded an address`, `ok "seeded one address`)
-	if got := Changed(declined, fingerprintOf(t, root, "checkout/card-declined")); got !=
-		"seed_address" {
+	if got := FingerprintChanged(declined,
+		fingerprintOf(t, root, "checkout/card-declined")); got != "seed_address" {
 		t.Errorf("after seed_address changed, Changed = %q", got)
 	}
-	if got := Changed(invite, fingerprintOf(t, root, "invites/accept-invite")); got != "" {
+	if got := FingerprintChanged(invite,
+		fingerprintOf(t, root, "invites/accept-invite")); got != "" {
 		t.Errorf("Accept invite doesn't call seed_address, but Changed = %q", got)
 	}
 	before := fingerprintOf(t, root, "checkout/3-d-secure-failed")
 	edit(t, root, "checkout/scripts/pay-with-saved-card.sh", "seed_cart 1", "seed_cart 2")
-	if got := Changed(before, fingerprintOf(t, root, "checkout/3-d-secure-failed")); got !=
+	if got := FingerprintChanged(before,
+		fingerprintOf(t, root, "checkout/3-d-secure-failed")); got !=
 		"checkout/pay-with-saved-card setup" {
 		t.Errorf("after a setup it builds on changed, Changed = %q", got)
 	}
 	before = fingerprintOf(t, root, "checkout/card-declined")
 	edit(t, root, "checkout/checkout.feature", "the order stays pending", "the order fails")
-	if got := Changed(before, fingerprintOf(t, root, "checkout/card-declined")); got !=
-		"steps" {
+	if got := FingerprintChanged(before,
+		fingerprintOf(t, root, "checkout/card-declined")); got != "steps" {
 		t.Errorf("after a step changed, Changed = %q", got)
 	}
 }

@@ -602,3 +602,23 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - SetupCard's unexported inline and runBlocks fields became Inline and RunBlocks (gopls
   rename), tagged `json:"-"` so the JSON is unchanged.
 - app.go and window.go stay: App and Window carry methods, so they aren't data-only.
+
+## internal/fingerprint folds in (2026-10-25)
+- internal/fingerprint is gone. Renames: `Of` -> `FingerprintOf`, `Changed` ->
+  `FingerprintChanged`, `PartSteps` and `PartSetup` -> `FingerprintPartSteps` and
+  `FingerprintPartSetup` (in app, "part" reads as Drop in's checklist parts); the test's
+  `copyShop` -> `copyShopCapabilities` (it copies only the capabilities folder; app_test.go's
+  copies the whole shop).
+- To big_helpers.go, after the status code: the part names, `FingerprintOf` and `hash`, since
+  statusFor and Drop in's `RecordRun` both call `FingerprintOf`.
+- To Share setup's section, before "See what a scenario needs installed": `stepsText`,
+  `setupText`, `fromChain`, `calledHelpers`, `sortedParts`, `FingerprintChanged` and `partWords`,
+  under the four "Changing …" headings and "Updating the kit keeps scenarios verified", which had
+  none. The package doc is their opening comment. Same call as `setupTexts` under
+  `RequiredCommands`: the helper is the shared way in, the walk it calls is the story's.
+  `FingerprintChanged`'s one caller is statusFor, a helper, as `outlineStatus`'s is `StatusOf`.
+- fingerprint_test.go is internal/app/fingerprint_test.go. Lines the longer names pushed past
+  100 columns were rewrapped; nothing else changed.
+- big.go 5,651 lines, big_helpers.go 900 (+52).
+- Surprise: fold.py's `gopls -remote=auto` can't reach a daemon here; a copy without
+  `-remote=auto` worked, about 18 s for this package.

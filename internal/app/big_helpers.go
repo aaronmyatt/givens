@@ -10,6 +10,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +25,6 @@ import (
 
 	"givens/internal/app/model"
 	"givens/internal/assert"
-	"givens/internal/fingerprint"
 	"givens/internal/helpers"
 	"givens/internal/markdown"
 	"givens/internal/project"
@@ -325,11 +326,11 @@ func statusFor(loaded *project.Project, scenario project.Scenario, key string,
 	if !ok {
 		return StatusNeverRun
 	}
-	current, err := fingerprint.Of(loaded, scenario, values)
+	current, err := FingerprintOf(loaded, scenario, values)
 	if err != nil {
 		return StatusNeverRun
 	}
-	if changed := fingerprint.Changed(latest.Fingerprint, current); changed != "" {
+	if changed := FingerprintChanged(latest.Fingerprint, current); changed != "" {
 		return statusUnverified + changed + " changed since the last run"
 	}
 	if latest.Result != runs.ResultPass {
@@ -354,6 +355,57 @@ func verified(run runs.Run, now time.Time) string {
 		status += " by " + run.Author
 	}
 	return status
+}
+
+// From internal/fingerprint: FingerprintOf, the way in to a scenario's setup fingerprint,
+// which statusFor and Drop in's RecordRun call, with the part names and hash. Working out each
+// part, and saying which changed, is Share setup's, in its section of big.go.
+
+// Part names that aren't helper names.
+const (
+	FingerprintPartSteps = "steps"
+	FingerprintPartSetup = "setup"
+	fromPrefix           = "from:"
+)
+
+// FingerprintOf works out the fingerprint of scenario, one of loaded's, for the row whose values
+// are row (nil for a scenario with no Examples).
+func FingerprintOf(loaded *project.Project, scenario project.Scenario,
+	row []runs.Pair) ([]runs.Pair, error) {
+	assert.That(loaded != nil, "the project is loaded")
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	parts := []runs.Pair{{Name: FingerprintPartSteps, Value: hash(stepsText(scenario, row))}}
+	own, err := setupText(scenario)
+	if err != nil {
+		return nil, err
+	}
+	parts = append(parts, runs.Pair{Name: FingerprintPartSetup, Value: hash(own)})
+	chain, err := fromChain(loaded, scenario)
+	if err != nil {
+		return nil, err
+	}
+	for _, built := range chain {
+		text, err := setupText(built)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, runs.Pair{Name: fromPrefix + built.Key(), Value: hash(text)})
+	}
+	called, err := calledHelpers(loaded, append([]project.Scenario{scenario}, chain...))
+	if err != nil {
+		return nil, err
+	}
+	return append(parts, called...), nil
+}
+
+// hash is a short code for text: the first 8 hex digits of its SHA-256.
+// Ref: https://pkg.go.dev/crypto/sha256
+func hash(text string) string {
+	assert.That(len(text) < 1<<30, "hashed text stays bounded")
+	sum := sha256.Sum256([]byte(text))
+	code := hex.EncodeToString(sum[:4])
+	assert.That(len(code) == 8, "a code is 8 hex digits")
+	return code
 }
 
 // aboutImage matches a markdown image: ![alt](path).

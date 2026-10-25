@@ -28,8 +28,8 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/spec, project, runs, runref, branch, fingerprint, setup, tags, slug, markdown,
-//     helpers, kit, starter and watch: domain packages, each with one job and its own tests.
+//   - internal/spec, project, runs, runref, branch, setup, tags, slug, markdown, helpers,
+//     kit, starter and watch: domain packages, each with one job and its own tests.
 
 package app
 
@@ -56,7 +56,6 @@ import (
 	"givens/internal/assert"
 	"givens/internal/branch"
 	"givens/internal/browser"
-	"givens/internal/fingerprint"
 	"givens/internal/helpers"
 	"givens/internal/kit"
 	"givens/internal/markdown"
@@ -675,7 +674,7 @@ func (s *Session) RecordRun(note string) error {
 		note = s.note
 	}
 	window := s.window
-	parts, err := fingerprint.Of(window.project, s.scenario, s.row)
+	parts, err := FingerprintOf(window.project, s.scenario, s.row)
 	if err != nil {
 		return err
 	}
@@ -3243,15 +3242,16 @@ func (w *Window) findHelpers(words string) []SearchResult {
 // kit loads them and warns when two shared files define one (internal/kit/givens.sh), and
 // internal/helpers reads their `# @helper` comments, calls, need and from lines. Helpers, the
 // Shared list itself, is in big_helpers.go, since Search's findHelpers and Views' Shared view read
-// it too; so is RequiredCommands, which Drop in's precheck also calls, and so are the bash -n
-// limits and bashError, which Write stories' shellProblems shares. The four "Changing …" scenarios
-// and "Updating the kit keeps scenarios verified" are internal/fingerprint, which statusFor
-// (big_helpers.go) and Drop in's RecordRun call. Code elsewhere: Drop in's page shows elsewhere's
-// message (messages); core glue offers OfferEdit and runs editHelper (allOffers and Choose,
-// offers.go), selects a helper (selectNow, selection.go), and shows a helper and a scenario's
-// requirements (helperLabels and requirementLabels, snapshot.go). Helper and its kin are types in
-// internal/app/model's helpers.go, and Window's helpers cache is in window.go. The Helpers tab is
-// internal/tui/helpers.go; `givens helpers` and `givens helper` are cmd/givens/panels.go.
+// it too; so is RequiredCommands, which Drop in's precheck also calls; so are the bash -n limits
+// and bashError, which Write stories' shellProblems shares; and so is FingerprintOf, the way in to
+// the setup fingerprint that the four "Changing …" scenarios and "Updating the kit keeps scenarios
+// verified" read, since statusFor (big_helpers.go) and Drop in's RecordRun call it. Code elsewhere:
+// Drop in's page shows elsewhere's message (messages); core glue offers OfferEdit and runs
+// editHelper (allOffers and Choose, offers.go), selects a helper (selectNow, selection.go), and
+// shows a helper and a scenario's requirements (helperLabels and requirementLabels, snapshot.go).
+// Helper and its kin are types in internal/app/model's helpers.go, and Window's helpers cache is in
+// window.go. The Helpers tab is internal/tui/helpers.go; `givens helpers` and `givens helper` are
+// cmd/givens/panels.go.
 
 // sharedFolder is where helpers live: _shared at the root, or in a capability's folder.
 const sharedFolder = "_shared"
@@ -3377,6 +3377,181 @@ func (w *Window) helperCode(file string, line int) string {
 		}
 	}
 	return strings.Join(lines[line-1:end], "\n")
+}
+
+// Scenario: Changing a helper unverifies the scenarios that call it
+// Scenario: Changing a step unverifies the scenario
+// Scenario: Changing a setup unverifies the scenarios built on it
+// Scenario: Changing a nested helper unverifies its callers
+// Scenario: Updating the kit keeps scenarios verified
+
+// From internal/fingerprint, which works out a scenario's setup fingerprint: one short code per
+// thing a run depends on, so Givens can say what changed since the last run.
+//
+// The parts, in order: the scenario's steps (its tags, steps and Examples), its own setup files
+// (.sh, .md and teardown), each setup it builds on through `from`, and each helper those
+// scripts call, nested calls included. The Feature description, about.md and the kit aren't
+// parts, so updating givens.sh unverifies nothing. FingerprintOf, the way in, is in
+// big_helpers.go, since statusFor and Drop in's RecordRun both call it.
+
+// stepsText is the scenario's block as it bears on a run: tags, steps and Examples, or only
+// the given row of them.
+func stepsText(scenario project.Scenario, row []runs.Pair) string {
+	assert.That(scenario.Name != "", "the scenario has a name")
+	assert.That(len(row) <= runs.FieldsMax, "a row stays bounded")
+	var text strings.Builder
+	text.WriteString(strings.Join(scenario.Tags, " ") + "\n")
+	for _, step := range append(append([]project.Step{}, scenario.Background...),
+		scenario.Steps...) {
+		text.WriteString(step.Keyword + " " + step.Text + "\n" + step.DocString + "\n")
+		for _, cells := range step.Table {
+			text.WriteString(strings.Join(cells, "|") + "\n")
+		}
+	}
+	if row != nil {
+		for _, value := range row {
+			text.WriteString(value.Name + "=" + value.Value + "\n")
+		}
+		return text.String()
+	}
+	for _, block := range scenario.Examples {
+		text.WriteString(block.Name + "\n" + strings.Join(block.Header, "|") + "\n")
+		for _, cells := range block.Rows {
+			text.WriteString(strings.Join(cells, "|") + "\n")
+		}
+	}
+	return text.String()
+}
+
+// setupText is a scenario's setup files, one after another; a missing file adds nothing.
+func setupText(scenario project.Scenario) (string, error) {
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	assert.That(scenario.Setup == "" || filepath.IsAbs(scenario.Setup), "paths are absolute")
+	var text strings.Builder
+	for _, path := range []string{scenario.Setup, scenario.SetupCards, scenario.Teardown} {
+		text.WriteString("\x00")
+		if path == "" {
+			continue
+		}
+		content, err := helpers.ReadScript(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		text.WriteString(content)
+	}
+	return text.String(), nil
+}
+
+// fromChain lists the scenarios a scenario's setup builds on, nearest first, each once. A
+// from line naming no scenario, and a loop, end the chain: Drop in reports both before running.
+func fromChain(loaded *project.Project, scenario project.Scenario) ([]project.Scenario, error) {
+	assert.That(loaded != nil, "the project is loaded")
+	assert.That(len(loaded.Capabilities) <= spec.CapabilitiesMax, "capabilities stay bounded")
+	chain := make([]project.Scenario, 0, 4)
+	seen := map[string]bool{scenario.Key(): true}
+	queue := []project.Scenario{scenario}
+	// bound: a scenario joins the queue only once, and the project has finitely many.
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current.Setup == "" {
+			continue
+		}
+		text, err := helpers.ReadScript(current.Setup)
+		if err != nil {
+			return nil, err
+		}
+		for _, from := range helpers.Froms(text) {
+			built, err := loaded.Find(from.Key)
+			if err != nil || seen[built.Key()] {
+				continue
+			}
+			seen[built.Key()] = true
+			chain = append(chain, built)
+			queue = append(queue, built)
+		}
+	}
+	return chain, nil
+}
+
+// calledHelpers fingerprints every helper the scenarios' setup scripts call, each seen from
+// its own capability, nested calls included, sorted by name.
+func calledHelpers(loaded *project.Project, scenarios []project.Scenario) ([]runs.Pair, error) {
+	assert.That(loaded != nil, "the project is loaded")
+	assert.That(len(scenarios) > 0, "there's at least the scenario itself")
+	shared, err := helpers.InFolder(loaded.Root, "", "")
+	if err != nil {
+		return nil, err
+	}
+	bodies := make(map[string]string, 16)
+	for _, scenario := range scenarios {
+		if scenario.Setup == "" {
+			continue
+		}
+		own, err := helpers.InFolder(loaded.Root, scenario.Capability, scenario.Capability)
+		if err != nil {
+			return nil, err
+		}
+		visible := helpers.Visible(shared, own)
+		text, err := helpers.ReadScript(scenario.Setup)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range helpers.Called(text, visible) {
+			bodies[name] = filepath.ToSlash(visible[name].File) + "\n" + visible[name].Body
+		}
+	}
+	return sortedParts(bodies), nil
+}
+
+// sortedParts hashes each body, by name, in name order.
+func sortedParts(bodies map[string]string) []runs.Pair {
+	assert.That(bodies != nil, "there's a map of bodies")
+	assert.That(len(bodies) <= helpers.HelpersMax, "helpers stay bounded")
+	names := make([]string, 0, len(bodies))
+	for name := range bodies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]runs.Pair, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, runs.Pair{Name: name, Value: hash(bodies[name])})
+	}
+	return parts
+}
+
+// FingerprintChanged names the first part of now that differs from then, a run's fingerprint,
+// as a person would say it: "steps", "setup", "checkout/pay-with-saved-card setup" or a
+// helper's name. It's "" when nothing changed.
+func FingerprintChanged(then []runs.Pair, now []runs.Pair) string {
+	assert.That(len(then) <= runs.FieldsMax, "then stays bounded")
+	assert.That(len(now) <= runs.FieldsMax, "now stays bounded")
+	before := make(map[string]string, len(then))
+	for _, part := range then {
+		before[part.Name] = part.Value
+	}
+	for _, part := range now {
+		if was, ok := before[part.Name]; !ok || was != part.Value {
+			return partWords(part.Name)
+		}
+	}
+	if len(then) != len(now) {
+		return FingerprintPartSetup
+	}
+	return ""
+}
+
+// partWords says a part's name as a message would.
+func partWords(name string) string {
+	assert.That(name != "", "a part has a name")
+	assert.That(!strings.ContainsAny(name, "\t\n"), "a part's name fits a run line field")
+	if key, ok := strings.CutPrefix(name, fromPrefix); ok {
+		return key + " setup"
+	}
+	return name
 }
 
 // Scenario: See what a scenario needs installed
