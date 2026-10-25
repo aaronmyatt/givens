@@ -26,10 +26,18 @@ case "$file" in
     if ! out=$(go run ./tools/tigerlint "$(dirname "$file")" 2>&1); then
       fail "tigerlint found problems in $file's package (see CONSTRAINTS.md):" "$out"
     fi
+    if [[ "$file" == */internal/app/big.go ]] &&
+      ! out=$(go test ./acceptance -run 'TestBigFile' 2>&1); then
+      fail "big.go's headings don't match the feature files:" "$out"
+    fi
     ;;
   *.feature)
     if ! out=$(go test ./acceptance -run 'TestSpecConventions' 2>&1); then
       fail "$file breaks a convention in capabilities/GIVENS.md:" "$out"
+    fi
+    # A renamed Feature, Rule or Scenario must be renamed in internal/app/big.go's headings.
+    if ! out=$(go test ./acceptance -run 'TestBigFile' 2>&1); then
+      fail "$file no longer matches internal/app/big.go's headings:" "$out"
     fi
     ;;
   */go.mod)

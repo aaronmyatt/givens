@@ -13,6 +13,10 @@ scenarios, sets up each scenario's starting state, and walks a developer through
 - `internal/app/`: the core the TUI, the CLI and the steps all drive; mostly stubs that
   return `ErrNotImplemented` until built. `internal/tui/`: the TUI. `cmd/givens/`: the CLI.
   `tools/tigerlint/`: the linter.
+- `internal/app/big.go`: the one-big-file pilot (`tasks/one-big-file/`), in story order:
+  `// Feature:`, `// Rule:` and `// Scenario:` comments mark the sections. `scripts/entry.sh
+  "<name>"` prints a section's lines and functions, `--debug` a delve command; `TestBigFile`
+  checks the headings against the feature files.
 - `_archive/`: the macOS SwiftUI app and its `givens serve` bridge, archived; Go tooling
   skips it and nothing builds or checks it.
 - `testdata/sample-shop/`: the pretend project most scenarios start from.

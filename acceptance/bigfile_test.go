@@ -1,0 +1,149 @@
+package acceptance
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	messages "github.com/cucumber/messages/go/v34"
+
+	"givens/internal/spec"
+)
+
+// bigFile tells Givens's stories in order, relative to this package. See its header and
+// tasks/one-big-file/notes.md.
+const bigFile = "../internal/app/big.go"
+
+// The comments that lay out the big file: a section per Feature, and inside it each Rule and,
+// where it helps, a Scenario. helpersHeading ends the last section.
+const (
+	featureHeading  = "// Feature: "
+	ruleHeading     = "// Rule: "
+	scenarioHeading = "// Scenario: "
+	helpersHeading  = "// Helpers"
+)
+
+// section is one story's part of the big file.
+type section struct {
+	feature   string
+	line      int
+	rules     []string
+	scenarios []string
+}
+
+// story is what a feature file says, for comparing with its section.
+type story struct {
+	path      string
+	order     int // its place among the capabilities folders
+	rules     []string
+	scenarios []string
+}
+
+// TestBigFile keeps the big file's sections in step with the feature files, as a plain check
+// that needs no agent. Each section names a Feature word for word, the sections follow the
+// order of the capabilities folders, a section has every one of its Feature's Rules in order,
+// and a Scenario comment names one of the Feature's scenarios. Run it with
+// `go test ./acceptance -run BigFile -v` to see how many stories are in.
+func TestBigFile(t *testing.T) {
+	stories, err := readStories()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sections, err := readSections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := -1
+	for _, part := range sections {
+		where := fmt.Sprintf("internal/app/big.go:%d", part.line)
+		told, ok := stories[part.feature]
+		if !ok {
+			t.Errorf("%s: no capability has \"Feature: %s\"", where, part.feature)
+			continue
+		}
+		if told.order <= last {
+			t.Errorf("%s: %q is out of order; sections follow the capabilities folders", where,
+				part.feature)
+		}
+		last = told.order
+		if !slices.Equal(part.rules, told.rules) {
+			t.Errorf("%s: its Rule comments are %q; %s has the Rules %q, in that order", where,
+				part.rules, told.path, told.rules)
+		}
+		for _, name := range part.scenarios {
+			if !slices.Contains(told.scenarios, name) {
+				t.Errorf("%s: \"Scenario: %s\" isn't in %s", where, name, told.path)
+			}
+		}
+	}
+	t.Logf("%d of %d stories are in the big file", len(sections), len(stories))
+}
+
+// readStories reads every capability's Feature, Rules and scenario names, keyed by its name.
+func readStories() (map[string]story, error) {
+	paths, err := filepath.Glob(filepath.Join(capabilitiesDir, "*", "*.feature"))
+	if err != nil {
+		return nil, err
+	}
+	stories := make(map[string]story, len(paths))
+	for order, path := range paths {
+		feature, err := spec.ParseFeature(path)
+		if err != nil {
+			return nil, err
+		}
+		told := story{path: strings.TrimPrefix(path, "../"), order: order, rules: rulesOf(feature)}
+		for _, scenario := range spec.Scenarios(feature) {
+			told.scenarios = append(told.scenarios, scenario.Name)
+		}
+		stories[feature.Name] = told
+	}
+	return stories, nil
+}
+
+func rulesOf(feature *messages.Feature) []string {
+	rules := make([]string, 0, len(feature.Children))
+	for _, child := range feature.Children {
+		if child.Rule != nil {
+			rules = append(rules, child.Rule.Name)
+		}
+	}
+	return rules
+}
+
+// readSections reads the big file's Feature, Rule and Scenario comments into sections, up to
+// the Helpers heading.
+func readSections() ([]section, error) {
+	opened, err := os.Open(bigFile)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = opened.Close() }()
+	sections := make([]section, 0, 32)
+	scanner := bufio.NewScanner(opened)
+	// Ref: https://pkg.go.dev/bufio#Scanner
+	for number := 1; scanner.Scan(); number++ { // bound: ends at the file's end
+		line := scanner.Text()
+		if line == helpersHeading {
+			break
+		}
+		if name, ok := strings.CutPrefix(line, featureHeading); ok {
+			sections = append(sections, section{feature: name, line: number})
+			continue
+		}
+		if len(sections) == 0 {
+			continue // the header, before the first story
+		}
+		current := &sections[len(sections)-1]
+		if name, ok := strings.CutPrefix(line, ruleHeading); ok {
+			current.rules = append(current.rules, name)
+		}
+		if name, ok := strings.CutPrefix(line, scenarioHeading); ok {
+			current.scenarios = append(current.scenarios, name)
+		}
+	}
+	return sections, scanner.Err()
+}
