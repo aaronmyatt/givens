@@ -233,3 +233,23 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - The four "Changing …" scenarios and "Updating the kit keeps scenarios verified" have no
   heading: they're internal/fingerprint, called from status.go and dropin_record.go.
 - Section 370 lines, big_helpers.go +88. big.go 1508, big_helpers.go 270. 10 of 17.
+
+## Read a capability moves in (2026-10-25)
+- history.go and copy_steps.go are gone. They're the section, between Copy and Search
+  everything: `shownCapability` (from selection.go) under "Read a story" and "A story image
+  that isn't on disk", the runs list (`RunsShownMax`, `RunLine`, `History`, `historyOf`,
+  `runText`, `shownHistory`) under "See a scenario's runs", and `OfferCopySteps` with
+  `gherkinOf` under "Copy a scenario's steps".
+- status.go is gone too, all of it to big_helpers.go: `statusOf` is read by every scenario as
+  shown (`scenarioOf`, project.go) and by Views; `StatusOf` by `givens list`; `statusFor` by
+  an outline's rows (rows.go). Its status constants went with it.
+- To big_helpers.go as well: `withImagePlaceholders` and its `aboutImage` regexp, from
+  project.go. Read a capability's `capabilityOf` calls it, and so does Write stories' preview
+  (preview.go).
+- No seams cut. `shownScenario` stays in selection.go, as core glue: `allOffers` builds every
+  scenario page's offers from it, and its Drop in branch shows the scenario dropped in to.
+  "Read a scenario" and "A scenario with no setup" have no heading: they start there, in
+  `scenarioOf` (project.go), and in `noSetup` (offers.go); the opening comment names them.
+- `OfferCopySteps` stayed in the section, though Open a project's `readOnlyOffers` (branch.go)
+  lists it: a label is the story's, as `SearchScenarios` stayed Search's though Copy reads it.
+- Section 181 lines, big_helpers.go +113. big.go 1314, big_helpers.go 295. 10 of 17.

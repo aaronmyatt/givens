@@ -22,8 +22,10 @@ import (
 
 	"givens/internal/assert"
 	"givens/internal/browser"
+	"givens/internal/fingerprint"
 	"givens/internal/helpers"
 	"givens/internal/project"
+	"givens/internal/runs"
 )
 
 // repoDepthMax bounds the walk up from a capabilities folder to its git repo's root.
@@ -267,4 +269,113 @@ func (w *Window) RequiredCommands(scenario string) ([]RequiredCommand, error) {
 		})
 	}
 	return required, nil
+}
+
+// Scenario statuses, as the library shows them.
+const (
+	StatusNeverRun      = "Never run"
+	StatusLastRunFailed = "Last run failed"
+	statusVerified      = "Verified"
+	statusUnverified    = "Unverified: "
+)
+
+// statusOf says where a scenario stands, by the app's clock. Answers are kept until a file in
+// the capabilities folder changes (runs/ included) or the day turns over, since the sidebar,
+// the capability page and the views all ask, and each answer reads every run file and
+// fingerprints the setup.
+func (w *Window) statusOf(scenario project.Scenario) string {
+	assert.That(w.project != nil, "status is read in a loaded project")
+	assert.That(scenario.Capability != "", "the scenario belongs to a capability")
+	now := w.app.config.Clock.Now()
+	if day := now.Format(time.DateOnly); day != w.statusDay || w.statuses == nil {
+		w.statuses, w.statusDay = make(map[string]string, 16), day
+	}
+	key := scenario.Capability + "/" + scenario.Name
+	if status, kept := w.statuses[key]; kept {
+		return status
+	}
+	status := StatusOf(w.project, scenario, now)
+	w.statuses[key] = status
+	return status
+}
+
+// StatusOf says where a scenario stands: verified while its latest run passed and nothing its
+// setup depends on has changed since. An outline sums up its rows. The givens command uses it
+// too. See capabilities/views and capabilities/share-setup-between-scenarios.
+func StatusOf(loaded *project.Project, scenario project.Scenario, now time.Time) string {
+	assert.That(loaded != nil, "status is read in a loaded project")
+	assert.That(!now.IsZero(), "now is a time")
+	if scenario.Slug == "" {
+		return StatusNeverRun
+	}
+	if scenario.Outline {
+		return outlineStatus(loaded, scenario, now)
+	}
+	return statusFor(loaded, scenario, scenario.Key(), nil, now)
+}
+
+// statusFor says where one run key, with its row's values, stands.
+func statusFor(loaded *project.Project, scenario project.Scenario, key string,
+	values []runs.Pair, now time.Time) string {
+	assert.That(loaded != nil, "status is read in a loaded project")
+	assert.That(key != "", "a run key is given")
+	recorded, err := runs.Read(loaded.Root)
+	if err != nil {
+		return StatusNeverRun
+	}
+	latest, ok := runs.Latest(recorded, key, values)
+	if !ok {
+		return StatusNeverRun
+	}
+	current, err := fingerprint.Of(loaded, scenario, values)
+	if err != nil {
+		return StatusNeverRun
+	}
+	if changed := fingerprint.Changed(latest.Fingerprint, current); changed != "" {
+		return statusUnverified + changed + " changed since the last run"
+	}
+	if latest.Result != runs.ResultPass {
+		return StatusLastRunFailed
+	}
+	return verified(latest, now)
+}
+
+// verified says when, and by whom, a passing run was recorded: "Verified today by Sam".
+func verified(run runs.Run, now time.Time) string {
+	assert.That(run.Result == runs.ResultPass, "only a passing run verifies")
+	assert.That(!now.IsZero(), "now is a time")
+	day := "on " + run.Time.Format(time.DateOnly)
+	switch run.Time.In(now.Location()).Format(time.DateOnly) {
+	case now.Format(time.DateOnly):
+		day = "today"
+	case now.AddDate(0, 0, -1).Format(time.DateOnly):
+		day = "yesterday"
+	}
+	status := statusVerified + " " + day
+	if run.Author != "" {
+		status += " by " + run.Author
+	}
+	return status
+}
+
+// aboutImage matches a markdown image: ![alt](path).
+const aboutImagePattern = `!\[([^\]]*)\]\(([^)\s]+)\)`
+
+var aboutImage = regexp.MustCompile(aboutImagePattern) //tiger:allow-global compiled once
+
+// withImagePlaceholders replaces each image about.md shows that isn't on disk with a line
+// naming it, so the rest of the story still reads: "Image not found: images/flow.svg".
+func withImagePlaceholders(about string, dir string) string {
+	assert.That(filepath.IsAbs(dir), "the capability's folder is absolute")
+	assert.That(len(about) <= EditorTextBytesMax, "about.md stays bounded")
+	return aboutImage.ReplaceAllStringFunc(about, func(found string) string {
+		path := aboutImage.FindStringSubmatch(found)[2]
+		if strings.Contains(path, "://") {
+			return found
+		}
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path))); err == nil {
+			return found
+		}
+		return "Image not found: " + path
+	})
 }

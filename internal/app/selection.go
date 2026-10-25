@@ -98,26 +98,6 @@ func (w *Window) Selected() string {
 	return w.selected
 }
 
-// shownCapability is the capability on show, or nil when none is selected or it's gone.
-func (w *Window) shownCapability() *Capability {
-	assert.That(w != nil, "shown capability runs on a window")
-	assert.That(w.app != nil, "a window belongs to an app")
-	name := w.selectedCapability
-	if w.selected == "" && w.project != nil && len(w.project.Capabilities) > 0 {
-		// A project opens on its first capability's story.
-		name = w.project.Capabilities[0].Slug
-	}
-	if name == "" {
-		return nil
-	}
-	loaded, ok := w.findCapability(name)
-	if !ok {
-		return nil
-	}
-	shown := w.capabilityOf(loaded)
-	return &shown
-}
-
 // shownScenario is the scenario on show, or nil when none is selected or it's gone.
 func (w *Window) shownScenario() *Scenario {
 	assert.That(w != nil, "shown scenario runs on a window")
