@@ -841,3 +841,24 @@ Feature, with `// Feature:`, `// Rule:` and `// Scenario:` comments as its headi
 - Surprise: a failed fold script's `rm` ran anyway (two shell lines, not `&&`); spec.go and
   explain.go were rebuilt from HEAD with the same renames, and the build matched.
 - big.go 7,696 lines (+156), big_helpers.go 2,740 (+155), 36% of big.go.
+
+## internal/starter folds in (2026-10-25)
+- internal/starter is gone. Its code is in Open a project's section after createCapabilities,
+  under "Create a capabilities folder", with its package doc as the opening comment:
+  createCapabilities and the open-a-project steps are its only callers.
+- Its files moved with `git mv` to internal/app/starter/ (add-a-story/, GIVENS.md and the
+  .shellcheckrc that says the scripts are bash): Go embeds only files under the package's own
+  folder, and a folder with no Go files isn't a package. The embeds are now
+  `starter/add-a-story` and `starter/GIVENS.md`.
+- One line of new code: StarterFiles returns `fs.Sub(starterFiles, "starter")`, so the FS is
+  still rooted at add-a-story's parent and callers walk "add-a-story" as before. Nothing it
+  writes changes.
+- Renames: `Files` -> `StarterFiles`, `Guide` -> `StarterGuide`, `files` -> `starterFiles`,
+  `guide` -> `starterGuide`; the test `TestGuideMatchesGivens` -> `TestStarterGuideMatchesGivens`.
+- Paths: scripts/check.sh shellchecks internal/app/starter's scripts, TestSpecConventions
+  checks ../internal/app/starter, and the starter test reads internal/app/starter/GIVENS.md (it
+  still compares it with capabilities/GIVENS.md up to "## This repository"). The section's
+  comment says "From package starter" so `grep -rn internal/starter` is empty outside tasks/.
+- starter_test.go is internal/app/starter_test.go. big.go's header lists internal/app/starter
+  and leaves internal/slug and kit as the domain packages.
+- big.go 7,737 lines (+41), big_helpers.go 2,740 (+0), 35% of big.go.

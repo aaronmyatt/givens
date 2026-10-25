@@ -13,7 +13,6 @@ import (
 
 	"givens/internal/app"
 	"givens/internal/slug"
-	"givens/internal/starter"
 )
 
 // Polling for "within two seconds": a fixed number of looks, a fixed pause apart.
@@ -164,7 +163,7 @@ func (s *state) gotCapabilitiesFolder() error {
 // starter's scenarios has a setup script.
 func (s *state) gotStarter(name string) error {
 	capabilities := filepath.Join(s.bare, "capabilities")
-	files := starter.Files()
+	files := app.StarterFiles()
 	err := fs.WalkDir(files, "add-a-story", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err

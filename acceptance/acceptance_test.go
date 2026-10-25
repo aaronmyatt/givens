@@ -16,7 +16,7 @@ const capabilitiesDir = "../capabilities"
 // sample shop fixture against the conventions in capabilities/GIVENS.md.
 func TestSpecConventions(t *testing.T) {
 	roots := []string{
-		capabilitiesDir, "../internal/starter", "../testdata/sample-shop/capabilities",
+		capabilitiesDir, "../internal/app/starter", "../testdata/sample-shop/capabilities",
 	}
 	for _, root := range roots {
 		problems, err := app.CheckCapabilities(root)

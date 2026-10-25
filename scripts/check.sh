@@ -57,7 +57,7 @@ check_shell() {
     internal/kit/*.bats
   # Setup scripts and helpers: the starter project's and the sample shop's. Their folders'
   # .shellcheckrc says they're bash.
-  find internal/starter testdata/sample-shop -name '*.sh' -print0 | xargs -0 shellcheck
+  find internal/app/starter testdata/sample-shop -name '*.sh' -print0 | xargs -0 shellcheck
 }
 
 # The kit's bats tests, one per The kit scenario as they're built.

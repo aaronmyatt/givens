@@ -28,8 +28,10 @@
 //     a label, a key or a selection into a call to a story, and build what the TUI and the
 //     steps read; kept apart so this file reads as the stories, not the plumbing.
 //   - app.go and window.go: the App and Window types and the API the edges hold.
-//   - internal/slug, kit and starter:
-//     domain packages, each with one job and its own tests.
+//   - internal/app/starter: the starter capability and GIVENS.md that Open a project's
+//     StarterFiles and StarterGuide embed; files, not code, since Go embeds only files under
+//     the package's own folder.
+//   - internal/slug and kit: domain packages, each with one job and its own tests.
 
 package app
 
@@ -39,6 +41,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"embed"
 	"encoding/csv"
 	"encoding/hex"
 	"errors"
@@ -65,7 +68,6 @@ import (
 	"givens/internal/browser"
 	"givens/internal/kit"
 	"givens/internal/slug"
-	"givens/internal/starter"
 )
 
 // Feature: Copy a setup script
@@ -3788,10 +3790,12 @@ func QuoteBashWord(text string) string {
 // glue shows MessageNoCapabilities and branchMessages (Snapshot, snapshot.go), and offers and runs
 // "Create capabilities folder" and cuts a branch's offers with readOnly (allOffers and Choose,
 // offers.go). createCapabilities writes with writeNew (big_helpers.go), which Write stories'
-// NewScenario uses too. Open starts Keep runs off main's sync (openRunStore), and OpenBranch links
-// a branch's copy to the ref the project keeps runs in (LinkRunsRefCopy). Window's branch fields
-// are in window.go's types. The end of this section, from internal/branch, copies a branch out of
-// git. The terminal scenarios are openFolder in cmd/givens/main.go and the TUI.
+// NewScenario uses too; the starter it writes (StarterFiles, StarterGuide) is under its scenario
+// and embeds the files in internal/app/starter. Open starts Keep runs off main's sync
+// (openRunStore), and OpenBranch links a branch's copy to the ref the project keeps runs in
+// (LinkRunsRefCopy). Window's branch fields are in window.go's types. The end of this section,
+// from internal/branch, copies a branch out of git. The terminal scenarios are openFolder in
+// cmd/givens/main.go and the TUI.
 
 // CloseWindow closes this window. Closing the last project window leaves nothing to reopen
 // at the next launch. A branch's window takes its copy with it. Needed by "Reopen a recent
@@ -3879,7 +3883,7 @@ func (w *Window) createCapabilities() error {
 		return errors.New("there's already a capabilities folder here")
 	}
 	files := map[string]string{
-		"GIVENS.md":         starter.Guide(),
+		"GIVENS.md":         StarterGuide(),
 		"_shared/givens.sh": kit.Script,
 		".gitattributes":    gitattributes,
 	}
@@ -3889,12 +3893,12 @@ func (w *Window) createCapabilities() error {
 		}
 	}
 	// Ref: https://pkg.go.dev/io/fs#WalkDir
-	err := fs.WalkDir(starter.Files(), "add-a-story", func(path string, entry fs.DirEntry,
+	err := fs.WalkDir(StarterFiles(), "add-a-story", func(path string, entry fs.DirEntry,
 		err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		text, err := fs.ReadFile(starter.Files(), path)
+		text, err := fs.ReadFile(StarterFiles(), path)
 		if err != nil {
 			return err
 		}
@@ -3905,6 +3909,43 @@ func (w *Window) createCapabilities() error {
 	}
 	w.path, w.found = root, true
 	return w.reload()
+}
+
+// From package starter: what Givens writes into every new capabilities folder: GIVENS.md and
+// the "Add a story" capability with a setup script per scenario. The files are in
+// internal/app/starter, since Go embeds only files under the package's own folder.
+
+// starterFiles is the starter capability, compiled into the binary.
+// Ref: https://pkg.go.dev/embed
+//
+//go:embed starter/add-a-story
+var starterFiles embed.FS //tiger:allow-global read-only files embedded at build time
+
+// starterGuide is GIVENS.md for a new project: Givens's own, without the part about this
+// repository.
+//
+//go:embed starter/GIVENS.md
+var starterGuide string //tiger:allow-global read-only file embedded at build time
+
+// StarterFiles returns the starter capability, rooted at its folder name.
+func StarterFiles() fs.FS {
+	// The embedded paths start with "starter/"; fs.Sub roots them at add-a-story's parent, so
+	// they're the paths a new capabilities folder gets.
+	// Ref: https://pkg.go.dev/io/fs#Sub
+	files, err := fs.Sub(starterFiles, "starter")
+	assert.That(err == nil, "the starter's folder is embedded")
+	feature, err := fs.Stat(files, "add-a-story/add-a-story.feature")
+	assert.That(err == nil, "the starter's .feature file is embedded")
+	assert.That(feature.Size() > 0, "the starter's .feature file isn't empty")
+	return files
+}
+
+// StarterGuide is the GIVENS.md a new capabilities folder gets.
+func StarterGuide() string {
+	assert.That(strings.HasPrefix(starterGuide, "# GIVENS.md"), "the guide is GIVENS.md")
+	assert.That(!strings.Contains(starterGuide, "## This repository"),
+		"the guide is project-neutral")
+	return starterGuide
 }
 
 // Scenario: Files written by other tools appear
