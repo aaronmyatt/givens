@@ -55,3 +55,20 @@ Feature: Use Givens from the terminal
     When a developer runs "givens run checkout/pay-in-app"
     Then each code block is printed on its own lines, with no fences and no indent
     And it can be selected and pasted as it is
+
+  # `givens skill` writes the agent skill Givens ships to .claude/skills/givens/SKILL.md, where
+  # Claude Code finds a project's skills. The skill tells an agent to read capabilities/GIVENS.md
+  # first, to use `givens list`, `run` and `check` rather than the TUI, and to flag work with
+  # `givens todo` and `givens done`. It also adds a short "## Givens" paragraph pointing to the
+  # skill to the project's CLAUDE.md, which Claude Code reads at the start of every session: a
+  # project with no CLAUDE.md gets one, and a Givens paragraph already there is replaced, with
+  # the rest of the file left as it was. Running it again leaves the same files.
+  Scenario: Apply Givens agent skill to current project
+    Given a developer's terminal is in the sample shop's folder
+    And the sample shop has no .claude/skills/givens/SKILL.md
+    And the sample shop's CLAUDE.md has a paragraph of its own
+    When they run "givens skill"
+    Then .claude/skills/givens/SKILL.md is written, a skill named "givens"
+    And CLAUDE.md has a "## Givens" paragraph after its own
+    And it prints "Wrote .claude/skills/givens/SKILL.md and CLAUDE.md"
+    And running "givens skill" again changes nothing

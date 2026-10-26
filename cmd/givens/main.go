@@ -11,6 +11,7 @@
 //	givens new story <name> | givens new scenario <capability>
 //	givens rename <key> <new name> [--yes], givens delete <key> [--yes]
 //	givens todo <key>, givens done <key>
+//	givens skill
 //	givens helpers | helper new|edit … | history <key> | search <words> | trust | sync
 package main
 
@@ -44,6 +45,7 @@ const usage = `usage: givens [folder]         (in a terminal, the TUI)
        givens new story <name> | givens new scenario <capability>
        givens rename <key> <new name> [--yes] | givens delete <key> [--yes]
        givens todo <key> | givens done <key>
+       givens skill
        givens helpers | helper new|edit … | history <key> | search <words> | trust | sync`
 
 func main() {
@@ -81,6 +83,8 @@ func run(args []string) int {
 		return runDelete(args[1:])
 	case "todo", "done":
 		return runFlag(args[1:], args[0] == "todo")
+	case "skill":
+		return runSkill(args[1:])
 	}
 	if code, ok := runPanel(args); ok {
 		return code

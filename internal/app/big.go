@@ -6326,6 +6326,99 @@ func checkScenarios(path string, feature *messages.Feature) []ConventionProblem 
 	return problems
 }
 
+// Scenario: Apply Givens agent skill to current project
+//
+// `givens skill` (runSkill, cmd/givens/skill.go) finds the project from the working folder and
+// calls WriteSkill, which writes the skill Givens ships and a paragraph in CLAUDE.md pointing to
+// it, so an agent in the project learns the commands above.
+
+// SkillPath is where the skill goes in a project, relative to the folder holding capabilities/:
+// where Claude Code looks for a project's skills. Ref: https://code.claude.com/docs/en/skills
+const SkillPath = ".claude/skills/givens/SKILL.md"
+
+// ClaudePath is the project's CLAUDE.md, which Claude Code reads at the start of every session.
+// Ref: https://code.claude.com/docs/en/memory
+const ClaudePath = "CLAUDE.md"
+
+// givensHeading starts the paragraph Givens owns in CLAUDE.md; the paragraph runs to the next
+// heading of the same level or higher.
+const givensHeading = "## Givens"
+
+// givensParagraph is what WriteSkill puts under givensHeading.
+const givensParagraph = givensHeading + `
+
+This project's behaviour is in capabilities/, as Gherkin scenarios. Before working on it, read
+` + SkillPath + ` and capabilities/GIVENS.md, then use ` + "`givens list`, `givens run` and" + `
+` + "`givens check`" + ` to find, set up and check scenarios.
+`
+
+// shippedSkill is the agent skill Givens ships, in the Agent Skills format: front matter with a
+// name and a description, then plain markdown. Ref: https://agentskills.io/specification
+//
+//go:embed skill/SKILL.md
+var shippedSkill string //tiger:allow-global read-only file embedded at build time
+
+// WriteSkill writes shippedSkill to SkillPath under project, making its folders, then puts
+// givensParagraph in project's CLAUDE.md with withGivensParagraph: a missing CLAUDE.md starts
+// empty. It returns the paths it wrote, relative to project. Each write gives the same bytes
+// for the same input, so it's safe to rerun.
+func WriteSkill(project string) ([]string, error) {
+	assert.That(project != "", "the project is a folder")
+	assert.That(strings.HasPrefix(shippedSkill, "---\n"), "the shipped skill has front matter")
+	// MkdirAll is a no-op when the folders exist. Ref: https://pkg.go.dev/os#MkdirAll
+	skill := filepath.Join(project, SkillPath)
+	if err := os.MkdirAll(filepath.Dir(skill), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(skill, []byte(shippedSkill), 0o644); err != nil {
+		return nil, err
+	}
+	// A missing CLAUDE.md reads as empty text; any other read error stops.
+	// Ref: https://pkg.go.dev/io/fs#ErrNotExist
+	claude := filepath.Join(project, ClaudePath)
+	old, err := os.ReadFile(claude)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	if err := os.WriteFile(claude, []byte(withGivensParagraph(string(old))), 0o644); err != nil {
+		return nil, err
+	}
+	return []string{SkillPath, ClaudePath}, nil
+}
+
+// withGivensParagraph returns claude, a CLAUDE.md's text, with givensParagraph in it: in place
+// of the one there, or after the rest, a blank line between. Everything else is kept as it was.
+func withGivensParagraph(claude string) string {
+	assert.That(len(claude) < 1<<24, "a CLAUDE.md is a small file")
+	lines := strings.Split(claude, "\n")
+	start := slices.Index(lines, givensHeading)
+	if start < 0 {
+		kept := strings.TrimRight(claude, "\n")
+		if kept == "" {
+			return givensParagraph
+		}
+		return kept + "\n\n" + givensParagraph
+	}
+	// The paragraph ends at the next "# " or "## " heading; a deeper one is part of it.
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") {
+			end = i
+			break
+		}
+	}
+	before := strings.Join(lines[:start], "\n")
+	if start > 0 {
+		before += "\n"
+	}
+	merged := before + givensParagraph
+	if end < len(lines) {
+		merged += "\n" + strings.Join(lines[end:], "\n")
+	}
+	assert.That(strings.Contains(merged, givensParagraph), "the paragraph is in the result")
+	return merged
+}
+
 // Feature: Views
 //
 // capabilities/views. Views gather scenarios and helpers from every capability: Error states,

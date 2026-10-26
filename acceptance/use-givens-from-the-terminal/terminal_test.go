@@ -63,6 +63,12 @@ func steps(w *world.World) []world.Step {
 		world.Def(`^each code block is printed on its own lines, with no fences and no indent$`,
 			s.codeBlockOnOwnLines),
 		world.Def(`^it can be selected and pasted as it is$`, s.codeBlockPastable),
+		world.Def(`^the sample shop has no \.claude/skills/givens/SKILL\.md$`, s.noSkill),
+		world.Def(`^\.claude/skills/givens/SKILL\.md is written, a skill named "([^"]*)"$`,
+			s.skillWritten),
+		world.Def(`^the sample shop's CLAUDE\.md has a paragraph of its own$`, s.claudeHasOwn),
+		world.Def(`^CLAUDE\.md has a "([^"]*)" paragraph after its own$`, s.claudeHasParagraph),
+		world.Def(`^running "([^"]*)" again changes nothing$`, s.againChangesNothing),
 	}
 }
 
